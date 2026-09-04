@@ -1,21 +1,21 @@
 {
   "worktrees": {
-    "vela": "/Users/delamind/Project/innominix/wt-vela"
+    "vela": "/Users/delamind/Project/innominix/wt-vela",
+    "fapony": "wt-fapony"
   },
-  "executor": {
-    "cmd": ["opencode", "run"],
-    "timeoutMin": 45
+  "roles": {
+    "executor":  { "cmd": ["opencode", "run", "--model", "{model}"], "model": "mimo", "timeoutMin": 45 },
+    "gate":      { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "sonnet" },
+    "planner":   { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" },
+    "bigFixer":  { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" }
   },
+  "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
   "review": {
     "bigDiff": { "files": 15, "lines": 400 },
     "maxRounds": 2,
     "gate": ["claude", "-p", "/code-review high"],
-    "prefilter": null
+    "prefilter": null,
+    "autoLoop": false
   },
-  "memory": {
-    "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],
-    "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],
-    "kickoff": ["bun", ".memory/mem.ts", "kickoff"]
-  }
+  "memory": null
 }
