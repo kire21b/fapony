@@ -10,6 +10,7 @@ import { cmdTest } from "./src/test.js";
 import { cmdGate } from "./src/gate.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdLoop } from "./src/loop.js";
+import { cmdPlanMv } from "./src/planmv.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -27,6 +28,8 @@ if (cmd === "run") {
   await cmdGate(a);
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
+} else if (cmd === "plan-mv") {
+  await cmdPlanMv(a);
 } else if (cmd === "test") {
   await cmdTest();
 } else {

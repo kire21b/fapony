@@ -13,6 +13,12 @@ import {
   testGateOnceAlreadyPassed,
   testGateOnceMaxRounds,
 } from "./gate.test.js";
+import {
+  testPlanMvNoHeader,
+  testPlanMvWithHeader,
+  testPlanMvNormalizeLinks,
+  testPlanMvDryRun,
+} from "./planmv.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -28,5 +34,9 @@ export async function cmdTest(): Promise<void> {
   testGateOnceFail();
   testGateOnceAlreadyPassed();
   testGateOnceMaxRounds();
+  testPlanMvNoHeader();
+  testPlanMvWithHeader();
+  testPlanMvNormalizeLinks();
+  testPlanMvDryRun();
   console.log("\nall tests passed ✓");
 }

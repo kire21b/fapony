@@ -39,6 +39,7 @@ fapony/
     status.ts         # ตาราง runs ที่ยังไม่ passed/stopped (33 บรรทัด)
     stop.ts           # stop run + release memory claim (47 บรรทัด)
     loop.ts           # loop driver: run → review → planner → repeat (pausable)
+    planmv.ts         # archive shipped PLAN → plan/done/ (validate + normalize links + git mv)
     init-mem.ts       # init-mem command
     test.ts           # self-check 7 ตัว (250 บรรทัด)
   test/
@@ -274,7 +275,7 @@ AI-powered git commit message generator (108 บรรทัด):
 - [x] 2a: src/parse.ts + prompts/planner.md + prompts/fixer.md + test fixtures
 - [x] 2b: runOnce + loop driver (pausable)
 - [x] 2c: auto-gate + bigFixer lane
-- [ ] 2d: plan-mv
+- [x] 2d: plan-mv
 - DeepSeek prefilter (prefilter: null ยังคงเดิม)
 - [x] ย้าย scrutinize-fix skill → prompts/scrutinize-fix.md (ถอด vela แล้ว)
 - [x] skill/git-commit-conventional.md + skill/move-to-done.md + skill/plan-with-me.md
@@ -355,5 +356,6 @@ fapony status                    # ตาราง active runs
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close
+fapony plan-mv <file>          # archive shipped PLAN → plan/done/
 fapony test                      # self-check 7 ตัว
 ```
