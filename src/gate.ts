@@ -4,12 +4,17 @@ import { closeMemory, kickoffMemory } from "./memory.js";
 export async function cmdGate(args: string[]): Promise<void> {
   const runId = parseInt(args[0], 10);
   const verdict = args[1];
-  const note = args.slice(2).join(" ");
 
   if (!runId || isNaN(runId) || (verdict !== "pass" && verdict !== "fail")) {
     console.error("usage: fapony gate <run-id> pass|fail [note]");
+    console.error("       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)");
     process.exit(1);
   }
+
+  // inline arg wins; otherwise read stdin if it's piped (not a TTY) — avoids
+  // shell-escaping a review full of backticks/quotes/markdown as a CLI arg
+  const inline = args.slice(2).join(" ");
+  const note = inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
 
   const db = openDb();
   const run = getRun(db, runId);

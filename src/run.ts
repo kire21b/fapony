@@ -7,6 +7,7 @@ import {
   setStatus,
   incrementRound,
   addEvent,
+  getPendingFeedback,
   type Config,
 } from "./db.js";
 import { gitFacts, parseHandoff, renderHandoff } from "./handoff.js";
@@ -126,9 +127,13 @@ export async function cmdRun(args: string[]): Promise<void> {
         "utf-8"
       )
     : "(no plan provided)";
+  const feedback = memId ? getPendingFeedback(db, worktreeKey, memId, runId) : null;
+  if (feedback) console.error(`carrying forward review feedback from previous round`);
+
   const prompt = promptTemplate
     .replace("{{PLAN}}", planContent)
-    .replace("{{MEM_ID}}", memId ?? "none");
+    .replace("{{MEM_ID}}", memId ?? "none")
+    .replace("{{FEEDBACK}}", feedback ?? "(none — first round)");
 
   const executorCmd = templateArgs(config.executor.cmd, {
     id: memId ?? "none",
