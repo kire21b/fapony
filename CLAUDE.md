@@ -5,7 +5,8 @@
 CLI orchestrator สำหรับ multi-agent dev loop: `opencode เขียน → review → วนต่อ`. อยู่นอก worktree ของ product (ไม่ใช่ git worktree ของ innominix) เพราะ state ของผู้คุมงานไม่ควรอยู่ในที่ที่ผู้ถูกคุมแก้ได้
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `Bun.spawn`, `node:fs`, `node:child_process`
-**State:** SQLite ที่ `~/.fapony/state.db` (WAL mode)
+**State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode)
+**Topology:** `fapony/` = main (คุณแตะคนเดียว — merge เมื่อ gate ผ่าน) · `fapony/wt-fapony/` = dev (agents ทำงานที่นี่เท่านั้น) — worktree อยู่ใน repo จึงต้อง gitignore `wt-*/` ก่อน
 **License:** MIT, public ตั้งแต่ commit แรก
 
 ---
@@ -14,18 +15,30 @@ CLI orchestrator สำหรับ multi-agent dev loop: `opencode เขีย
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch (27 บรรทัด) — ลอกทรง mem.ts มา
+  fapony.ts           # CLI dispatch (33 บรรทัด)
   fapony.config.json  # runtime config (worktrees, executor, review gate, memory)
   package.json        # bin: { fapony: "./fapony.ts" }, ไม่มี dependencies
   prompts/
     execute.md        # execution prompt template ที่ inject เข้า executor
+    planner.md        # planner prompt — mark เสร็จ + NEXT-PROMPT/FILE_DONE
+    fixer.md          # fixer prompt — แก้ตาม gate note แล้ว HANDOFF
   src/
-    db.ts             # SQLite schema + loadConfig() + CRUD (180 บรรทัด)
-    run.ts            # flow หลัก: guard → claim → spawn → facts → route (247 บรรทัด)
+    db.ts             # SQLite schema + loadConfig() + CRUD (222 บรรทัด)
+    run.ts            # flow หลัก: guard → claim → spawn → facts → route (227 บรรทัด)
+    gate.ts           # gate CLI: pass/fail verdict + memory close (67 บรรทัด)
     handoff.ts        # gitFacts() + parseHandoff() + renderHandoff() (159 บรรทัด)
+    parse.ts          # parseGateVerdict() + parsePlanUpdate() (67 บรรทัด)
+    memory.ts         # shell adapter helpers for config.memory.* (45 บรรทัด)
+    safety.ts         # assertSafe() deny-list (19 บรรทัด)
     status.ts         # ตาราง runs ที่ยังไม่ passed/stopped (33 บรรทัด)
     stop.ts           # stop run + release memory claim (47 บรรทัด)
-    test.ts           # self-check 4 ตัว: assertSafe, parseHandoff, db lifecycle, renderHandoff (180 บรรทัด)
+    init-mem.ts       # init-mem command
+    test.ts           # self-check 7 ตัว (250 บรรทัด)
+  test/
+    fixtures/
+      executor.ts     # stub executor — commit + HANDOFF (no network)
+      gate.ts         # stub gate — VERDICT pass/fail (no network)
+      planner.ts      # stub planner — NEXT-PROMPT/FILE_DONE (no network)
 ```
 
 ---
@@ -92,7 +105,7 @@ events(
   id INTEGER PRIMARY KEY,
   run_id INTEGER NOT NULL,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,          -- spawn|commit|handoff|route|gate|stop|stalled|memory_claim|memory_claim_failed
+  kind TEXT NOT NULL,          -- spawn|commit|handoff|route|gate|stop|stalled|memory_claim|memory_claim_failed|memory_claim_closed|plan
   data TEXT                    -- json
 )
 ```
@@ -116,7 +129,8 @@ events(
   "memory": {
     "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],
     "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"]
+    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],
+    "kickoff": ["bun", ".memory/mem.ts", "kickoff"]
   }
 }
 ```
@@ -161,12 +175,12 @@ events(
 |-----------|-----------|
 | Dangerous git commands | `assertSafe()` deny-list ใน run.ts — เป็นโค้ด ไม่ใช่ข้อความ |
 | Dirty working tree | หยุดถาม + exit 1 ไม่ใช่ล้างเอง ห้ามstash/clean |
-| fapony เขียนไฟล์ worktree | ห้ามเด็ด镩 — db อยู่ ~/.fapony/ เท่านั้น |
+| fapony เขียนไฟล์ worktree | ห้ามเด็ด镩 — db อยู่ ~/.config/fapony/ เท่านั้น |
 | Executor ค้าง | timeout จาก config → status='stalled' + release claim |
 | Crash หลัง commit ก่อน log mem | events มี commit hash แล้ว; `fapony status` เตือน run ที่มี commit แต่ไม่มี memory event |
 | ไม่มี ## HANDOFF ใน stdout | ห้าม fail ทั้ง run → mark handoff_missing แล้วใช้ git-only handoff ต่อ |
 | Base SHA | เก็บ HEAD ตอนเริ่ม run (ไม่ใช่ HEAD~1) เพราะ opencode commit หลายก้อนตาม concern |
-| ~/.fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
+| ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
 
 ---
 
@@ -249,11 +263,13 @@ AI-powered git commit message generator (108 บรรทัด):
 - [x] ไม่ auto-drive Claude Code (user รัน review เอง)
 - [x] ไม่ทำ prefilter DeepSeek
 
-### Chunk 2 (ยังไม่ทำ) — auto-drive + review loop
-- Auto-drive executor ผ่าน `claude -p` หรือ `opencode run`
-- DeepSeek prefilter
+### Chunk 2 (กำลังทำ) — auto-drive + review loop
+- [x] 2a: src/parse.ts + prompts/planner.md + prompts/fixer.md + test fixtures
+- [ ] 2b: runOnce + loop driver (pausable)
+- [ ] 2c: auto-gate + bigFixer lane
+- [ ] 2d: plan-mv
+- DeepSeek prefilter (prefilter: null ยังคงเดิม)
 - ย้าย scrutinize-fix skill (ต้องถอด pnpm --filter vela-app ออกก่อน)
-- Test suite เต็ม
 
 ### Pre-condition ก่อน chunk 2
 - ต้องรัน chunk 1 กับ vela จริงสัก 2-3 รอบแล้วเห็นว่า handoff template ใช้ได้จริง
@@ -266,7 +282,7 @@ AI-powered git commit message generator (108 บรรทัด):
 2. **ห้าม git push** — กฎจาก vela opencode.json
 3. **Commit แยก concern** — one commit per feature/area
 4. **assertSafe() ต้องเรียกกับทุก command** ก่อน spawn รวมถึงที่มาจาก config
-5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.fapony/ เท่านั้น
+5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
 6. **status ที่ถูกต้อง:** running → awaiting_review → fixing → passed | stopped | stalled
 7. **round cap:** ถ้า round > maxRounds → STOP, plan มีปัญหา
 8. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
@@ -280,5 +296,6 @@ fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]
 fapony status                    # ตาราง active runs
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
-fapony test                      # self-check 4 ตัว
+fapony gate <run-id> pass|fail [note]  # review verdict + memory close
+fapony test                      # self-check 7 ตัว
 ```

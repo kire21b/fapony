@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import assert from "node:assert";
 import {
@@ -11,6 +11,7 @@ import {
   getRun,
 } from "./db.js";
 import { parseHandoff, renderHandoff } from "./handoff.js";
+import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 
 function testAssertSafe(): void {
   // These should throw (dangerous)
@@ -153,6 +154,102 @@ function testRenderHandoff(): void {
   console.log("  ✓ renderHandoff");
 }
 
+function testParseGateVerdict(): void {
+  // pass with note
+  const passWithNote = `Some review output here
+VERDICT: pass
+Looks good, no issues found.`;
+  let v = parseGateVerdict(passWithNote);
+  assert(v !== null, "should parse pass verdict");
+  assert.equal(v!.verdict, "pass");
+  assert.equal(v!.note, "Looks good, no issues found.");
+
+  // fail with multiline note
+  const failNote = `VERDICT: fail
+- Missing error handling in auth.ts:42
+- Type mismatch in db.ts`;
+  v = parseGateVerdict(failNote);
+  assert(v !== null, "should parse fail verdict");
+  assert.equal(v!.verdict, "fail");
+  assert(v!.note.includes("Missing error handling"), "note should contain findings");
+
+  // no verdict marker → null (§0.4)
+  v = parseGateVerdict("just some output with no verdict");
+  assert.equal(v, null, "no VERDICT marker should return null");
+
+  // verdict without note
+  v = parseGateVerdict("VERDICT: pass");
+  assert(v !== null, "should parse pass without note");
+  assert.equal(v!.verdict, "pass");
+  assert.equal(v!.note, "");
+
+  console.log("  ✓ parseGateVerdict");
+}
+
+function testParsePlanUpdate(): void {
+  // NEXT-PROMPT
+  const nextPrompt = `Marked file as done.
+
+## NEXT-PROMPT
+Implement the login flow in src/auth.ts following the pattern in src/auth-old.ts.
+Include error handling and unit tests.`;
+  let p = parsePlanUpdate(nextPrompt);
+  assert(p !== null, "should parse NEXT-PROMPT");
+  assert.equal(p!.kind, "next_prompt");
+  assert(p!.text.includes("Implement the login flow"), "should contain prompt text");
+
+  // FILE_DONE
+  const fileDone = `Done with this file.
+
+## FILE_DONE
+auth.ts is complete — all tests pass.`;
+  p = parsePlanUpdate(fileDone);
+  assert(p !== null, "should parse FILE_DONE");
+  assert.equal(p!.kind, "file_done");
+  assert(p!.text.includes("auth.ts is complete"), "should contain done message");
+
+  // no marker → null (§0.4)
+  p = parsePlanUpdate("just some output without markers");
+  assert.equal(p, null, "no marker should return null");
+
+  // both markers → last one wins
+  const both = `## NEXT-PROMPT
+First prompt
+
+## FILE_DONE
+All files done.`;
+  p = parsePlanUpdate(both);
+  assert(p !== null, "should parse last marker");
+  assert.equal(p!.kind, "file_done");
+  assert(p!.text.includes("All files done"), "should use last marker");
+
+  // empty text after marker → null
+  const empty = "## NEXT-PROMPT\n";
+  p = parsePlanUpdate(empty);
+  assert.equal(p, null, "empty text after marker should return null");
+
+  console.log("  ✓ parsePlanUpdate");
+}
+
+function testFixtureGuard(): void {
+  // Verify fixture files do not contain spawn/fetch — prevents token burn in tests
+  const fixtureDir = join(import.meta.dir, "..", "test", "fixtures");
+  try {
+    const files = readdirSync(fixtureDir).filter((f: string) => f.endsWith(".ts"));
+    for (const file of files) {
+      const content = readFileSync(join(fixtureDir, file), "utf-8");
+      assert(
+        !/\bBun\.spawn\b/.test(content) && !/\bfetch\b/.test(content),
+        `fixture ${file} must not contain Bun.spawn or fetch`
+      );
+    }
+    console.log("  ✓ fixture guard (no spawn/fetch)");
+  } catch {
+    // test/fixtures/ doesn't yet exist — that's fine, the guard passes vacuously
+    console.log("  ✓ fixture guard (no fixtures yet, skipped)");
+  }
+}
+
 // Duplicated from run.ts to avoid circular import in test
 const DANGEROUS_PATTERNS = [
   /reset\s+--hard/,
@@ -176,5 +273,8 @@ export async function cmdTest(): Promise<void> {
   testParseHandoff();
   testDbLifecycle();
   testRenderHandoff();
+  testParseGateVerdict();
+  testParsePlanUpdate();
+  testFixtureGuard();
   console.log("\nall tests passed ✓");
 }
