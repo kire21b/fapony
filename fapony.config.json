@@ -15,6 +15,7 @@
   "memory": {
     "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],
     "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"]
+    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],
+    "kickoff": ["bun", ".memory/mem.ts", "kickoff"]
   }
 }

@@ -64,6 +64,10 @@ fapony status
 # Reprint handoff for a run
 fapony handoff <run-id>
 
+# Close the review gate — pass closes the mem claim + prints mem kickoff (next items)
+fapony gate <run-id> pass "reviewed, looks good"
+fapony gate <run-id> fail "missing error handling on X" # round+1, status → fixing
+
 # Stop a run
 fapony stop <run-id> "plan needs rework"
 
@@ -82,7 +86,7 @@ Key fields:
 - `review.bigDiff` — thresholds for routing to "big" review
 - `review.maxRounds` — hard cap on fix rounds
 - `review.gate` — command to run for review
-- `memory` — shell commands for claim/close/add, or `null` to disable
+- `memory` — shell commands for claim/close/add/kickoff, or `null` to disable
 
 ## License
 
