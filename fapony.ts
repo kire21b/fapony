@@ -9,11 +9,14 @@ import { cmdStop } from "./src/stop.js";
 import { cmdTest } from "./src/test.js";
 import { cmdGate } from "./src/gate.js";
 import { cmdInitMem } from "./src/init-mem.js";
+import { cmdLoop } from "./src/loop.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
 if (cmd === "run") {
   await cmdRun(a);
+} else if (cmd === "loop") {
+  await cmdLoop(a);
 } else if (cmd === "status") {
   cmdStatus(a);
 } else if (cmd === "handoff") {
@@ -28,6 +31,6 @@ if (cmd === "run") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
-  console.error("usage: fapony <run|status|handoff|stop|gate|init-mem|test> [args]");
+  console.error("usage: fapony <run|loop|status|handoff|stop|gate|init-mem|test> [args]");
   process.exit(1);
 }

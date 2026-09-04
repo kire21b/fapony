@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import {
   openDb,
   loadConfig,
@@ -9,12 +10,13 @@ import {
   addEvent,
   getPendingFeedback,
   type Config,
+  type RunStatus,
 } from "./db.js";
-import { gitFacts, parseHandoff, renderHandoff } from "./handoff.js";
+import { gitFacts, parseHandoff, renderHandoff, type GitFacts, type ParsedHandoff } from "./handoff.js";
 import { closeMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";
 
-function templateArgs(
+export function templateArgs(
   arr: string[],
   vars: Record<string, string>
 ): string[] {
@@ -27,39 +29,45 @@ function templateArgs(
   });
 }
 
-export async function cmdRun(args: string[]): Promise<void> {
-  const worktreeKey = args[0];
-  if (!worktreeKey) {
-    console.error("usage: fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]");
-    process.exit(1);
-  }
+export interface RunOnceOpts {
+  worktreeKey: string;
+  planPath: string | null;
+  planContent: string | null;
+  memId: string | null;
+  allowDirty: boolean;
+}
 
-  let planPath: string | null = null;
-  let memId: string | null = null;
-  let allowDirty = false;
+export interface RunOnceResult {
+  runId: number;
+  status: RunStatus;
+  facts: GitFacts;
+  parsed: ParsedHandoff;
+  isBig: boolean;
+  error?: string;
+}
 
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === "--plan" && args[i + 1]) {
-      planPath = args[++i];
-    } else if (args[i] === "--mem-id" && args[i + 1]) {
-      memId = args[++i];
-    } else if (args[i] === "--allow-dirty") {
-      allowDirty = true;
-    }
-  }
-
+/**
+ * Core run flow — does NOT call process.exit.
+ * CLI wrapper (cmdRun) is responsible for exit codes.
+ */
+export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
+  const { worktreeKey, planPath, planContent: planContentOverride, memId, allowDirty } = opts;
   const config = loadConfig();
   const worktree = config.worktrees[worktreeKey];
+
   if (!worktree) {
-    console.error(`unknown worktree key: ${worktreeKey}`);
-    console.error(`available: ${Object.keys(config.worktrees).join(", ")}`);
-    process.exit(1);
+    return {
+      runId: 0,
+      status: "stopped",
+      facts: { files: 0, lines: 0, commits: [], branch: "" },
+      parsed: { missing: true },
+      isBig: false,
+      error: `unknown worktree key: ${worktreeKey} (available: ${Object.keys(config.worktrees).join(", ")})`,
+    };
   }
 
   // --- 1. GIT GUARD ---
-  // Check for unclean working tree
   try {
-    const { execSync } = await import("node:child_process");
     const porcelain = execSync("git status --porcelain", {
       cwd: worktree,
       encoding: "utf-8",
@@ -71,18 +79,27 @@ export async function cmdRun(args: string[]): Promise<void> {
       const more = porcelain.split("\n").length > 10
         ? `\n  ... and ${porcelain.split("\n").length - 10} more`
         : "";
-      console.error(
-        `worktree has uncommitted changes (may be another agent's work):\n${dirtyFiles}${more}\n\nRe-run with --allow-dirty to proceed, or commit/stash first.`
-      );
-      process.exit(1);
+      return {
+        runId: 0,
+        status: "stopped",
+        facts: { files: 0, lines: 0, commits: [], branch: "" },
+        parsed: { missing: true },
+        isBig: false,
+        error: `worktree has uncommitted changes:\n${dirtyFiles}${more}\n\nRe-run with --allow-dirty to proceed.`,
+      };
     }
   } catch (e) {
-    console.error(`git status failed in ${worktree}: ${(e as Error).message}`);
-    process.exit(1);
+    return {
+      runId: 0,
+      status: "stopped",
+      facts: { files: 0, lines: 0, commits: [], branch: "" },
+      parsed: { missing: true },
+      isBig: false,
+      error: `git status failed in ${worktree}: ${(e as Error).message}`,
+    };
   }
 
   // --- 2. BASE SHA + INSERT RUN ---
-  const { execSync } = await import("node:child_process");
   const baseSha = execSync("git rev-parse HEAD", {
     cwd: worktree,
     encoding: "utf-8",
@@ -100,7 +117,6 @@ export async function cmdRun(args: string[]): Promise<void> {
     try {
       const claimCmd = templateArgs(config.memory.claim, { id: memId });
       assertSafe(claimCmd);
-      const { execSync } = await import("node:child_process");
       execSync(claimCmd.join(" "), {
         cwd: worktree,
         stdio: ["pipe", "pipe", "pipe"],
@@ -116,17 +132,25 @@ export async function cmdRun(args: string[]): Promise<void> {
     }
   }
 
-  // --- 4. SPAWN EXECUTOR ---
+  // --- 4. RESOLVE PLAN CONTENT ---
+  // Source 1: explicit planContent override (from loop/planner)
+  // Source 2: plan file on disk
+  // Source 3: fallback
+  let planContent = planContentOverride;
+  if (!planContent && planPath) {
+    try {
+      planContent = readFileSync(join(worktree, planPath), "utf-8");
+    } catch {
+      planContent = `(plan file not found: ${planPath})`;
+    }
+  }
+  if (!planContent) planContent = "(no plan provided)";
+
+  // --- 5. SPAWN EXECUTOR ---
   const promptTemplate = readFileSync(
     join(import.meta.dir, "..", "prompts", "execute.md"),
     "utf-8"
   );
-  const planContent = planPath
-    ? readFileSync(
-        join(worktree, planPath),
-        "utf-8"
-      )
-    : "(no plan provided)";
   const feedback = memId ? getPendingFeedback(db, worktreeKey, memId, runId) : null;
   if (feedback) console.error(`carrying forward review feedback from previous round`);
 
@@ -153,11 +177,9 @@ export async function cmdRun(args: string[]): Promise<void> {
       stderr: "pipe",
     });
 
-    // Write prompt to stdin (proc.stdin is a FileSink when stdin:"pipe" — no getWriter())
     proc.stdin.write(prompt);
     await proc.stdin.end();
 
-    // Stream stdout
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -188,21 +210,26 @@ export async function cmdRun(args: string[]): Promise<void> {
     addEvent(db, runId, "stalled", { exit_code: exitCode });
     console.error(`\nfapony: run ${runId} stalled (exit ${exitCode})`);
 
-    // Release memory if claimed
     if (memId) closeMemory(config, worktree, memId, `run ${runId} stalled`);
-    process.exit(1);
+
+    return {
+      runId,
+      status: "stalled",
+      facts: { files: 0, lines: 0, commits: [], branch: "" },
+      parsed: { missing: true },
+      isBig: false,
+    };
   }
 
-  // --- 5. GIT FACTS + PARSE HANDOFF ---
+  // --- 6. GIT FACTS + PARSE HANDOFF ---
   const facts = gitFacts(worktree, baseSha);
   const parsed = parseHandoff(stdout);
 
-  // Log all commits from this run
   for (const hash of facts.commits) {
     addEvent(db, runId, "commit", { hash });
   }
 
-  // --- 6. ROUTE ---
+  // --- 7. ROUTE ---
   const isBig =
     facts.files > config.review.bigDiff.files ||
     facts.lines > config.review.bigDiff.lines;
@@ -210,18 +237,51 @@ export async function cmdRun(args: string[]): Promise<void> {
   addEvent(db, runId, "route", { big: isBig, files: facts.files, lines: facts.lines });
   setStatus(db, runId, "awaiting_review");
 
-  // --- 7. PRINT HANDOFF + NEXT STEP ---
-  const handoff = renderHandoff(facts, parsed);
+  return { runId, status: "awaiting_review", facts, parsed, isBig };
+}
+
+/** CLI wrapper — calls runOnce and exits with appropriate code. */
+export async function cmdRun(args: string[]): Promise<void> {
+  const worktreeKey = args[0];
+  if (!worktreeKey) {
+    console.error("usage: fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]");
+    process.exit(1);
+  }
+
+  let planPath: string | null = null;
+  let memId: string | null = null;
+  let allowDirty = false;
+
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === "--plan" && args[i + 1]) {
+      planPath = args[++i];
+    } else if (args[i] === "--mem-id" && args[i + 1]) {
+      memId = args[++i];
+    } else if (args[i] === "--allow-dirty") {
+      allowDirty = true;
+    }
+  }
+
+  const result = await runOnce({ worktreeKey, planPath, planContent: null, memId, allowDirty });
+
+  if (result.error) {
+    console.error(result.error);
+    process.exit(1);
+  }
+
+  // Print handoff + next step (CLI-only output, loop handles this differently)
+  const handoff = renderHandoff(result.facts, result.parsed);
   console.log("\n" + handoff);
 
   console.log("\n--- next step (run manually) ---");
+  const config = loadConfig();
   const gate = config.review.gate.join(" ");
   console.log(
-    `Route: ${isBig ? "big" : "small"} diff (${facts.files} files, ${facts.lines} lines)`
+    `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`
   );
   console.log(`Run review: ${gate}`);
   console.log(`After review: fapony status`);
-  if (parsed.not_done?.length) {
-    console.log(`\n⚠ not_done items: ${parsed.not_done.join("; ")}`);
+  if (result.parsed.not_done?.length) {
+    console.log(`\n⚠ not_done items: ${result.parsed.not_done.join("; ")}`);
   }
 }

@@ -34,6 +34,9 @@ export interface Event {
 export interface Config {
   worktrees: Record<string, string>;
   executor: { cmd: string[]; timeoutMin: number };
+  roles?: {
+    [name: string]: { cmd: string[]; model?: string; timeoutMin?: number };
+  };
   review: {
     bigDiff: { files: number; lines: number };
     maxRounds: number;
@@ -219,4 +222,37 @@ export function getPendingFeedback(
   } catch {
     return null;
   }
+}
+
+/**
+ * Pulls the most recent planner output (NEXT-PROMPT or FILE_DONE) for a worktree+mem_id pair.
+ * Used by loop.ts to resolve {{PLAN}} from planner events when no plan file is specified.
+ * Returns { kind, text } or null if no plan event exists.
+ */
+export function getLastPlanUpdate(
+  db: Database,
+  worktree: string,
+  memId: string
+): { kind: "next_prompt" | "file_done"; text: string } | null {
+  const run = db
+    .prepare(
+      `SELECT id FROM runs WHERE worktree = ? AND mem_id = ? ORDER BY id DESC LIMIT 1`
+    )
+    .get(worktree, memId) as { id: number } | null;
+  if (!run) return null;
+
+  const event = db
+    .prepare(
+      `SELECT data FROM events WHERE run_id = ? AND kind = 'plan' ORDER BY id DESC LIMIT 1`
+    )
+    .get(run.id) as { data: string | null } | null;
+  if (!event || !event.data) return null;
+
+  try {
+    const parsed = JSON.parse(event.data) as { kind?: string; text?: string };
+    if (parsed.kind && parsed.text) {
+      return { kind: parsed.kind as "next_prompt" | "file_done", text: parsed.text };
+    }
+  } catch {}
+  return null;
 }

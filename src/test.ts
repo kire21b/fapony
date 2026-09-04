@@ -9,6 +9,7 @@ import {
   setStatus,
   addEvent,
   getRun,
+  getLastPlanUpdate,
 } from "./db.js";
 import { parseHandoff, renderHandoff } from "./handoff.js";
 import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
@@ -250,6 +251,51 @@ function testFixtureGuard(): void {
   }
 }
 
+function testGetLastPlanUpdate(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
+  const dbPath = join(dir, "state.db");
+  const origHome = process.env.HOME;
+  process.env.HOME = dir;
+
+  try {
+    const db = openDb();
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+
+    // No plan event yet → null
+    let result = getLastPlanUpdate(db, "test-wt", "mem-1");
+    assert.equal(result, null, "no plan event should return null");
+
+    // Add plan event with NEXT-PROMPT
+    addEvent(db, runId, "plan", { kind: "next_prompt", text: "Implement auth flow" });
+    result = getLastPlanUpdate(db, "test-wt", "mem-1");
+    assert(result !== null, "should find plan event");
+    assert.equal(result!.kind, "next_prompt");
+    assert.equal(result!.text, "Implement auth flow");
+
+    // Add another plan event with FILE_DONE — last one wins
+    addEvent(db, runId, "plan", { kind: "file_done", text: "All done." });
+    result = getLastPlanUpdate(db, "test-wt", "mem-1");
+    assert(result !== null, "should find latest plan event");
+    assert.equal(result!.kind, "file_done");
+    assert.equal(result!.text, "All done.");
+
+    // Different mem_id → null
+    result = getLastPlanUpdate(db, "test-wt", "mem-999");
+    assert.equal(result, null, "different mem_id should return null");
+
+    // Different worktree → null
+    result = getLastPlanUpdate(db, "other-wt", "mem-1");
+    assert.equal(result, null, "different worktree should return null");
+
+    db.close();
+  } finally {
+    process.env.HOME = origHome;
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ getLastPlanUpdate");
+}
+
 // Duplicated from run.ts to avoid circular import in test
 const DANGEROUS_PATTERNS = [
   /reset\s+--hard/,
@@ -276,5 +322,6 @@ export async function cmdTest(): Promise<void> {
   testParseGateVerdict();
   testParsePlanUpdate();
   testFixtureGuard();
+  testGetLastPlanUpdate();
   console.log("\nall tests passed ✓");
 }
