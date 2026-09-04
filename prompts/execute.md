@@ -8,13 +8,18 @@ You are working in a worktree managed by fapony.
 
 {{MEM_ID}}
 
+## Review feedback (previous round, if any)
+
+{{FEEDBACK}}
+
 ## Rules
 
+- If there is review feedback above, fix those points first — that's what this round is for.
 - Commit changes as you go, split by concern/domain — one commit per feature/area touched. Do NOT bundle unrelated changes into one commit.
 - Do NOT `git push` — pushing waits for the user or the review gate.
 - Do NOT run `git reset --hard`, `git clean -fd`, `git checkout -- .`, or `git stash` — these are banned.
 - If `git status --porcelain` shows unexpected uncommitted files, STOP and report — do not clean them.
-- Do NOT write any files outside the worktree (fapony state lives at ~/.fapony/).
+- Do NOT write any files outside the worktree (fapony state lives in ~/.config/fapony/).
 
 ## Required Output
 

@@ -186,3 +186,37 @@ export function getEvents(db: Database, runId: number): Event[] {
     .prepare("SELECT * FROM events WHERE run_id = ? ORDER BY id")
     .all(runId) as Event[];
 }
+
+/**
+ * Pulls the most recent unresolved "gate fail" note for a worktree+mem_id pair —
+ * i.e. the review feedback the next `fapony run` should hand back to the executor.
+ * Only looks at the latest run for that pair; if it already passed, returns null
+ * (nothing to carry forward).
+ */
+export function getPendingFeedback(
+  db: Database,
+  worktree: string,
+  memId: string,
+  excludeRunId?: number
+): string | null {
+  const run = db
+    .prepare(
+      `SELECT * FROM runs WHERE worktree = ? AND mem_id = ? AND id != ? ORDER BY id DESC LIMIT 1`
+    )
+    .get(worktree, memId, excludeRunId ?? -1) as Run | null;
+  if (!run || run.status !== "fixing") return null;
+
+  const event = db
+    .prepare(
+      `SELECT * FROM events WHERE run_id = ? AND kind = 'gate' ORDER BY id DESC LIMIT 1`
+    )
+    .get(run.id) as Event | null;
+  if (!event || !event.data) return null;
+
+  try {
+    const parsed = JSON.parse(event.data) as { verdict?: string; note?: string };
+    return parsed.verdict === "fail" && parsed.note ? parsed.note : null;
+  } catch {
+    return null;
+  }
+}
