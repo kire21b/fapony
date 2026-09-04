@@ -44,6 +44,7 @@ export interface Config {
     claim: string[];
     close: string[];
     add: string[];
+    kickoff?: string[];
   } | null;
 }
 
@@ -59,12 +60,19 @@ const DEFAULT_CONFIG: Config = {
   memory: null,
 };
 
+// XDG Base Directory convention (macOS ignores Apple's ~/Library/Application Support
+// for CLI tools by common practice — gh, ripgrep-adjacent tools, etc. use ~/.config too)
+function faponyDir(): string {
+  const base = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+  return join(base, "fapony");
+}
+
 function dbPath(): string {
-  return join(homedir(), ".fapony", "state.db");
+  return join(faponyDir(), "state.db");
 }
 
 export function openDb(): Database {
-  const dir = join(homedir(), ".fapony");
+  const dir = faponyDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const db = new Database(dbPath());
