@@ -7,6 +7,12 @@ import {
   testParsePlanUpdate,
   testFixtureGuard,
 } from "./parse.test.js";
+import {
+  testGateOncePass,
+  testGateOnceFail,
+  testGateOnceAlreadyPassed,
+  testGateOnceMaxRounds,
+} from "./gate.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -18,5 +24,9 @@ export async function cmdTest(): Promise<void> {
   testParsePlanUpdate();
   testFixtureGuard();
   testGetLastPlanUpdate();
+  testGateOncePass();
+  testGateOnceFail();
+  testGateOnceAlreadyPassed();
+  testGateOnceMaxRounds();
   console.log("\nall tests passed ✓");
 }

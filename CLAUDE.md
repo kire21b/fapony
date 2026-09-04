@@ -267,7 +267,7 @@ AI-powered git commit message generator (108 บรรทัด):
 ### Chunk 2 (กำลังทำ) — auto-drive + review loop
 - [x] 2a: src/parse.ts + prompts/planner.md + prompts/fixer.md + test fixtures
 - [x] 2b: runOnce + loop driver (pausable)
-- [ ] 2c: auto-gate + bigFixer lane
+- [x] 2c: auto-gate + bigFixer lane
 - [ ] 2d: plan-mv
 - DeepSeek prefilter (prefilter: null ยังคงเดิม)
 - ย้าย scrutinize-fix skill (ต้องถอด pnpm --filter vela-app ออกก่อน)

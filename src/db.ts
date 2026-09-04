@@ -42,6 +42,7 @@ export interface Config {
     maxRounds: number;
     gate: string[];
     prefilter: null;
+    autoLoop?: boolean;
   };
   memory: {
     claim: string[];

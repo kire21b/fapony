@@ -1,30 +1,36 @@
-import { openDb, getRun, setStatus, incrementRound, addEvent, loadConfig } from "./db.js";
+import {
+  openDb,
+  getRun,
+  setStatus,
+  incrementRound,
+  addEvent,
+  loadConfig,
+} from "./db.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 
-export async function cmdGate(args: string[]): Promise<void> {
-  const runId = parseInt(args[0], 10);
-  const verdict = args[1];
+export interface GateResult {
+  runId: number;
+  status: "passed" | "fixing" | "stopped";
+  round?: number;
+  error?: string;
+}
 
-  if (!runId || isNaN(runId) || (verdict !== "pass" && verdict !== "fail")) {
-    console.error("usage: fapony gate <run-id> pass|fail [note]");
-    console.error("       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)");
-    process.exit(1);
-  }
-
-  // inline arg wins; otherwise read stdin if it's piped (not a TTY) — avoids
-  // shell-escaping a review full of backticks/quotes/markdown as a CLI arg
-  const inline = args.slice(2).join(" ");
-  const note = inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
-
+/**
+ * Core gate logic — does NOT call process.exit.
+ * CLI wrapper (cmdGate) is responsible for exit codes.
+ */
+export function gateOnce(
+  runId: number,
+  verdict: "pass" | "fail",
+  note: string
+): GateResult {
   const db = openDb();
   const run = getRun(db, runId);
   if (!run) {
-    console.error(`run ${runId} not found`);
-    process.exit(1);
+    return { runId, status: "stopped", error: `run ${runId} not found` };
   }
   if (run.status === "passed" || run.status === "stopped") {
-    console.error(`run ${runId} is already ${run.status}`);
-    process.exit(1);
+    return { runId, status: run.status, error: `run ${runId} is already ${run.status}` };
   }
 
   const config = loadConfig();
@@ -39,14 +45,10 @@ export async function cmdGate(args: string[]): Promise<void> {
       addEvent(db, runId, "memory_claim_closed", { mem_id: run.mem_id });
     }
 
-    console.log(`run ${runId} passed`);
-
     const kickoff = kickoffMemory(config, worktree);
-    if (kickoff) {
-      console.log("\n--- next (mem kickoff) ---");
-      console.log(kickoff);
-    }
-    return;
+    if (kickoff) console.log(kickoff);
+
+    return { runId, status: "passed" };
   }
 
   // fail → back to executor, one more round
@@ -55,13 +57,43 @@ export async function cmdGate(args: string[]): Promise<void> {
   addEvent(db, runId, "gate", { verdict: "fail", note });
 
   const updated = getRun(db, runId)!;
-  console.log(`run ${runId} needs fixes (round ${updated.round}): ${note || "(no note)"}`);
 
   if (updated.round >= config.review.maxRounds) {
-    console.log(
-      `\n⚠ round ${updated.round} ≥ maxRounds ${config.review.maxRounds} — plan likely has a problem, not the code. Consider stopping and revising the plan instead of another fapony run.`
-    );
-  } else {
-    console.log(`\nRe-run to fix: fapony run ${run.worktree} --plan ${run.plan ?? "<plan>"} --mem-id ${run.mem_id ?? "<id>"} --allow-dirty`);
+    return {
+      runId,
+      status: "stopped",
+      round: updated.round,
+      error: `round ${updated.round} >= maxRounds ${config.review.maxRounds} — plan likely has a problem`,
+    };
+  }
+
+  return { runId, status: "fixing", round: updated.round };
+}
+
+/** CLI wrapper — parses args, calls gateOnce, handles exit. */
+export async function cmdGate(args: string[]): Promise<void> {
+  const runId = parseInt(args[0], 10);
+  const verdict = args[1];
+
+  if (!runId || isNaN(runId) || (verdict !== "pass" && verdict !== "fail")) {
+    console.error("usage: fapony gate <run-id> pass|fail [note]");
+    console.error("       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)");
+    process.exit(1);
+  }
+
+  const inline = args.slice(2).join(" ");
+  const note = inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
+
+  const result = gateOnce(runId, verdict, note);
+
+  if (result.error) {
+    console.error(result.error);
+    process.exit(1);
+  }
+
+  if (result.status === "passed") {
+    console.log(`run ${runId} passed`);
+  } else if (result.status === "fixing") {
+    console.log(`run ${runId} needs fixes (round ${result.round}): ${note || "(no note)"}`);
   }
 }

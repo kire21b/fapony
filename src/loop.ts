@@ -5,12 +5,14 @@ import {
   setStatus,
   addEvent,
   getLastPlanUpdate,
+  type Config,
 } from "./db.js";
 import { runOnce, templateArgs } from "./run.js";
+import { gateOnce } from "./gate.js";
 import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 import { assertSafe } from "./safety.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
-import { execSync } from "node:child_process";
+import { renderHandoff } from "./handoff.js";
 
 /**
  * fapony loop — run executor → review → planner → repeat until FILE_DONE.
@@ -19,13 +21,8 @@ import { execSync } from "node:child_process";
  *   fapony loop <key> --plan <path>  → start new run
  *   fapony loop <run-id>             → resume after gate pass
  *
- * Flow per iteration:
- *   1. runOnce → awaiting_review → stop, print gate cmd for human
- *   2. Human gates pass → fapony loop <run-id> → resume
- *   3. If config has planner → spawn planner → get NEXT-PROMPT or FILE_DONE
- *   4. NEXT-PROMPT → runOnce with new prompt → goto 1
- *   5. FILE_DONE → close memory, kickoff next PLAN → done
- *   6. If no planner → stop at awaiting_review, tell human
+ * When autoLoop: true + roles.gate exists:
+ *   Loop spawns gate agent automatically instead of waiting for human.
  */
 export async function cmdLoop(args: string[]): Promise<void> {
   const config = loadConfig();
@@ -55,7 +52,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
 
   const db = openDb();
 
-  // --- Resume mode: load run context ---
+  // --- Resume mode ---
   if (runId) {
     const run = getRun(db, runId);
     if (!run) {
@@ -84,36 +81,72 @@ export async function cmdLoop(args: string[]): Promise<void> {
   }
 
   const hasPlanner = !!config.roles?.planner;
+  const autoLoop = !!config.review?.autoLoop;
+  const hasGate = !!config.roles?.gate;
+
   if (!hasPlanner) {
-    console.error("config.roles.planner not set — loop will stop at awaiting_review (no auto-planner)");
+    console.error("config.roles.planner not set — loop will stop at awaiting_review");
+  }
+  if (autoLoop && !hasGate) {
+    console.error("config.review.autoLoop is true but no roles.gate — auto-gate disabled");
   }
 
   // --- Main loop ---
   while (true) {
     const currentRun = runId ? getRun(db, runId) : null;
 
-    // --- awaiting_review: either stop (no planner) or spawn planner ---
+    // --- awaiting_review ---
     if (currentRun?.status === "awaiting_review") {
-      if (!hasPlanner) {
-        console.log(`\nrun ${runId} awaiting review — no planner configured, stopping loop`);
+      // Auto-gate: spawn gate agent
+      if (autoLoop && hasGate) {
+        console.error(`\n--- auto-gate for run ${runId} ---`);
+
+        const gateResult = await spawnGate(config, worktree, currentRun);
+        if (!gateResult) {
+          console.error("gate produced no VERDICT — stopping loop (§0.4 fail-safe)");
+          break;
+        }
+
+        const gateOutcome = gateOnce(runId!, gateResult.verdict, gateResult.note);
+        console.log(`gate: ${gateResult.verdict} — ${gateOutcome.status}`);
+
+        if (gateOutcome.status === "passed") {
+          // Continue to planner
+        } else if (gateOutcome.status === "fixing") {
+          // Continue loop — will re-run executor with feedback
+        } else {
+          // stopped (maxRounds)
+          console.error(`run ${runId} stopped: ${gateOutcome.error}`);
+          break;
+        }
+      } else {
+        // Manual gate: stop and wait for human
+        if (!hasPlanner) {
+          console.log(`\nrun ${runId} awaiting review — stopping loop (no planner)`);
+          console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+          break;
+        }
+        console.log(`\nrun ${runId} awaiting review`);
         console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+        console.log(`Resume loop: fapony loop ${runId}`);
         break;
       }
+    }
 
-      // Spawn planner
+    // --- After gate pass: spawn planner ---
+    const afterGate = runId ? getRun(db, runId) : null;
+    if (afterGate?.status === "passed" && hasPlanner) {
       console.error(`\n--- spawning planner for run ${runId} ---`);
 
-      const planUpdate = await spawnPlanner(config, worktree, currentRun);
+      const planUpdate = await spawnPlanner(config, worktree, afterGate);
       if (!planUpdate) {
         console.error("planner produced no valid marker — stopping loop (§0.4 fail-safe)");
         break;
       }
 
-      // Log plan event
       addEvent(db, runId, "plan", planUpdate);
 
       if (planUpdate.kind === "file_done") {
-        // PLAN complete — close memory, kickoff next
         console.log(`\nFILE_DONE: ${planUpdate.text}`);
         if (memId) {
           closeMemory(config, worktree, memId, planUpdate.text);
@@ -124,25 +157,17 @@ export async function cmdLoop(args: string[]): Promise<void> {
         break;
       }
 
-      // NEXT-PROMPT → continue loop with new plan content
+      // NEXT-PROMPT → run executor with new plan
       console.error(`planner returned NEXT-PROMPT, starting next run...`);
-      planPath = null; // plan comes from planner, not file
-      runId = null; // will create new run
-      // Fall through to runOnce below with planContent from planner
+      planPath = null;
+      runId = null;
     }
 
     // --- Run executor ---
-    // Resolve plan content: from planner event (if we just spawned) or from file
-    let planContent: string | null = null;
-    if (currentRun?.status === "awaiting_review" && hasPlanner) {
-      // We just spawned planner above — use its output as plan content
-      // (planPath was set to null, so runOnce will pick it up from getLastPlanUpdate)
-    }
-
     const result = await runOnce({
       worktreeKey,
       planPath,
-      planContent,
+      planContent: null,
       memId,
       allowDirty: currentRun?.status === "fixing" ? true : allowDirty,
     });
@@ -159,11 +184,86 @@ export async function cmdLoop(args: string[]): Promise<void> {
       break;
     }
 
-    // awaiting_review — stop and let human gate
-    console.log(`\n--- awaiting review (run ${runId}) ---`);
-    console.log(`Review: fapony gate ${runId} pass|fail [note]`);
-    console.log(`Resume loop: fapony loop ${runId}`);
-    break;
+    // --- Big diff route: spawn bigFixer instead of planner ---
+    if (result.isBig && config.roles?.bigFixer) {
+      console.error(`\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`);
+
+      const fixerResult = await spawnBigFixer(config, worktree, result);
+      if (!fixerResult) {
+        console.error("bigFixer produced no HANDOFF — stopping loop");
+        break;
+      }
+
+      // bigFixer output goes through gate
+      if (autoLoop && hasGate) {
+        const gateResult = await spawnGate(config, worktree, { id: runId, mem_id: memId, worktree: worktreeKey! });
+        if (gateResult) {
+          gateOnce(runId, gateResult.verdict, gateResult.note);
+        }
+      }
+      // Continue loop — re-run executor or planner
+      continue;
+    }
+
+    // awaiting_review — loop back to top
+    if (result.status === "awaiting_review") {
+      console.log(`\nrun ${runId} awaiting review`);
+      if (!autoLoop || !hasGate) {
+        console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+        console.log(`Resume loop: fapony loop ${runId}`);
+        break;
+      }
+      // autoLoop: continue to top of loop to auto-gate
+      continue;
+    }
+  }
+}
+
+async function spawnGate(
+  config: Config,
+  worktree: string,
+  run: { id: number; mem_id: string | null; worktree: string }
+): Promise<{ verdict: "pass" | "fail"; note: string } | null> {
+  const roleConfig = config.roles!.gate!;
+
+  const stdin = `Review run ${run.id} for worktree ${run.worktree}.`;
+
+  const cmd = templateArgs(roleConfig.cmd, {
+    model: roleConfig.model ?? "",
+    PROMPT: stdin,
+  });
+  assertSafe(cmd);
+
+  try {
+    const proc = Bun.spawn(cmd, {
+      cwd: worktree,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    proc.stdin.write(stdin);
+    proc.stdin.end();
+
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let stdout = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      stdout += decoder.decode(value, { stream: true });
+    }
+
+    const errBuf = await new Response(proc.stderr).text();
+    if (errBuf) process.stderr.write(errBuf);
+
+    await proc.exited;
+
+    return parseGateVerdict(stdout);
+  } catch (e) {
+    console.error(`gate spawn failed: ${(e as Error).message}`);
+    return null;
   }
 }
 
@@ -174,7 +274,6 @@ async function spawnPlanner(
 ): Promise<{ kind: "next_prompt" | "file_done"; text: string } | null> {
   const roleConfig = config.roles!.planner!;
 
-  // Build planner prompt — simplified stdin with run context
   const stdin = `Run ID: ${run.id}
 Worktree: ${run.worktree}
 Memory ID: ${run.mem_id ?? "none"}
@@ -198,7 +297,6 @@ Review the current state and output your decision.`;
     proc.stdin.write(stdin);
     proc.stdin.end();
 
-    // Collect stdout
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
     let stdout = "";
@@ -209,7 +307,6 @@ Review the current state and output your decision.`;
       stdout += decoder.decode(value, { stream: true });
     }
 
-    // Stream stderr for visibility
     const errBuf = await new Response(proc.stderr).text();
     if (errBuf) process.stderr.write(errBuf);
 
@@ -218,6 +315,55 @@ Review the current state and output your decision.`;
     return parsePlanUpdate(stdout);
   } catch (e) {
     console.error(`planner spawn failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+async function spawnBigFixer(
+  config: Config,
+  worktree: string,
+  runResult: { facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
+): Promise<string | null> {
+  const roleConfig = config.roles!.bigFixer!;
+
+  const stdin = `Big diff detected: ${runResult.facts.files} files, ${runResult.facts.lines} lines.
+Fix any issues found. Output HANDOFF when done.`;
+
+  const cmd = templateArgs(roleConfig.cmd, {
+    model: roleConfig.model ?? "",
+    PROMPT: stdin,
+  });
+  assertSafe(cmd);
+
+  try {
+    const proc = Bun.spawn(cmd, {
+      cwd: worktree,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    proc.stdin.write(stdin);
+    proc.stdin.end();
+
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let stdout = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      stdout += decoder.decode(value, { stream: true });
+    }
+
+    const errBuf = await new Response(proc.stderr).text();
+    if (errBuf) process.stderr.write(errBuf);
+
+    await proc.exited;
+
+    return stdout || null;
+  } catch (e) {
+    console.error(`bigFixer spawn failed: ${(e as Error).message}`);
     return null;
   }
 }
