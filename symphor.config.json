@@ -1,0 +1,20 @@
+{
+  "worktrees": {
+    "vela": "/Users/delamind/Project/innominix/wt-vela"
+  },
+  "executor": {
+    "cmd": ["opencode", "run"],
+    "timeoutMin": 45
+  },
+  "review": {
+    "bigDiff": { "files": 15, "lines": 400 },
+    "maxRounds": 2,
+    "gate": ["claude", "-p", "/code-review high"],
+    "prefilter": null
+  },
+  "memory": {
+    "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],
+    "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
+    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"]
+  }
+}
