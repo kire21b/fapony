@@ -71,6 +71,10 @@ fapony gate <run-id> fail "missing error handling on X" # round+1, status → fi
 # Stop a run
 fapony stop <run-id> "plan needs rework"
 
+# Scaffold the .memory/ system (mem.ts + store/selectors/render/commands) into a
+# new worktree from templates/memory/ — for projects that don't have one yet
+fapony init-mem <worktree-key>
+
 # Self-test
 fapony test
 ```
