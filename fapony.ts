@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// symphor — multi-agent dev loop orchestrator
+// fapony — multi-agent dev loop orchestrator
 // CLI dispatch: all logic lives in src/
 
 import { cmdRun } from "./src/run.js";
@@ -21,7 +21,7 @@ if (cmd === "run") {
 } else if (cmd === "test") {
   await cmdTest();
 } else {
-  console.error(`symphor: unknown command "${cmd ?? ""}"`);
-  console.error("usage: symphor <run|status|handoff|stop|test> [args]");
+  console.error(`fapony: unknown command "${cmd ?? ""}"`);
+  console.error("usage: fapony <run|status|handoff|stop|test> [args]");
   process.exit(1);
 }

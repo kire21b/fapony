@@ -5,7 +5,7 @@ export async function cmdStop(args: string[]): Promise<void> {
   const reason = args.slice(1).join(" ") || "stopped by user";
 
   if (!runId || isNaN(runId)) {
-    console.error("usage: symphor stop <run-id> [reason]");
+    console.error("usage: fapony stop <run-id> [reason]");
     process.exit(1);
   }
 

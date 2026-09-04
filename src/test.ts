@@ -93,7 +93,7 @@ not_done: none
 }
 
 function testDbLifecycle(): void {
-  const dir = mkdtempSync(join(tmpdir(), "symphor-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
   const dbPath = join(dir, "state.db");
 
   // Override dbPath for this test by temporarily patching

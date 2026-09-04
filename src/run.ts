@@ -43,7 +43,7 @@ function templateArgs(
 export async function cmdRun(args: string[]): Promise<void> {
   const worktreeKey = args[0];
   if (!worktreeKey) {
-    console.error("usage: symphor run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]");
+    console.error("usage: fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]");
     process.exit(1);
   }
 
@@ -196,7 +196,7 @@ export async function cmdRun(args: string[]): Promise<void> {
   if (exitCode !== 0) {
     setStatus(db, runId, "stalled");
     addEvent(db, runId, "stalled", { exit_code: exitCode });
-    console.error(`\nsymphor: run ${runId} stalled (exit ${exitCode})`);
+    console.error(`\nfapony: run ${runId} stalled (exit ${exitCode})`);
 
     // Release memory if claimed
     if (memId && config.memory) {
@@ -240,7 +240,7 @@ export async function cmdRun(args: string[]): Promise<void> {
     `Route: ${isBig ? "big" : "small"} diff (${facts.files} files, ${facts.lines} lines)`
   );
   console.log(`Run review: ${gate}`);
-  console.log(`After review: symphor status`);
+  console.log(`After review: fapony status`);
   if (parsed.not_done?.length) {
     console.log(`\n⚠ not_done items: ${parsed.not_done.join("; ")}`);
   }

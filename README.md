@@ -1,12 +1,12 @@
-# symphor
+# fapony
 
-Multi-agent dev loop orchestrator. You plan, symphor coordinates the execute → review → fix cycle.
+Multi-agent dev loop orchestrator. You plan, fapony coordinates the execute → review → fix cycle.
 
 ```
 PLAN (you + Claude)
   │
   ▼
-symphor run <worktree> --plan <path>
+fapony run <worktree> --plan <path>
   │
   ├─ git guard (dirty tree? dangerous command?)
   ├─ memory claim (optional, via config.memory.*)
@@ -19,8 +19,8 @@ symphor run <worktree> --plan <path>
         ▼
   review gate (claude -p /code-review high)
         │
-        ├─ pass → symphor status shows passed
-        └─ fix needed → symphor run again (round +1, cap 2)
+        ├─ pass → fapony status shows passed
+        └─ fix needed → fapony run again (round +1, cap 2)
              │
              └─ round 3? → STOP. Plan has a problem, not code.
 ```
@@ -56,24 +56,24 @@ Round 3 means the **plan** has a problem, not the code. At that point, stop and 
 
 ```bash
 # First run
-symphor run vela --plan PLAN-foo.md --mem-id abc123
+fapony run vela --plan PLAN-foo.md --mem-id abc123
 
 # Check active runs
-symphor status
+fapony status
 
 # Reprint handoff for a run
-symphor handoff <run-id>
+fapony handoff <run-id>
 
 # Stop a run
-symphor stop <run-id> "plan needs rework"
+fapony stop <run-id> "plan needs rework"
 
 # Self-test
-symphor test
+fapony test
 ```
 
 ## Config
 
-`symphor.config.json` in the project root. See the example file for the full schema.
+`fapony.config.json` in the project root. See the example file for the full schema.
 
 Key fields:
 - `worktrees` — name → path mapping

@@ -1,9 +1,12 @@
 {
-  "name": "symphor",
+  "name": "fapony",
   "version": "0.1.0",
   "description": "Multi-agent dev loop orchestrator",
   "license": "MIT",
   "bin": {
-    "symphor": "./symphor.ts"
+    "fapony": "./fapony.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
   }
 }

@@ -1,4 +1,4 @@
-You are working in a worktree managed by symphor.
+You are working in a worktree managed by fapony.
 
 ## Plan
 
@@ -14,7 +14,7 @@ You are working in a worktree managed by symphor.
 - Do NOT `git push` — pushing waits for the user or the review gate.
 - Do NOT run `git reset --hard`, `git clean -fd`, `git checkout -- .`, or `git stash` — these are banned.
 - If `git status --porcelain` shows unexpected uncommitted files, STOP and report — do not clean them.
-- Do NOT write any files outside the worktree (symphor state lives at ~/.symphor/).
+- Do NOT write any files outside the worktree (fapony state lives at ~/.fapony/).
 
 ## Required Output
 

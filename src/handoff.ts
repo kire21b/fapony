@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { openDb, getRun, getEvents, type Run } from "./db.js";
 
 export interface GitFacts {
   files: number;
@@ -120,4 +121,39 @@ export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff): string {
   }
 
   return lines.join("\n");
+}
+
+export function cmdHandoff(args: string[]): void {
+  const runId = parseInt(args[0], 10);
+  if (!runId || isNaN(runId)) {
+    console.error("usage: fapony handoff <run-id>");
+    process.exit(1);
+  }
+
+  const db = openDb();
+  const run = getRun(db, runId);
+  if (!run) {
+    console.error(`run ${runId} not found`);
+    process.exit(1);
+  }
+
+  const events = getEvents(db, runId);
+  const commitEvents = events.filter((e) => e.kind === "commit");
+  const commits = commitEvents.map((e) => {
+    const d = JSON.parse(e.data ?? "{}");
+    return d.hash ?? "";
+  }).filter(Boolean);
+
+  const facts: GitFacts = {
+    files: 0,
+    lines: 0,
+    commits,
+    branch: "",
+  };
+
+  const parsed: ParsedHandoff = {
+    missing: true,
+  };
+
+  console.log(renderHandoff(facts, parsed));
 }

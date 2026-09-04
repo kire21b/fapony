@@ -60,11 +60,11 @@ const DEFAULT_CONFIG: Config = {
 };
 
 function dbPath(): string {
-  return join(homedir(), ".symphor", "state.db");
+  return join(homedir(), ".fapony", "state.db");
 }
 
 export function openDb(): Database {
-  const dir = join(homedir(), ".symphor");
+  const dir = join(homedir(), ".fapony");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const db = new Database(dbPath());
@@ -98,7 +98,7 @@ export function openDb(): Database {
 }
 
 export function loadConfig(): Config {
-  const configPath = join(process.cwd(), "symphor.config.json");
+  const configPath = join(process.cwd(), "fapony.config.json");
   if (!existsSync(configPath)) return DEFAULT_CONFIG;
 
   try {
