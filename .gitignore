@@ -2,6 +2,7 @@
 node_modules/
 *.db*
 wt-*/
+ROADMAP.md
 
 # Local env files
 .env
