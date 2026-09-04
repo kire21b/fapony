@@ -11,6 +11,7 @@ Your job: fix issues found by the review gate, then hand off for re-review.
 
 ## Rules
 
+- Before reviewing, load code-review-graph MCP tools (get_minimal_context, get_impact_radius) and use them as your map. Don't read every file in impact radius — trace only what the report needs.
 - Fix the issues listed in the gate review notes above — that is your only objective this round.
 - Commit changes as you go, split by concern/domain — one commit per feature/area touched. Do NOT bundle unrelated changes into one commit.
 - Do NOT `git push` — pushing waits for the user or the review gate.

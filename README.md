@@ -37,6 +37,25 @@ Round 1: executor writes code, reviewer checks it.
 Round 2: executor fixes what the reviewer found.
 Round 3 means the **plan** has a problem, not the code. At that point, stop and go back to the human who wrote the plan. More rounds just burn tokens fixing symptoms.
 
+## Skills
+
+fapony ships with three portable skills (copy to any agent tool):
+
+| Skill | Purpose | Trigger |
+|-------|---------|---------|
+| `skill/git-commit-conventional.md` | Commit split by concern + conventional message | `/git-commit` |
+| `skill/move-to-done.md` | Archive PLAN to plan/done/ after ship | `/move-to-done` |
+| `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
+
+## Prompts
+
+| Prompt | Used by | Purpose |
+|--------|---------|---------|
+| `prompts/execute.md` | executor | What to build, rules, output contract |
+| `prompts/fixer.md` | fixer | Fix gate review notes + re-handoff |
+| `prompts/planner.md` | planner | Update PLAN, mark shipped, hand off next chunk |
+| `prompts/scrutinize-fix.md` | review agent | Two-phase review + fix in one round |
+
 ## Scope
 
 **Supported:**

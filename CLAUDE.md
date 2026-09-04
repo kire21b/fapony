@@ -22,6 +22,11 @@ fapony/
     execute.md        # execution prompt template ที่ inject เข้า executor
     planner.md        # planner prompt — mark เสร็จ + NEXT-PROMPT/FILE_DONE
     fixer.md          # fixer prompt — แก้ตาม gate note แล้ว HANDOFF
+    scrutinize-fix.md # two-phase review + fix in one round (ported from vela)
+  skill/
+    git-commit-conventional.md  # commit แยก concern + conventional message
+    move-to-done.md             # archive PLAN หลัง ship
+    plan-with-me.md             # draft plan + spec จาก conversation
   src/
     db.ts             # SQLite schema + loadConfig() + CRUD (222 บรรทัด)
     run.ts            # flow หลัก: guard → claim → spawn → facts → route (227 บรรทัด)
@@ -211,7 +216,7 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 |------|--------|
 | `.memory/mem.ts` | เรียกผ่าน config.memory.* shell template ไม่ใช่ import |
 | `.opencode/plugins/memory-claims.ts` | ผูกกับ opencode plugin API ไม่ใช่หน้าที่ orchestrator |
-| `.opencode/skill/scrutinize-fix/` | chunk 2 — ต้องถอด pnpm --filter vela-app ออกก่อน |
+| `.opencode/skill/scrutinize-fix/` | ~~chunk 2 — ต้องถอด pnpm --filter vela-app ออกก่อน~~ ✅ ported แล้ว → `prompts/scrutinize-fix.md` |
 
 ---
 
@@ -270,7 +275,8 @@ AI-powered git commit message generator (108 บรรทัด):
 - [x] 2c: auto-gate + bigFixer lane
 - [ ] 2d: plan-mv
 - DeepSeek prefilter (prefilter: null ยังคงเดิม)
-- ย้าย scrutinize-fix skill (ต้องถอด pnpm --filter vela-app ออกก่อน)
+- [x] ย้าย scrutinize-fix skill → prompts/scrutinize-fix.md (ถอด vela แล้ว)
+- [x] skill/git-commit-conventional.md + skill/move-to-done.md + skill/plan-with-me.md
 
 ### Pre-condition ก่อน chunk 2
 - ต้องรัน chunk 1 กับ vela จริงสัก 2-3 รอบแล้วเห็นว่า handoff template ใช้ได้จริง
@@ -287,6 +293,54 @@ AI-powered git commit message generator (108 บรรทัด):
 6. **status ที่ถูกต้อง:** running → awaiting_review → fixing → passed | stopped | stalled
 7. **round cap:** ถ้า round > maxRounds → STOP, plan มีปัญหา
 8. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
+
+---
+
+## Plan Core — template สำหรับทุก plan
+
+ใช้ template นี้กับทุก plan file (ไม่ใช่แค่ fapony):
+
+```markdown
+# PLAN-<feature>.md —<short name>
+
+> **Status:** 🚧 in-progress · **Owner:** <dev> · **Created:** <YYYY-MM-DD>
+> **Source spec:** [spec/<feature>.md](../spec/<feature>.md) — ถ้ามี
+
+---
+
+## 1. เป้าหมาย (ทำไม)
+1–3 sentences — ถ้าอ่านแล้วตอบ "แล้วไง" ไม่ได้ = ยังไม่ชัด
+
+## 2. ขอบเขต (ทำอะไรไม่ทำอะไร)
+**ทำ:** 3–7 bullets, outcome ไม่ใช่ task
+**ไม่ทำ:** 2–5 bullets + เหตุผล 1 บรรทัดต่อข้อ
+
+## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
+3–6 bullets — ทดสอบได้ (test pass / command รันได้ / user ทำซ้ำได้)
+ห้ามเขียน "เสร็จ" ลอยๆ — ต้องวัดได้
+
+## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
+3–8 bullets — ข้อที่ละเมิดแล้วพัง (ไม่ใช่ "แนวปฏิบัติที่ดี")
+
+## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
+ตาราง 3–5 แถว: เสี่ยง | โอกาส | ผลกระทบ | ทางหนี
+
+## 6. ขั้นตอน (ทำอะไรก่อน-หลัง)
+1. **<Step 1>** — มี deliverable ชัด
+2. **<Step 2>** — ...
+แต่ละขั้นต้อง verify ได้ก่อนไปขั้นถัดไป
+
+## 7. ตัวอย่าง (เห็นภาพ)
+bash examples: ก่อน / หลัง
+
+## 8. อ้างอิง
+- link กลับไฟล์ที่เกี่ยวข้อง
+```
+
+**กฎเหล็ก 3 ข้อ:**
+- Section 1–4 ห้ามขาด — ถ้าขาด = plan ไม่บรรลุนิติภาวะ ไม่ให้ agent ทำ
+- Section 6 แต่ละขั้นต้อง verify ได้ — ถ้าทำแล้วไม่รู้ว่าผ่าน = ยังไม่ชัด
+- Section 8 ต้อง link กลับ — กันหลงทิศและให้ context ตอน reopen
 
 ---
 
