@@ -1,3 +1,5 @@
+> ✅ **shipped** (2fd51e5)
+
 # PLAN-loop — chunk 2: loop ครบวง (executor → gate → planner → วนต่อ) + ทุกบทบาทเป็น config
 
 > ต่อจาก chunk 1 (run รอบเดียวจบ: guard → claim → spawn → handoff → route) ไฟล์นี้ทำให้ fapony
