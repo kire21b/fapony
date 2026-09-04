@@ -1,4 +1,5 @@
 import { openDb, getRun, setStatus, addEvent, loadConfig } from "./db.js";
+import { closeMemory } from "./memory.js";
 
 export async function cmdStop(args: string[]): Promise<void> {
   const runId = parseInt(args[0], 10);
@@ -27,20 +28,7 @@ export async function cmdStop(args: string[]): Promise<void> {
   // Release memory if claimed
   if (run.mem_id) {
     const config = loadConfig();
-    if (config.memory) {
-      try {
-        const closeCmd = config.memory.close.map((s) =>
-          s
-            .replace("{id}", run.mem_id!)
-            .replace("{msg}", reason)
-        );
-        const { execSync } = await import("node:child_process");
-        execSync(closeCmd.join(" "), {
-          cwd: config.worktrees[run.worktree] ?? ".",
-          stdio: "ignore",
-        });
-      } catch {}
-    }
+    closeMemory(config, config.worktrees[run.worktree] ?? ".", run.mem_id, reason);
   }
 
   console.log(`run ${runId} stopped: ${reason}`);

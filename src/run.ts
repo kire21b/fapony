@@ -10,22 +10,8 @@ import {
   type Config,
 } from "./db.js";
 import { gitFacts, parseHandoff, renderHandoff } from "./handoff.js";
-
-const DANGEROUS_PATTERNS = [
-  /reset\s+--hard/,
-  /clean\s+-[a-z]*f/,
-  /checkout\s+--\s/,
-  /git\s+stash/,
-];
-
-function assertSafe(argv: string[]): void {
-  const joined = argv.join(" ");
-  for (const pat of DANGEROUS_PATTERNS) {
-    if (pat.test(joined)) {
-      throw new Error(`refusing to run dangerous command: ${joined}`);
-    }
-  }
-}
+import { closeMemory } from "./memory.js";
+import { assertSafe } from "./safety.js";
 
 function templateArgs(
   arr: string[],
@@ -199,17 +185,7 @@ export async function cmdRun(args: string[]): Promise<void> {
     console.error(`\nfapony: run ${runId} stalled (exit ${exitCode})`);
 
     // Release memory if claimed
-    if (memId && config.memory) {
-      try {
-        const closeCmd = templateArgs(config.memory.close, {
-          id: memId,
-          msg: `run ${runId} stalled`,
-        });
-        assertSafe(closeCmd);
-        const { execSync } = await import("node:child_process");
-        execSync(closeCmd.join(" "), { cwd: worktree, stdio: "ignore" });
-      } catch {}
-    }
+    if (memId) closeMemory(config, worktree, memId, `run ${runId} stalled`);
     process.exit(1);
   }
 
