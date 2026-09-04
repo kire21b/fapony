@@ -23,6 +23,7 @@ fapony/
     planner.md        # planner prompt — mark เสร็จ + NEXT-PROMPT/FILE_DONE
     fixer.md          # fixer prompt — แก้ตาม gate note แล้ว HANDOFF
     scrutinize-fix.md # two-phase review + fix in one round (ported from vela)
+                          # ← อยู่ใน prompts/ เพราะถูกใช้เป็น role (review gate), ไม่ใช่ standalone skill
   skill/
     git-commit-conventional.md  # commit แยก concern + conventional message
     move-to-done.md             # archive PLAN หลัง ship
