@@ -148,10 +148,9 @@ export async function cmdRun(args: string[]): Promise<void> {
       stderr: "pipe",
     });
 
-    // Write prompt to stdin
-    const writer = proc.stdin.getWriter();
-    await writer.write(prompt);
-    await writer.close();
+    // Write prompt to stdin (proc.stdin is a FileSink when stdin:"pipe" — no getWriter())
+    proc.stdin.write(prompt);
+    await proc.stdin.end();
 
     // Stream stdout
     const reader = proc.stdout.getReader();
@@ -172,7 +171,7 @@ export async function cmdRun(args: string[]): Promise<void> {
 
     clearTimeout(timeout);
     stdout = buffer;
-    exitCode = proc.exitCode ?? 1;
+    exitCode = await proc.exited;
   } catch (e) {
     console.error(`executor failed: ${(e as Error).message}`);
     exitCode = 1;
