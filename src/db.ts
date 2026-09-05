@@ -99,6 +99,9 @@ export interface Config {
   } | null;
   plan?: {
     extensions?: string[];
+    // hygiene check: warn (never block) when a plan file exceeds this many
+    // lines, or when section 7 balloons despite a linked Source spec.
+    maxLines?: number;
   } | null;
   planmv?: {
     // "chore(plan): archive ..." commit template; vars {file} {hash}.
@@ -116,6 +119,7 @@ export interface Config {
 }
 
 export const DEFAULT_SPEC_MAX_LINES = 200;
+export const DEFAULT_PLAN_MAX_LINES = 200;
 export const DEFAULT_SOURCE_MARKER = "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$";
 export const DEFAULT_HANDOFF_MARKER = "## HANDOFF";
 export const DEFAULT_VERDICT_RE = "^VERDICT:\\s*(pass|fail)\\s*$";
@@ -269,6 +273,10 @@ export function loadConfig(configPath?: string): Config {
 
 export function specMaxLines(config: Config): number {
   return config.spec?.maxLines ?? DEFAULT_SPEC_MAX_LINES;
+}
+
+export function planMaxLines(config?: Config): number {
+  return config?.plan?.maxLines ?? DEFAULT_PLAN_MAX_LINES;
 }
 
 export function sourceSpecRE(config?: Config): RegExp {

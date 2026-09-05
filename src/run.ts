@@ -22,6 +22,7 @@ import {
 import { gitFacts, parseHandoff, renderHandoff, type GitFacts, type ParsedHandoff } from "./handoff.js";
 import { closeMemory, claimMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";
+import { checkPlanHygiene } from "./planlint.js";
 import { templateArgs } from "./util.js";
 
 export interface RunOnceOpts {
@@ -208,6 +209,13 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     }
   }
   if (!planContent) planContent = "(no plan provided)";
+
+  // --- 4a. PLAN HYGIENE (warn only — never blocks the run) ---
+  if (planContent && planContent !== "(no plan provided)" && !planContent.startsWith("(plan file not found")) {
+    for (const w of checkPlanHygiene(planContent, config)) {
+      console.error(`⚠ plan hygiene: ${w.detail}`);
+    }
+  }
 
   // --- 4b. SPEC INJECTION ---
   let specContent: string | null = null;
