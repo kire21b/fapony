@@ -19,6 +19,7 @@ import {
 } from "./commands/read.js";
 import { cmdTest } from "./commands/selftest.js";
 import { cmdPlanSweep, cmdPlanCheck } from "./commands/plan.js";
+import { cmdRotate } from "./commands/rotate.js";
 import {
   cmdAdd,
   cmdClose,
@@ -56,6 +57,8 @@ if (cmd === "add") {
   cmdPlanSweep(a);
 } else if (cmd === "plan-check") {
   cmdPlanCheck(a);
+} else if (cmd === "rotate") {
+  cmdRotate(a);
 } else {
   // mem now (default) — next+bug+hold. decision/note ไม่ใช่งานค้าง → ค้นด้วย find แทน
   cmdNow();

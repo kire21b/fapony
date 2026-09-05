@@ -110,7 +110,12 @@ function nextId(all: LogRow[]): string {
   return id;
 }
 
-export { root, app, dir, LOG, agent, KINDS, rows, put, nextId };
+// เขียนแถวดิบ (ts/agent เดิม ไม่ generate ใหม่) — ใช้ตอน rotate ย้าย row เก่าไปไฟล์ใหม่
+// ปกติเขียน log ต้องผ่าน put() เท่านั้น อันนี้ทางเดียวที่ยกเว้น
+const appendRaw = (path: string, r: LogRow): void =>
+  appendFileSync(path, JSON.stringify(r) + "\n");
+
+export { root, app, dir, LOG, agent, KINDS, rows, put, nextId, appendRaw };
 export type {
   WorkKind,
   WorkRow,

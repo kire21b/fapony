@@ -114,3 +114,30 @@ export const staleReport = (all: LogRow[]): string[] => {
   }
   return out;
 };
+
+// rotate: แถวที่ต้องแบกต่อในไฟล์ log ใหม่หลัง archive
+// - next/bug/hold ที่ยังเปิด + claim ที่ยัง active อยู่บนแถวนั้น (close/claim ของ ref ที่ปิดแล้ว = ทิ้งได้)
+// - decision/note ยังไม่มี "close" ของตัวเอง (ประวัติถาวรตามดีไซน์) แต่ resolved ได้ทางอ้อมผ่าน synced:
+//   spec ถูก synced *หลัง* แถวนี้แล้ว = ข้อมูลเข้า spec แล้วจริง เก็บใน archive (git) พอ ไม่ต้องแบกในไฟล์ hot
+//   (logic เดียวกับ staleReport's decision check — ไม่มี spec หรือยังไม่ synced ทันแถวนี้ = ยังถือว่า relevant, เก็บไว้)
+// ponytail: decision/note ที่ไม่มี spec ไม่มีทางรู้ว่า resolved แล้วหรือยัง — เก็บไว้ตลอด (เพดานจริงคือ
+// ต้อง attach spec ตั้งแต่ log ถ้าอยากให้ rotate ออกได้ในอนาคต ไม่ใช่ปัญหาของ rotate เอง)
+export const rotateKeep = (all: LogRow[]): LogRow[] => {
+  const open = openRows(all);
+  const workOpen = open.filter(
+    (r) => r.kind === "next" || r.kind === "bug" || r.kind === "hold",
+  );
+  const claims = claimsOf(all);
+  const openIds = new Set(workOpen.map((r) => r.id));
+  const keepClaims = [...claims.values()].filter((c) => openIds.has(c.ref));
+
+  const syncedAt: Record<string, number> = {};
+  for (const r of all) if (r.kind === "synced") syncedAt[r.spec] = Date.parse(r.ts);
+  const keepDecisionNote = open.filter(
+    (r) =>
+      (r.kind === "decision" || r.kind === "note") &&
+      (!r.spec || !(r.spec in syncedAt) || syncedAt[r.spec] < Date.parse(r.ts)),
+  );
+
+  return [...workOpen, ...keepDecisionNote, ...keepClaims];
+};

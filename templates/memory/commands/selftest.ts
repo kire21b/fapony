@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 
 import type { LogRow } from "../store.js";
 
-import { openRows, claimsOf } from "../selectors.js";
+import { openRows, claimsOf, rotateKeep } from "../selectors.js";
 import {
   rewriteMarkdownLinks,
   rewriteMovedFileLinks,
@@ -85,6 +85,74 @@ const runSelectorTests = () => {
       .sort()
       .join() === "a1,a3,a5",
     "open rows ผิด",
+  );
+};
+
+const runRotateTests = () => {
+  const t: LogRow[] = [
+    { id: "r1", kind: "next", text: "keep me", ts: "", agent: "" },
+    { kind: "claim", ref: "r1", ts: "2026-01-01T00:00:00Z", agent: "agent-1" },
+    // r1: open + claimed → work row + claim row ต้องเก็บทั้งคู่
+
+    { id: "r2", kind: "bug", text: "closed already", ts: "", agent: "" },
+    { kind: "claim", ref: "r2", ts: "2026-01-01T00:00:00Z", agent: "agent-1" },
+    { kind: "close", ref: "r2", text: "shipped", ts: "", agent: "" },
+    // r2: ปิดแล้ว → work row, claim row, close tombstone ทิ้งหมด
+
+    {
+      id: "r3",
+      kind: "decision",
+      text: "resolved decision",
+      ts: "2026-01-01T00:00:00Z",
+      agent: "",
+      spec: "PLAN-a.md",
+    },
+    { kind: "synced", spec: "PLAN-a.md", ts: "2026-01-02T00:00:00Z", agent: "" },
+    // r3: spec synced *หลัง* decision นี้ → resolved แล้ว archive ได้
+
+    {
+      id: "r4",
+      kind: "decision",
+      text: "still relevant decision",
+      ts: "2026-01-03T00:00:00Z",
+      agent: "",
+      spec: "PLAN-a.md",
+    },
+    // r4: decision ใหม่กว่า synced ล่าสุด → ยังไม่ resolved เก็บไว้
+
+    { id: "r5", kind: "note", text: "note no spec", ts: "", agent: "" },
+    // r5: note ไม่มี spec → ไม่มีทางรู้ resolved หรือยัง เก็บไว้เสมอ
+  ];
+
+  const kept = rotateKeep(t);
+  assert(
+    kept.some((r) => "id" in r && r.id === "r1" && r.kind === "next"),
+    "rotateKeep: ต้องเก็บ open work row",
+  );
+  assert(
+    kept.some((r) => r.kind === "claim" && "ref" in r && r.ref === "r1"),
+    "rotateKeep: ต้องเก็บ active claim ของ open row",
+  );
+  assert(
+    !kept.some((r) => "id" in r && r.id === "r2"),
+    "rotateKeep: ห้ามเก็บ work row ที่ปิดแล้ว",
+  );
+  assert(
+    !kept.some((r) => r.kind === "claim" && "ref" in r && r.ref === "r2"),
+    "rotateKeep: ห้ามเก็บ claim ของ ref ที่ปิดแล้ว",
+  );
+  assert(!kept.some((r) => r.kind === "close"), "rotateKeep: ห้ามเก็บ close tombstone");
+  assert(
+    !kept.some((r) => "id" in r && r.id === "r3"),
+    "rotateKeep: decision ที่ spec synced หลังแล้ว → resolved, ไม่เก็บ",
+  );
+  assert(
+    kept.some((r) => "id" in r && r.id === "r4"),
+    "rotateKeep: decision ใหม่กว่า synced ล่าสุด → ยัง relevant, ต้องเก็บ",
+  );
+  assert(
+    kept.some((r) => "id" in r && r.id === "r5"),
+    "rotateKeep: note ไม่มี spec → เก็บไว้เสมอ",
   );
 };
 
@@ -330,6 +398,7 @@ const runPlanCheckTests = () => {
 
 export const cmdTest = () => {
   runSelectorTests();
+  runRotateTests();
   runPlanSweepTests();
   runPlanCheckTests();
   console.log("ok");

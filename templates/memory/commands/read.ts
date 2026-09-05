@@ -6,6 +6,12 @@ import { fmtRow, fmtClose, printOpenRows, doneLines } from "../render.js";
 import { openRows, claimsOf, staleReport } from "../selectors.js";
 import { app, rows } from "../store.js";
 import { shippedNotMoved } from "./plan.js";
+import { THRESHOLD } from "./rotate.js";
+
+const rotateLine = (n: number) =>
+  n >= THRESHOLD
+    ? `\n## 🗜 log ${n} rows (≥ ${THRESHOLD}) — รัน: bun .memory/mem.ts rotate --apply`
+    : "";
 
 const planSweepLine = () => {
   const pending = shippedNotMoved();
@@ -34,6 +40,8 @@ export const cmdNow = () => {
     );
   const sweep = planSweepLine();
   if (sweep) console.log(sweep);
+  const rotate = rotateLine(all.length);
+  if (rotate) console.log(rotate);
 };
 
 export const cmdDone = () => {
@@ -91,6 +99,8 @@ export const cmdKickoff = (a: string[]) => {
       );
     const sweep = planSweepLine();
     if (sweep) console.log(sweep);
+    const rotate = rotateLine(all.length);
+    if (rotate) console.log(rotate);
   } else if (arg.endsWith(".md")) {
     // spec.md = brief ของ spec นั้น
     const workAll = all.filter((r): r is WorkRow => "id" in r);
