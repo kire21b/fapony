@@ -43,7 +43,8 @@ fapony/
     init.ts           # fapony init — scaffold .fapony/{plan,spec,.memory}
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
     init-mem.ts       # init-mem command (legacy, superseded by init)
-    test.ts           # self-check 27 ตัว
+    planlint.ts       # checkPlanHygiene() — warn เมื่อ spec content หลุดเข้า plan
+    test.ts           # self-check 31 ตัว
   test/
     fixtures/
       executor.ts     # stub executor — commit + HANDOFF (no network)
@@ -161,7 +162,7 @@ events(
   "markers": { "handoff": "## HANDOFF", "verdict": "^VERDICT:\\s*(pass|fail)\\s*$", "nextPrompt": "## NEXT-PROMPT", "fileDone": "## FILE_DONE", "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*" },
   "paths": { "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts", "doneDir": "done", "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"] },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
-  "plan": { "extensions": [".md"] },
+  "plan": { "extensions": [".md"], "maxLines": 200 },
   "planmv": { "archiveMsg": "chore(plan): archive {file} (shipped {hash})", "inboundWarnAt": 5 },
   "display": { "dirtyPreview": 10, "shortSha": 8 },
   "defaults": { "timeoutMin": 10 }
@@ -281,8 +282,19 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 ## Plan Core — template สำหรับทุก plan
 
 ใช้ [templates/PLAN.md](templates/PLAN.md) กับทุก plan file (ไม่ใช่แค่ fapony) — copy ไปตั้งชื่อ
-`.fapony/plan/PLAN-<feature>.md` **กฎเหล็ก 3 ข้อ** (บังคับ ไม่ใช่แนะนำ): section 1–4 ห้ามขาด (ไม่งั้น plan
-ไม่บรรลุนิติภาวะ ไม่ให้ agent ทำ) · section 6 แต่ละขั้นต้อง verify ได้ · section 8 ต้อง link กลับ
+`.fapony/plan/PLAN-<feature>.md` และ [templates/SPEC.md](templates/SPEC.md) กับทุก spec file
+(`.fapony/spec/SPEC-<feature>.md`) **กฎเหล็ก 4 ข้อ** (บังคับ ไม่ใช่แนะนำ): section 1–4 ห้ามขาด (ไม่งั้น plan
+ไม่บรรลุนิติภาวะ ไม่ให้ agent ทำ) · section 6 แต่ละขั้นต้อง verify ได้ · section 8 ต้อง link กลับ · **plan =
+what/why/order, spec = how in detail** — ห้ามแปะ API shape/schema/wireframe/edge-case ลงใน plan section 7
+ตรงๆ ให้ link ไปที่ spec แทน
+
+Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)`) — ทำให้เป็น graph สองทาง ไม่ต้องมี tooling
+เพิ่ม แค่ markdown link ที่ `fapony plan-mv` เดินหา inbound link อยู่แล้ว (`linkScanDirs` คลุมทั้ง `plan/` และ
+`spec/`)
+
+**Enforcement:** `fapony run` เรียก `checkPlanHygiene()` ([src/planlint.ts](src/planlint.ts)) ก่อน spawn
+executor ทุกครั้ง — เตือน (ไม่ block) เมื่อ plan ยาวเกิน `plan.maxLines` (default 200) หรือ section 7 บวมทั้งที่
+มี Source spec ผูกอยู่แล้ว (สัญญาณว่า spec content หลุดเข้ามาใน plan)
 
 ---
 
@@ -301,5 +313,5 @@ fapony gate <run-id> pass|fail [note]  # review verdict + memory close
 fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
 fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
 fapony kickoff <worktree-key>  # auto-detect pending plan + run
-fapony test                      # self-check 27 ตัว
+fapony test                      # self-check 31 ตัว
 ```

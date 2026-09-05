@@ -34,13 +34,23 @@ Table with 3–5 rows: risk | likelihood | impact | escape hatch
 Each step must be verifiable before moving to the next
 
 ## 7. Examples (make it concrete)
-bash examples: before / after
+bash examples: before / after — **link into spec/, don't paste it.**
+If Source spec exists, this section stays ≤5 lines (1-2 examples or a pointer);
+anything longer belongs in the spec file, not here.
 
 ## 8. References
 - link back to related files
 ```
 
-**3 iron rules:**
+**4 iron rules:**
 - Sections 1–4 are mandatory — if missing = plan is immature, agent must not execute
 - Section 6 each step must be verifiable — if you can't tell it passed = not clear yet
 - Section 8 must link back — prevents drift and gives context on reopen
+- **Plan is "what/why/order", spec is "how in detail"** — API shapes, schemas,
+  wireframes, edge-case tables go in [spec/](../spec/), the plan only links to
+  them. A plan that keeps growing past ~200 lines is spec content leaking in,
+  not a plan getting more thorough — split it out. (`fapony run` warns on this
+  automatically, see [CLAUDE.md](../CLAUDE.md) § Plan Core.)
+
+Use [templates/SPEC.md](SPEC.md) for the spec file itself — it links back to
+every plan that uses it, so the relationship reads both ways.
