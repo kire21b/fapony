@@ -140,9 +140,19 @@ export function cmdHandoff(args: string[]): void {
 
   const facts = gitFacts(run.worktree, run.base_sha);
 
-  const parsed: ParsedHandoff = {
-    missing: true,
-  };
+  // Prefer the executor report captured at run time; fall back to git-only
+  // for runs started before handoff events existed.
+  let parsed: ParsedHandoff = { missing: true };
+  const events = getEvents(db, runId);
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].kind !== "handoff") continue;
+    try {
+      parsed = JSON.parse(events[i].data ?? "") as ParsedHandoff;
+    } catch {
+      parsed = { missing: true };
+    }
+    break;
+  }
 
   console.log(renderHandoff(facts, parsed));
 }
