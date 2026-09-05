@@ -96,20 +96,20 @@ export function testResolveChangedFiles(): void {
   console.log("  ✓ resolveChangedFiles");
 }
 
-// spawnScrutinizeFix opens the HOME-based db internally (no run row →
-// unknown-files fallback), so isolate HOME like the gate/db tests do.
+// spawnScrutinizeFix opens the db internally (no run row → unknown-files
+// fallback), so isolate its location like the gate/db tests do.
+// ponytail: bug fix — Bun caches os.homedir() at process start, so setting
+// process.env.HOME here never redirected openDb(); this was silently writing
+// into the real ~/.config/fapony/state.db on every test run.
 async function withTmpHome<T>(fn: () => Promise<T>): Promise<T> {
   const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
-  const origHome = process.env.HOME;
-  const origXdg = process.env.XDG_CONFIG_HOME;
-  process.env.HOME = dir;
-  delete process.env.XDG_CONFIG_HOME;
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
   try {
     return await fn();
   } finally {
-    if (origHome !== undefined) process.env.HOME = origHome;
-    else delete process.env.HOME;
-    if (origXdg !== undefined) process.env.XDG_CONFIG_HOME = origXdg;
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
 }
