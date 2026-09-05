@@ -7,7 +7,7 @@ import {
   getLastPlanUpdate,
   type Config,
 } from "./db.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { runOnce } from "./run.js";
@@ -17,6 +17,7 @@ import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 import { assertSafe } from "./safety.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 import { renderHandoff } from "./handoff.js";
+import { planMv, SHIPPED_RE, type PlanMvResult } from "./planmv.js";
 
 /**
  * fapony loop — run executor → review → planner → repeat until FILE_DONE.
@@ -156,6 +157,18 @@ export async function cmdLoop(args: string[]): Promise<void> {
           closeMemory(config, worktree, memId, planUpdate.text);
           addEvent(db, runId, "memory_claim_closed", { mem_id: memId });
         }
+
+        if (afterGate.plan) {
+          const archived = autoArchivePlan(worktree, afterGate.plan);
+          if (archived.ok) {
+            console.log(`archived: plan/done/${afterGate.plan.split("/").pop()}`);
+            addEvent(db, runId, "plan_archived", { plan: afterGate.plan });
+          } else {
+            console.error(`auto plan-mv skipped: ${archived.error}`);
+            console.error(`Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in plan/)`);
+          }
+        }
+
         const kickoff = kickoffMemory(config, worktree);
         if (kickoff) console.log(`\n--- next PLAN ---\n${kickoff}`);
         break;
@@ -447,6 +460,54 @@ export function buildScrutinizePrompt(
     "utf-8"
   );
   return `${template}\n\n---\nRun ID: ${runResult.runId}\nrepo_root="${worktree}"\nChanged files (use these, do not auto-detect):\n${changedFiles}\nChanged: ${runResult.facts.files} files, ${runResult.facts.lines} lines, branch ${runResult.facts.branch}, commits ${runResult.facts.commits.join(", ") || "(none)"}\nReview the changed code then fix MAJOR/BLOCKER in place and commit.`;
+}
+
+/**
+ * Auto-archive a shipped PLAN via planMv() — the FILE_DONE mirror of
+ * bigFixer/scrutinizeFix's "reuse-not-rebuild" wiring.
+ *
+ * planMv() requires a file-level shipped header (`> ✅ **shipped** (<hash>)`)
+ * at the top of the file; the planner only marks individual items shipped
+ * inline (prompts/planner.md), so that header never exists yet at FILE_DONE
+ * time. This synthesizes it from the current HEAD before calling planMv(),
+ * then commits the archive (rename + header) in one step — deterministic,
+ * no agent involved.
+ */
+export function autoArchivePlan(worktree: string, planRelPath: string): PlanMvResult {
+  const filePath = join(worktree, planRelPath);
+  let hash: string;
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    if (!SHIPPED_RE.test(content)) {
+      hash = execSync("git rev-parse --short HEAD", { cwd: worktree, encoding: "utf-8" }).trim();
+      writeFileSync(filePath, `> ✅ **shipped** (${hash})\n\n${content}`, "utf-8");
+    } else {
+      hash = "existing";
+    }
+  } catch (e) {
+    return { ok: false, error: `cannot prepare shipped header: ${(e as Error).message}` };
+  }
+
+  const result = planMv(filePath, { repoRoot: worktree });
+  if (!result.ok) return result;
+
+  try {
+    const fileName = planRelPath.split("/").pop();
+    execSync(`git commit -m "chore(plan): archive ${fileName} (shipped ${hash})"`, {
+      cwd: worktree,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (e) {
+    // git mv already happened — report but don't undo it; dev commits manually
+    // (not "run fapony plan-mv again" — the file is already at its new path).
+    return {
+      ...result,
+      ok: false,
+      error: `moved to plan/done/ but commit failed: ${(e as Error).message} — run: git commit`,
+    };
+  }
+
+  return result;
 }
 
 export async function spawnScrutinizeFix(

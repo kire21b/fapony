@@ -42,6 +42,12 @@ import {
   testSpawnScrutinizeFix,
   testSpawnScrutinizeFixRejectsDangerousCmd,
 } from "./scrutinize.test.js";
+import {
+  testAutoArchivePlanSynthesizesHeader,
+  testAutoArchivePlanKeepsExistingHeader,
+  testAutoArchivePlanNormalizesLinks,
+  testAutoArchivePlanMissingFile,
+} from "./archive.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -76,5 +82,9 @@ export async function cmdTest(): Promise<void> {
   testResolveChangedFiles();
   await testSpawnScrutinizeFix();
   await testSpawnScrutinizeFixRejectsDangerousCmd();
+  testAutoArchivePlanSynthesizesHeader();
+  testAutoArchivePlanKeepsExistingHeader();
+  testAutoArchivePlanNormalizesLinks();
+  testAutoArchivePlanMissingFile();
   console.log("\nall tests passed ✓");
 }
