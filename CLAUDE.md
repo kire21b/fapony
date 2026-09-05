@@ -39,8 +39,8 @@ fapony/
     status.ts         # ตาราง runs ที่ยังไม่ passed/stopped (33 บรรทัด)
     stop.ts           # stop run + release memory claim (47 บรรทัด)
     loop.ts           # loop driver: run → review → planner → repeat (pausable)
-    planmv.ts         # archive shipped PLAN → plan/done/ (validate + normalize links + git mv)
-    init.ts           # fapony init — scaffold plan/spec/.memory/.fapony
+    planmv.ts         # archive shipped PLAN → .fapony/plan/done/ (validate + normalize links + git mv)
+    init.ts           # fapony init — scaffold .fapony/{plan,spec,.memory}
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
     init-mem.ts       # init-mem command (legacy, superseded by init)
     test.ts           # self-check 27 ตัว
@@ -138,15 +138,15 @@ events(
     "prefilter": null
   },
   "memory": {
-    "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],
-    "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],
-    "kickoff": ["bun", ".memory/mem.ts", "kickoff"]
+    "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
+    "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
+    "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
+    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
   }
 }
 ```
 
-- `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
+- `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
 - `prefilter: null` = ยังไม่ทำ prefilter DeepSeek (มีช่องรอไว้ใน config แต่ code path ยังไม่ใช้)
 
 ---
@@ -194,7 +194,7 @@ events(
 | ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
 | `fapony init` ซ้ำ | 逐目 check ทุก dir → error ถ้าเจอของเก่า ห้ามทับ |
 | kickoff ambiguous (>1 pending) | คืน error list ชื่อไฟล์ ห้ามเดา |
-| memory: null + .memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
+| memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Source spec ไม่มีไฟล์ | prompt ใส่ (no spec) — ไม่ error |
 
 ---
@@ -236,7 +236,7 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 
 ### สิ่งที่กำลังจะทำต่อ
 ดู [ROADMAP.md](ROADMAP.md) — chunk ที่เสร็จ (1, 2) เก็บไว้ที่นี่เป็นประวัติ ส่วนงานที่ยังไม่เริ่ม
-อยู่ใน ROADMAP.md ที่เดียว (กัน duplicate 2 ที่ไม่ sync กัน) plan file รายละเอียดอยู่ใต้ `plan/`
+อยู่ใน ROADMAP.md ที่เดียว (กัน duplicate 2 ที่ไม่ sync กัน) plan file รายละเอียดอยู่ใต้ `.fapony/plan/`
 
 ---
 
@@ -256,7 +256,7 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 ## Plan Core — template สำหรับทุก plan
 
 ใช้ [templates/PLAN.md](templates/PLAN.md) กับทุก plan file (ไม่ใช่แค่ fapony) — copy ไปตั้งชื่อ
-`plan/PLAN-<feature>.md` **กฎเหล็ก 3 ข้อ** (บังคับ ไม่ใช่แนะนำ): section 1–4 ห้ามขาด (ไม่งั้น plan
+`.fapony/plan/PLAN-<feature>.md` **กฎเหล็ก 3 ข้อ** (บังคับ ไม่ใช่แนะนำ): section 1–4 ห้ามขาด (ไม่งั้น plan
 ไม่บรรลุนิติภาวะ ไม่ให้ agent ทำ) · section 6 แต่ละขั้นต้อง verify ได้ · section 8 ต้อง link กลับ
 
 ---
@@ -271,8 +271,8 @@ fapony status                    # ตาราง active runs
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close
-fapony plan-mv <file>          # archive shipped PLAN → plan/done/
-fapony init <path>             # scaffold plan/spec/.memory/.fapony
+fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
+fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
 fapony kickoff <worktree-key>  # auto-detect pending plan + run
 fapony test                      # self-check 27 ตัว
 ```

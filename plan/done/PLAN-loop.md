@@ -166,7 +166,7 @@ git worktree add wt-fapony -b dev
   2. rewrite relative link `](...)` ทุกเส้น บวก `../` อีกชั้น — **normalize ก่อน** (link ที่มี
      `../` อยู่แล้วห้ามกองซ้อน `../../..`)
   3. ไล่ inbound link จากไฟล์อื่นที่ยังชี้ path เก่า → รายงานรายชื่อ (แก้เองถ้าเล็ก / รายงานถ้าเยอะ)
-  4. `git mv` ไป `plan/done/`
+   4. `git mv` ไป `.fapony/plan/done/`
 - **`src/test.ts`** — เพิ่ม check ทรง PLAN จริง (ลอกโครง PLAN-attention.md เป็น fixture)
 
 ### Execution order (2d)
@@ -196,7 +196,7 @@ git worktree add wt-fapony -b dev
   ห้ามไปยุ่ง schema เพื่อแยก
 - **stub fixtures ห้าม network** — guard test ไล่หา `spawn`/`fetch` ในไฟล์ fixture
   (ครั้งเดียวที่ใช้ token จริงคือ dogfood ตาม Execution order 2c.4)
-- **plan-mv กับ link ลึก** — `plan/done/` อยู่ลึกกว่า `plan/` หนึ่งชั้น ไฟล์ที่ย้ายแล้ว
+- **plan-mv กับ link ลึก** — `.fapony/plan/done/` อยู่ลึกกว่า `.fapony/plan/` หนึ่งชั้น ไฟล์ที่ย้ายแล้ว
   (PLAN-attention.md) มี link ต้อง normalize ก่อนบวกเสมอ
 
 ---

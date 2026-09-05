@@ -44,7 +44,7 @@ fapony ships with three portable skills (copy to any agent tool):
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
 | `skill/git-commit-conventional.md` | Commit split by concern + conventional message | `/git-commit` |
-| `skill/move-to-done.md` | Archive PLAN to plan/done/ after ship | `/move-to-done` |
+| `skill/move-to-done.md` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
 | `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
 
 ## Using plan-with-me with any agent
@@ -95,13 +95,13 @@ cat prompts/plan-with-me.md | <your-agent>
 - Auto-driving the executor via `claude -p` or `opencode run` (chunk 2)
 - DeepSeek prefilter
 - Distributed runs across multiple machines
-- Memory migration from `.memory/log.jsonl`
+- Memory migration from `.fapony/.memory/log.jsonl`
 
 ## Usage
 
 ```bash
 # First run
-fapony run vela --plan PLAN-foo.md --mem-id abc123
+fapony run vela --plan .fapony/plan/PLAN-foo.md --mem-id abc123
 
 # Check active runs
 fapony status
@@ -116,7 +116,7 @@ fapony gate <run-id> fail "missing error handling on X" # round+1, status → fi
 # Stop a run
 fapony stop <run-id> "plan needs rework"
 
-# Scaffold the .memory/ system (mem.ts + store/selectors/render/commands) into a
+# Scaffold the .fapony/.memory/ system (mem.ts + store/selectors/render/commands) into a
 # new worktree from templates/memory/ — for projects that don't have one yet
 fapony init-mem <worktree-key>
 
