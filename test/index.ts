@@ -19,6 +19,22 @@ import {
   testPlanMvNormalizeLinks,
   testPlanMvDryRun,
 } from "./planmv.test.js";
+import {
+  testInitCreatesDirectories,
+  testInitIdempotent,
+  testInitNoArgs,
+} from "./init.test.js";
+import {
+  testKickoffSinglePending,
+  testKickoffShippedFiltered,
+  testKickoffMultiplePending,
+  testKickoffNoPending,
+} from "./kickoff.test.js";
+import {
+  testMemoryDefaultWiringWithFile,
+  testMemoryDefaultWiringNoFile,
+  testMemoryExplicitConfigWins,
+} from "./memory.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -38,5 +54,15 @@ export async function cmdTest(): Promise<void> {
   testPlanMvWithHeader();
   testPlanMvNormalizeLinks();
   testPlanMvDryRun();
+  testInitCreatesDirectories();
+  testInitIdempotent();
+  testInitNoArgs();
+  testKickoffSinglePending();
+  testKickoffShippedFiltered();
+  testKickoffMultiplePending();
+  testKickoffNoPending();
+  testMemoryDefaultWiringWithFile();
+  testMemoryDefaultWiringNoFile();
+  testMemoryExplicitConfigWins();
   console.log("\nall tests passed ✓");
 }

@@ -30,18 +30,20 @@ fapony/
     plan-with-me.md             # draft plan + spec จาก conversation
   src/
     db.ts             # SQLite schema + loadConfig() + CRUD (222 บรรทัด)
-    run.ts            # flow หลัก: guard → claim → spawn → facts → route (227 บรรทัด)
+    run.ts            # flow หลัก: guard → claim → spawn → facts → route + spec injection
     gate.ts           # gate CLI: pass/fail verdict + memory close (67 บรรทัด)
     handoff.ts        # gitFacts() + parseHandoff() + renderHandoff() (159 บรรทัด)
     parse.ts          # parseGateVerdict() + parsePlanUpdate() (67 บรรทัด)
-    memory.ts         # shell adapter helpers for config.memory.* (45 บรรทัด)
+    memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY (70 บรรทัด)
     safety.ts         # assertSafe() deny-list (19 บรรทัด)
     status.ts         # ตาราง runs ที่ยังไม่ passed/stopped (33 บรรทัด)
     stop.ts           # stop run + release memory claim (47 บรรทัด)
     loop.ts           # loop driver: run → review → planner → repeat (pausable)
     planmv.ts         # archive shipped PLAN → plan/done/ (validate + normalize links + git mv)
-    init-mem.ts       # init-mem command
-    test.ts           # self-check 7 ตัว (250 บรรทัด)
+    init.ts           # fapony init — scaffold plan/spec/.memory/.fapony
+    kickoff.ts        # fapony kickoff — auto-detect pending plan + run
+    init-mem.ts       # init-mem command (legacy, superseded by init)
+    test.ts           # self-check 27 ตัว
   test/
     fixtures/
       executor.ts     # stub executor — commit + HANDOFF (no network)
@@ -74,6 +76,7 @@ fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]
   │
   ├─ 4. SPAWN EXECUTOR
   │     - สร้าง prompt จาก prompts/execute.md + plan content + mem_id
+  │     - ถ้า plan header มี Source spec → อ่านไฟล์ spec แนบท้าย prompt (truncated)
   │     - Bun.spawn ด้วย config.executor.cmd, cwd = worktree
   │     - เขียน prompt ทาง stdin, stream stdout ออกจอ + เก็บ buffer
   │     - timeout หรือ exit!=0 → status='stalled' + memory release + exit 1
@@ -143,7 +146,7 @@ events(
 }
 ```
 
-- `memory: null` = ปิดทั้งชั้น (คนนอกใช้ได้ทันทีโดยไม่ต้องมี mem.ts)
+- `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
 - `prefilter: null` = ยังไม่ทำ prefilter DeepSeek (มีช่องรอไว้ใน config แต่ code path ยังไม่ใช้)
 
 ---
@@ -189,6 +192,10 @@ events(
 | ไม่มี ## HANDOFF ใน stdout | ห้าม fail ทั้ง run → mark handoff_missing แล้วใช้ git-only handoff ต่อ |
 | Base SHA | เก็บ HEAD ตอนเริ่ม run (ไม่ใช่ HEAD~1) เพราะ opencode commit หลายก้อนตาม concern |
 | ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
+| `fapony init` ซ้ำ | 逐目 check ทุก dir → error ถ้าเจอของเก่า ห้ามทับ |
+| kickoff ambiguous (>1 pending) | คืน error list ชื่อไฟล์ ห้ามเดา |
+| memory: null + .memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
+| Source spec ไม่มีไฟล์ | prompt ใส่ (no spec) — ไม่ error |
 
 ---
 
@@ -265,5 +272,7 @@ fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close
 fapony plan-mv <file>          # archive shipped PLAN → plan/done/
-fapony test                      # self-check 7 ตัว
+fapony init <path>             # scaffold plan/spec/.memory/.fapony
+fapony kickoff <worktree-key>  # auto-detect pending plan + run
+fapony test                      # self-check 27 ตัว
 ```

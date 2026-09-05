@@ -1,0 +1,72 @@
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import assert from "node:assert";
+import { resolveMemoryConfig, DEFAULT_MEMORY } from "../src/memory.js";
+import type { Config } from "../src/db.js";
+
+const BASE_CONFIG: Config = {
+  worktrees: { test: "/tmp/test" },
+  executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
+  review: {
+    bigDiff: { files: 15, lines: 400 },
+    maxRounds: 2,
+    gate: ["claude", "-p", "/code-review high"],
+    prefilter: null,
+  },
+  memory: null,
+};
+
+export function testMemoryDefaultWiringWithFile(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
+  try {
+    const memDir = join(dir, ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(join(memDir, "mem.ts"), "// stub");
+
+    const result = resolveMemoryConfig(BASE_CONFIG, dir);
+    assert.deepEqual(result, DEFAULT_MEMORY);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ memory default-wiring with .memory/mem.ts");
+}
+
+export function testMemoryDefaultWiringNoFile(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
+  try {
+    const result = resolveMemoryConfig(BASE_CONFIG, dir);
+    assert.equal(result, null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ memory default-wiring without .memory/mem.ts");
+}
+
+export function testMemoryExplicitConfigWins(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
+  try {
+    const memDir = join(dir, ".memory");
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(join(memDir, "mem.ts"), "// stub");
+
+    const explicitConfig: Config = {
+      ...BASE_CONFIG,
+      memory: {
+        claim: ["custom", "claim", "{id}"],
+        close: ["custom", "close", "{id}", "{msg}"],
+        add: ["custom", "add", "{kind}", "{text}"],
+      },
+    };
+
+    const result = resolveMemoryConfig(explicitConfig, dir);
+    assert.deepEqual(result, explicitConfig.memory);
+    assert.notDeepEqual(result, DEFAULT_MEMORY);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ memory explicit config wins over default");
+}

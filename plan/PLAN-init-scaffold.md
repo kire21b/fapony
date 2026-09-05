@@ -1,6 +1,6 @@
 # PLAN-init-scaffold — `fapony init` + `fapony kickoff` + spec เป็น contract
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-05
+> **Status:** ✅ shipped · **Owner:** delamind · **Created:** 2026-09-05
 > **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § สัปดาห์ 3–4)
 
 ---
