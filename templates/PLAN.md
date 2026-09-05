@@ -1,46 +1,46 @@
-# Plan Core — template สำหรับทุก plan file
+# Plan Core — template for every plan file
 
-> ใช้ template นี้กับทุก plan file (ไม่ใช่แค่ fapony) — ดู [CLAUDE.md](../CLAUDE.md) § Rules
-> for AI Agents สำหรับกฎที่คุมว่า plan แต่ละไฟล์ต้องผ่านอะไรก่อนให้ agent ทำตาม
+> Use this template for every plan file (not just fapony) — see [CLAUDE.md](../CLAUDE.md) § Rules
+> for AI Agents for the rules each plan must pass before an agent may execute it.
 
 ```markdown
-# PLAN-<feature>.md —<short name>
+# PLAN-<feature>.md — <short name>
 
 > **Status:** 🚧 in-progress · **Owner:** <dev> · **Created:** <YYYY-MM-DD>
-> **Source spec:** [spec/<feature>.md](../spec/<feature>.md) — ถ้ามี
+> **Source spec:** [spec/<feature>.md](../spec/<feature>.md) — if any
 
 ---
 
-## 1. เป้าหมาย (ทำไม)
-1–3 sentences — ถ้าอ่านแล้วตอบ "แล้วไง" ไม่ได้ = ยังไม่ชัด
+## 1. Goal (why)
+1–3 sentences — if a reader can't answer "so what" after reading = not clear yet
 
-## 2. ขอบเขต (ทำอะไรไม่ทำอะไร)
-**ทำ:** 3–7 bullets, outcome ไม่ใช่ task
-**ไม่ทำ:** 2–5 bullets + เหตุผล 1 บรรทัดต่อข้อ
+## 2. Scope (do / don't do)
+**Do:** 3–7 bullets, outcomes not tasks
+**Don't do:** 2–5 bullets + 1-line reason per item
 
-## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
-3–6 bullets — ทดสอบได้ (test pass / command รันได้ / user ทำซ้ำได้)
-ห้ามเขียน "เสร็จ" ลอยๆ — ต้องวัดได้
+## 3. Done criteria (how we know it's finished)
+3–6 bullets — testable (tests pass / command runs / user can reproduce)
+Never write bare "done" — must be measurable
 
-## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
-3–8 bullets — ข้อที่ละเมิดแล้วพัง (ไม่ใช่ "แนวปฏิบัติที่ดี")
+## 4. Constraints / Hard rules (must not violate)
+3–8 bullets — violations that break things (not "good practices")
 
-## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
-ตาราง 3–5 แถว: เสี่ยง | โอกาส | ผลกระทบ | ทางหนี
+## 5. Risks & Escape hatches (if it fails)
+Table with 3–5 rows: risk | likelihood | impact | escape hatch
 
-## 6. ขั้นตอน (ทำอะไรก่อน-หลัง)
-1. **<Step 1>** — มี deliverable ชัด
+## 6. Steps (what in which order)
+1. **<Step 1>** — has a clear deliverable
 2. **<Step 2>** — ...
-แต่ละขั้นต้อง verify ได้ก่อนไปขั้นถัดไป
+Each step must be verifiable before moving to the next
 
-## 7. ตัวอย่าง (เห็นภาพ)
-bash examples: ก่อน / หลัง
+## 7. Examples (make it concrete)
+bash examples: before / after
 
-## 8. อ้างอิง
-- link กลับไฟล์ที่เกี่ยวข้อง
+## 8. References
+- link back to related files
 ```
 
-**กฎเหล็ก 3 ข้อ:**
-- Section 1–4 ห้ามขาด — ถ้าขาด = plan ไม่บรรลุนิติภาวะ ไม่ให้ agent ทำ
-- Section 6 แต่ละขั้นต้อง verify ได้ — ถ้าทำแล้วไม่รู้ว่าผ่าน = ยังไม่ชัด
-- Section 8 ต้อง link กลับ — กันหลงทิศและให้ context ตอน reopen
+**3 iron rules:**
+- Sections 1–4 are mandatory — if missing = plan is immature, agent must not execute
+- Section 6 each step must be verifiable — if you can't tell it passed = not clear yet
+- Section 8 must link back — prevents drift and gives context on reopen
