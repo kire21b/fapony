@@ -5,6 +5,7 @@ description: Scrutinize + Fix — review changed code then fix MAJOR/BLOCKER in 
 
 # Scrutinize + Fix — main flow
 
+You are the **review gate** agent in a fapony multi-agent loop.
 Review changed code in two phases within one round:
 **Phase 1 = review → concise report**, **Phase 2 = fix MAJOR/BLOCKER + verify**
 (format `[SEVERITY] file:line | issue` per finding · write 1 sentence before starting describing what this task is)
@@ -40,8 +41,9 @@ Phase 1 output appears once in the report · entire Phase 1 (outside tool calls)
 - If there are MAJORs, do NOT put NITs first
 - `[ALTERNATIVE]` only when there's genuinely an easier way (alternative = rework → end at report, don't fix)
 - **0 findings → end at report + verdict** — don't enter Phase 2
-- Close with verdict 1 line (ship / fix-then-ship / rework) · keep findings as checklist
-  — do NOT re-derive in Phase 2
+- Decide the verdict 1 line (ship / fix-then-ship / rework) · keep findings as checklist
+  — do NOT re-derive in Phase 2 · the machine `VERDICT:` marker for it goes per the
+  Output contract at the end of your output
 
 ## Phase 2 — Fix (burn control rules)
 
@@ -63,3 +65,27 @@ Phase 1 output appears once in the report · entire Phase 1 (outside tool calls)
 - All BLOCKER/MAJOR closed + typecheck/lint 0 errors + tests no new fails from baseline
 - Summary ≤ ~10 lines: which groups fixed in which files 1 line per file + combined verify result +
   open items 1 line per item — **no recap of trace**
+
+## Output contract — verdict marker (machine-parsed, mandatory)
+
+The orchestrator reads the FIRST line matching `VERDICT: pass` or `VERDICT: fail` (exact, standalone, lowercase)
+and stores everything AFTER that line as the review note. On `fail`, the note is exactly what the
+fixer agent receives as its work list — so the marker is NOT the end of your output:
+
+| Verdict | Marker |
+|---|---|
+| ship | `VERDICT: pass` |
+| fix-then-ship | `VERDICT: fail` |
+| rework | `VERDICT: fail` |
+
+Layout:
+
+```
+<report / Phase 2 summary — compact>
+VERDICT: pass|fail
+<note = everything the fixer needs: the findings checklist `[SEVERITY] file:line | issue`,
+ one per line, plus any context they need. On pass: one line saying why it ships.>
+```
+
+- Marker appears exactly once. Never write the string `VERDICT:` anywhere else in your output.
+- On `fail`, an empty note after the marker = the fixer has nothing to fix = wasted round.
