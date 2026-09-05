@@ -8,7 +8,7 @@ Whether you use Claude Code, OpenCode, Codex, or anything else that reads stdin 
 
 ```bash
 # 1. Install (Bun is the only runtime dependency — fapony itself has zero packages)
-git clone https://github.com/delamind/fapony.git && cd fapony
+git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 
