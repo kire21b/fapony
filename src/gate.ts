@@ -58,12 +58,12 @@ export function gateOnce(
 
   const updated = getRun(db, runId)!;
 
-  if (updated.round >= config.review.maxRounds) {
+  if (updated.round > config.review.maxRounds) {
     return {
       runId,
       status: "stopped",
       round: updated.round,
-      error: `round ${updated.round} >= maxRounds ${config.review.maxRounds} — plan likely has a problem`,
+      error: `round ${updated.round} > maxRounds ${config.review.maxRounds} — plan likely has a problem`,
     };
   }
 

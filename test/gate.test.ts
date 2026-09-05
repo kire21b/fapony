@@ -77,13 +77,19 @@ export function testGateOnceMaxRounds(): void {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
     setStatus(db, runId, "awaiting_review");
 
-    // Fail twice to hit maxRounds (default maxRounds = 2)
+    // Fail twice — round 1 and 2 (still allowed since 2 > 2 is false)
     gateOnce(runId, "fail", "round 1");
     const r1 = getRun(db, runId)!;
     assert.equal(r1.round, 1);
 
     setStatus(db, runId, "awaiting_review");
-    const result = gateOnce(runId, "fail", "round 2");
+    gateOnce(runId, "fail", "round 2");
+    const r2 = getRun(db, runId)!;
+    assert.equal(r2.round, 2);
+
+    // Third fail — round 3 > 2, so stops
+    setStatus(db, runId, "awaiting_review");
+    const result = gateOnce(runId, "fail", "round 3");
     assert.equal(result.status, "stopped");
     assert(result.error!.includes("maxRounds"), "should mention maxRounds");
   });
