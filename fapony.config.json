@@ -7,7 +7,8 @@
     "executor":  { "cmd": ["opencode", "run", "--model", "{model}"], "model": "mimo", "timeoutMin": 45 },
     "gate":      { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "sonnet" },
     "planner":   { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" },
-    "bigFixer":  { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" }
+    "bigFixer":  { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" },
+    "scrutinizeFix": { "cmd": ["claude", "-p", "{model}", "{PROMPT}"], "model": "haiku", "timeoutMin": 15 }
   },
   "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
   "review": {

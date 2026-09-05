@@ -35,6 +35,13 @@ import {
   testMemoryDefaultWiringNoFile,
   testMemoryExplicitConfigWins,
 } from "./memory.test.js";
+import {
+  testShouldScrutinizeFix,
+  testBuildScrutinizePrompt,
+  testResolveChangedFiles,
+  testSpawnScrutinizeFix,
+  testSpawnScrutinizeFixRejectsDangerousCmd,
+} from "./scrutinize.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -64,5 +71,10 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
+  testShouldScrutinizeFix();
+  testBuildScrutinizePrompt();
+  testResolveChangedFiles();
+  await testSpawnScrutinizeFix();
+  await testSpawnScrutinizeFixRejectsDangerousCmd();
   console.log("\nall tests passed ✓");
 }

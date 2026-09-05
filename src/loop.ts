@@ -7,6 +7,9 @@ import {
   getLastPlanUpdate,
   type Config,
 } from "./db.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { runOnce } from "./run.js";
 import { templateArgs } from "./util.js";
 import { gateOnce } from "./gate.js";
@@ -207,6 +210,19 @@ export async function cmdLoop(args: string[]): Promise<void> {
       continue;
     }
 
+    // --- Small diff route: scrutinize-fix pass before gate ---
+    // NOTE: symmetric to bigFixer but no continue — falls through to the
+    // awaiting_review block below so the normal gate logic (auto/manual)
+    // reviews the already-fixed diff. Fire-and-forget like bigFixer:
+    // commits its own fixes, failure here never blocks the gate.
+    if (shouldScrutinizeFix(result, config)) {
+      console.error(`\n--- scrutinize-fix pass for run ${runId} ---`);
+      const fixed = await spawnScrutinizeFix(config, worktree, result);
+      if (!fixed) {
+        console.error("scrutinize-fix produced no output — continuing to gate with original diff");
+      }
+    }
+
     // awaiting_review — loop back to top
     if (result.status === "awaiting_review") {
       console.log(`\nrun ${runId} awaiting review`);
@@ -381,6 +397,111 @@ Fix any issues found. Output HANDOFF when done.`;
     return stdout || null;
   } catch (e) {
     console.error(`bigFixer spawn failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Routing predicate for the scrutinize-fix lane — the small-diff mirror of
+ * the `result.isBig && roles.bigFixer` branch above. Extracted (not inlined)
+ * so tests assert the real branch condition, not a copy of it.
+ */
+export function shouldScrutinizeFix(
+  result: { isBig: boolean; status: string },
+  config: Config
+): boolean {
+  return !result.isBig && !!config.roles?.scrutinizeFix && result.status === "awaiting_review";
+}
+
+/**
+ * Resolves the changed-file list for the prompt via base_sha..HEAD.
+ * Falls back to sentinel strings when the base is unknown or the diff is empty.
+ */
+export function resolveChangedFiles(worktree: string, baseSha: string | null | undefined): string {
+  if (!baseSha) return "(unknown — base sha unavailable)";
+  try {
+    return (
+      execSync(`git diff --name-only ${baseSha}..HEAD -- .`, {
+        cwd: worktree,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim() || "(none)"
+    );
+  } catch {
+    return "(unknown — base sha unavailable)";
+  }
+}
+
+/**
+ * Builds the scrutinize-fix stdin: role prompt template + run context header.
+ * The template alone carries no diff info, so the header supplies what the
+ * role prompt requires (changed files + repo_root).
+ */
+export function buildScrutinizePrompt(
+  worktree: string,
+  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string } },
+  changedFiles: string
+): string {
+  const template = readFileSync(
+    join(import.meta.dir, "..", "prompts", "scrutinize-fix.md"),
+    "utf-8"
+  );
+  return `${template}\n\n---\nRun ID: ${runResult.runId}\nrepo_root="${worktree}"\nChanged files (use these, do not auto-detect):\n${changedFiles}\nChanged: ${runResult.facts.files} files, ${runResult.facts.lines} lines, branch ${runResult.facts.branch}, commits ${runResult.facts.commits.join(", ") || "(none)"}\nReview the changed code then fix MAJOR/BLOCKER in place and commit.`;
+}
+
+export async function spawnScrutinizeFix(
+  config: Config,
+  worktree: string,
+  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
+): Promise<string | null> {
+  const roleConfig = config.roles!.scrutinizeFix!;
+
+  const db = openDb();
+  const run = getRun(db, runResult.runId);
+  const changedFiles = resolveChangedFiles(worktree, run?.base_sha);
+
+  const stdin = buildScrutinizePrompt(worktree, runResult, changedFiles);
+
+  const cmd = templateArgs(roleConfig.cmd, {
+    model: roleConfig.model ?? "",
+    PROMPT: stdin,
+  });
+  assertSafe(cmd);
+
+  const timeoutMs = (roleConfig.timeoutMin ?? 15) * 60 * 1000;
+
+  try {
+    const proc = Bun.spawn(cmd, {
+      cwd: worktree,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    proc.stdin.write(stdin);
+    proc.stdin.end();
+
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let stdout = "";
+
+    const timeout = setTimeout(() => proc.kill(), timeoutMs);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      stdout += decoder.decode(value, { stream: true });
+    }
+
+    clearTimeout(timeout);
+    const errBuf = await new Response(proc.stderr).text();
+    if (errBuf) process.stderr.write(errBuf);
+
+    await proc.exited;
+
+    return stdout || null;
+  } catch (e) {
+    console.error(`scrutinizeFix spawn failed: ${(e as Error).message}`);
     return null;
   }
 }

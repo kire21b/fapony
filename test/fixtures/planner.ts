@@ -1,26 +1,18 @@
 #!/usr/bin/env bun
 // test/fixtures/planner.ts — stub planner for tests.
-// Reads stdin, outputs NEXT-PROMPT or FILE_DONE marker.
+// Reads stdin, outputs a canned ## NEXT-PROMPT.
+// (Single behavior on purpose — if a test ever needs FILE_DONE, add a
+//  planner-file-done.ts fixture instead of env-toggling this one. Bun.spawn
+//  ignores process.env mutations, so env toggles silently don't work.)
 
 import { readFileSync } from "node:fs";
 
 // Read stdin (the plan + git facts + handoff fapony writes)
 readFileSync(0, "utf-8");
 
-// Default to NEXT-PROMPT; override via FIXTURE_PLANNER_ACTION
-const action = process.env.FIXTURE_PLANNER_ACTION || "next_prompt";
-
-if (action === "file_done") {
-  process.stdout.write(`All done.
-
-## FILE_DONE
-auth.ts — login flow implemented with tests.
-`);
-} else {
-  process.stdout.write(`Marked auth.ts as done.
+process.stdout.write(`Marked auth.ts as done.
 
 ## NEXT-PROMPT
 Implement the registration flow in src/register.ts following the same pattern as src/auth.ts.
 Include validation and error handling.
 `);
-}
