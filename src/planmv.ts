@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, dirname, relative, resolve } from "node:path";
 
-const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
+export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;
 const ABSOLUTE_LINK_RE = /^(https?:|\/)/;
 

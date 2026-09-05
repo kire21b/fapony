@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig } from "./db.js";
 
-function copyDir(src: string, dest: string): string[] {
+export function copyDir(src: string, dest: string): string[] {
   mkdirSync(dest, { recursive: true });
   const copied: string[] = [];
   for (const entry of readdirSync(src, { withFileTypes: true })) {
