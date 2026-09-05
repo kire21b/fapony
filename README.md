@@ -1,41 +1,139 @@
 # fapony
 
-Multi-agent dev loop orchestrator. You plan, fapony coordinates the execute → review → fix cycle.
+fapony turns any coding agent into a multi-agent workflow. You write the plan; fapony drives the execute → review → fix loop: one agent writes code and commits, a second agent reviews the diff, and a fix round runs only if the review fails. Plan, spec, and memory live as plain files in your own git repo, so you can swap agents at any time without migrating anything.
+
+Whether you use Claude Code, OpenCode, Codex, or anything else that reads stdin — no framework to learn: if you can write a markdown plan and run a CLI command, you can use fapony.
+
+## Quick start
+
+```bash
+# 1. Install (Bun is the only runtime dependency — fapony itself has zero packages)
+git clone https://github.com/delamind/fapony.git && cd fapony
+bun install
+bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
+
+# 2. Scaffold .fapony/ (plan/, spec/, .memory/) into your project worktree
+fapony init /path/to/your-worktree
+
+# 3. Point fapony at your worktree and your agents
+#    (fapony.config.json in the fapony checkout — see "Config" below)
+
+# 4. Write a plan — use the template, or draft one with your agent
+cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
+
+# 5. Run
+fapony kickoff <worktree-key>     # auto-detects the single pending plan
+fapony status                     # what's running, what awaits review
+fapony gate <run-id> pass         # or: fail "missing error handling on X"
+fapony stats                      # pass/stall rate, avg rounds, timing KPIs
+```
+
+After a run you get a **handoff**: verifiable git facts first (files, lines, commits, branch), then the executor's own report (what it was unsure about, what it didn't finish). You — or a review agent — judge from that, not from a chat transcript.
+
+## How the loop works
 
 ```
-PLAN (you + Claude)
+PLAN (you + your agent)
   │
   ▼
 fapony run <worktree> --plan <path>
   │
-  ├─ git guard (dirty tree? dangerous command?)
-  ├─ memory claim (optional, via config.memory.*)
-  ├─ spawn executor (opencode / claude code / etc.)
+  ├─ git guard (dirty tree? dangerous command? → stop, ask, never clean up)
+  ├─ memory claim (optional, per-project memory via config.memory.*)
+  ├─ spawn executor (your agent — Claude Code / OpenCode / Codex / …)
   │    └─ executor writes code, commits, outputs ## HANDOFF
-  ├─ gitFacts() — real diff stats from git
+  ├─ gitFacts — real diff stats from git
   ├─ route — big diff (>15 files or >400 lines) → full review, small → normal
   └─ print handoff + review command
         │
         ▼
-  review gate (claude -p /code-review high)
+  review gate (a reviewer agent, or you)
         │
-        ├─ pass → fapony status shows passed
-        └─ fix needed → fapony run again (round +1, cap 2)
+        ├─ pass → done (loop continues to the next chunk if you use `fapony loop`)
+        └─ fix needed → run again (round +1, cap 2)
              │
-             └─ round 3? → STOP. Plan has a problem, not code.
+             └─ round 3? → STOP. The plan has a problem, not the code.
 ```
+
+Small diffs get a cheap pre-pass (`scrutinize-fix` prompt: review + fix in one round) *before* the expensive review gate — small bugs die young instead of burning tokens at the gate.
+
+## Three ways to use it
+
+### Case 1 — Claude Code user who wants a reviewer
+
+You already work in Claude Code. You want a second opinion on every diff before it lands, and you want the loop to chunk a big feature into reviewable pieces.
+
+```jsonc
+// fapony.config.json
+{
+  "worktrees": { "myapp": "/absolute/path/to/myapp" },
+  "executor": { "cmd": ["claude", "-p", "--dangerously-skip-permissions"], "timeoutMin": 45 },
+  "review": {
+    "bigDiff": { "files": 15, "lines": 400 },
+    "maxRounds": 2,
+    "gate": ["claude", "-p", "/code-review high"]
+  }
+}
+```
+
+```bash
+fapony run myapp --plan .fapony/plan/PLAN-my-feature.md
+# …review the printed handoff…
+fapony gate <run-id> pass        # or fail + note; the note is carried into the fix round
+```
+
+The gate note from a `fail` is injected into the next executor round as `{{FEEDBACK}}` — the fixer sees exactly what the reviewer saw.
+
+### Case 2 — OpenCode user who wants project memory
+
+You use OpenCode (`opencode run` reads a prompt from stdin). You want each run to claim a memory slot in the project, log what happened, and get a "what's next" kickoff when work passes review.
+
+```jsonc
+// fapony.config.json — memory via shell adapter, agent-agnostic by design
+{
+  "worktrees": { "myapp": "/absolute/path/to/myapp" },
+  "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
+  "memory": {
+    "claim":   ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
+    "close":   ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
+    "add":     ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
+    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
+  }
+}
+```
+
+If `.fapony/.memory/mem.ts` exists (scaffolded by `fapony init`, from [templates/memory/](templates/memory/)) you can omit the whole `memory` block — fapony wires these defaults automatically. Memory is **per project**: the adapter runs inside each worktree against that worktree's own `.fapony/.memory/`, while fapony's run-state DB stays outside the worktree where agents can't rewrite it. A memory log that grows past a threshold can be compacted with `bun .fapony/.memory/mem.ts rotate --apply`.
+
+### Case 3 — Codex user who wants spec-driven work
+
+You use Codex (or any agent that takes a prompt on stdin). You keep the detailed contract in a spec file and want it attached to every executor round, so the agent works against a fixed contract instead of re-deriving one.
+
+Point `executor.cmd` at your Codex invocation (flags vary by Codex version — this case is supported by design and verified by fapony's test suite for the spec-injection behavior, not yet run against a live Codex session):
+
+```jsonc
+// fapony.config.json
+{
+  "worktrees": { "myapp": "/absolute/path/to/myapp" },
+  "executor": { "cmd": ["codex", "exec"], "timeoutMin": 45 }
+}
+```
+
+Then reference the spec from the plan header:
+
+```markdown
+# PLAN-my-feature
+> **Source spec:** .fapony/spec/my-feature.md
+```
+
+fapony reads `.fapony/spec/my-feature.md` inside the worktree and appends it to the executor prompt (truncated at `spec.maxLines`, default 200). Missing spec file → `(no spec)`, never a crash.
 
 ## Why handoff must be a template with git facts first
 
-The `## HANDOFF` block that the executor outputs is a **template**, not a chat transcript. Git facts (files changed, commits, branch) come first because they are verifiable. The executor's self-reported items (uncertain, not_done) come second and are labeled as such.
-
-A chat transcript is too long for a reviewer to read completely, and "typecheck passed" is only proof that the code compiles — not that the flow or permissions are correct. The handoff template forces the executor to produce a structured summary that the reviewer can actually consume.
+The `## HANDOFF` block the executor outputs is a **template**, not a chat transcript. Git facts (files changed, commits, branch) come first because they are verifiable. The executor's self-reported items (uncertain, not_done) come second and are labeled as such. "Typecheck passed" only proves the code compiles — not that the flow or permissions are right. The template forces a structured summary a reviewer can actually consume, and `fapony handoff <run-id>` reprints it later from the audit trail.
 
 ## Why cap at 2 rounds
 
-Round 1: executor writes code, reviewer checks it.
-Round 2: executor fixes what the reviewer found.
-Round 3 means the **plan** has a problem, not the code. At that point, stop and go back to the human who wrote the plan. More rounds just burn tokens fixing symptoms.
+Round 1: executor writes code, reviewer checks it. Round 2: executor fixes what the reviewer found. Round 3 means the **plan** has a problem, not the code — stop and go back to the human. More rounds just burn tokens fixing symptoms; fapony stops the run and says so.
 
 ## Skills
 
@@ -52,14 +150,9 @@ fapony ships with three portable skills (copy to any agent tool):
 The `plan-with-me` prompt is vendor-neutral — pipe it to any agent:
 
 ```bash
-# opencode
-cat prompts/plan-with-me.md | opencode run
-
-# Claude Code
-cat prompts/plan-with-me.md | claude -p
-
-# Any agent that reads stdin
-cat prompts/plan-with-me.md | <your-agent>
+cat prompts/plan-with-me.md | claude -p     # Claude Code
+cat prompts/plan-with-me.md | opencode run  # OpenCode
+cat prompts/plan-with-me.md | <your-agent>  # anything that reads stdin
 ```
 
 **Example plans** produced by this prompt (in [examples/](examples/)):
@@ -82,68 +175,50 @@ cat prompts/plan-with-me.md | <your-agent>
 | `prompts/scrutinize-fix.md` | review agent | Two-phase review + fix in one round |
 | `prompts/plan-with-me.md` | any agent | Draft plan + spec from conversation (vendor-neutral) |
 
-## Scope
-
-**Supported:**
-- Bun-only, zero runtime dependency
-- SQLite via `bun:sqlite` for run state
-- Git worktree coordination (guard, handoff, routing)
-- Memory integration via shell commands (configurable)
-- Memory log rotation (`bun .fapony/.memory/mem.ts rotate --apply`) once `log.jsonl` crosses a row threshold — archives resolved rows via `git mv`, keeps open work + unresolved decisions/notes
-- Manual review gate (chunk 1 — you run the review command yourself)
-
-**Not supported (yet):**
-- Auto-driving the executor via `claude -p` or `opencode run` (chunk 2)
-- DeepSeek prefilter
-- Distributed runs across multiple machines
-- Memory migration from `.fapony/.memory/log.jsonl`
-
-## Usage
+## CLI
 
 ```bash
-# First run
-fapony run vela --plan .fapony/plan/PLAN-foo.md --mem-id abc123
-
-# Check active runs
-fapony status
-
-# KPIs across all runs — pass/stall rate, avg rounds, exec/review time
-fapony stats
-
-# Print (or send, if configured) telemetry — see TELEMETRY.md for exactly what's in it
-fapony telemetry show
-fapony telemetry send
-
-# Reprint handoff for a run
-fapony handoff <run-id>
-
-# Close the review gate — pass closes the mem claim + prints mem kickoff (next items)
-fapony gate <run-id> pass "reviewed, looks good"
-fapony gate <run-id> fail "missing error handling on X" # round+1, status → fixing
-
-# Stop a run
-fapony stop <run-id> "plan needs rework"
-
-# Scaffold the .fapony/.memory/ system (mem.ts + store/selectors/render/commands) into a
-# new worktree from templates/memory/ — for projects that don't have one yet
-fapony init-mem <worktree-key>
-
-# Self-test
-fapony test
+fapony init <path>                       # scaffold .fapony/ into a worktree
+fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty]
+fapony kickoff <key>                     # auto-detect the single pending plan
+fapony loop <key> --plan <path>          # full loop: run → review → plan next chunk → repeat
+fapony loop <run-id>                     # resume a loop after a manual gate pass
+fapony status                            # active runs table
+fapony stats                             # pass/stall rate, avg rounds, exec/review timing
+fapony handoff <run-id>                  # reprint a run's handoff
+fapony gate <run-id> pass|fail [note]    # review verdict (note: or pipe via stdin)
+fapony stop <run-id> [reason]            # stop run + release memory claim
+fapony plan-mv <file>                    # archive a shipped PLAN
+fapony init-mem <key>                    # scaffold .fapony/.memory/ only (legacy path)
+fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
+fapony test                              # self-check
 ```
 
 ## Config
 
-`fapony.config.json` in the project root. See the example file for the full schema.
+`fapony.config.json` lives in the fapony checkout. The checked-in [fapony.config.json](fapony.config.json) is a complete working example; every section is optional with sane defaults. Key fields:
 
-Key fields:
-- `worktrees` — name → path mapping
-- `executor.cmd` — command to spawn (receives prompt via stdin)
-- `executor.timeoutMin` — kill executor after this many minutes
-- `review.bigDiff` — thresholds for routing to "big" review
-- `review.maxRounds` — hard cap on fix rounds
-- `review.gate` — command to run for review
-- `memory` — shell commands for claim/close/add/kickoff, or `null` to disable
+- `worktrees` — name → absolute path mapping
+- `executor.cmd` — command to spawn (receives the prompt via stdin); `roles.executor` overrides it per-role with `{model}` support
+- `review.bigDiff` / `review.maxRounds` / `review.gate` — routing, round cap, reviewer command
+- `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
+- `prompts` / `markers` / `paths` / `safety` — override prompt files, output markers, directory layout, and the dangerous-command deny-list
+
+Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
+
+## Scope
+
+**Supported:**
+- Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
+- Git worktree coordination (guard, handoff, routing, auto-archive on ship)
+- Memory integration via shell adapter, per project (configurable or default-wired)
+- Vendor-neutral executor/reviewer roles — anything that reads stdin
+- Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)
+
+**Not supported (yet):**
+- DeepSeek prefilter (a slot exists in config; the code path is not wired)
+- Distributed runs across multiple machines
+- Memory migration from `.fapony/.memory/log.jsonl`
 
 ## License
 

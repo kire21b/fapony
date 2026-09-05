@@ -1,6 +1,6 @@
 # PLAN-readme-launch — README ใหม่ vendor-neutral + 3 use-case จริง
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-05
+> **Status:** ✅ done (pending gate) · **Owner:** delamind · **Created:** 2026-09-05
 > **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § เดือนที่ 3)
 
 ---
