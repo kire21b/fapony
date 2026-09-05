@@ -5,12 +5,12 @@
 
 ---
 
-## 1. เป้าหมาย (ทำไม)
+## 1. Goal (why)
 
 User ต้อง copy data จาก table ใน UI ไป paste ใน Excel/Sheets ทุกครั้ง — เสียเวลา + ข้อมูล
 หาย column บ้าง ต้องมี export button ที่ download ไฟล์ CSV หรือ JSON ตรงๆ
 
-## 2. ขอบเขต (ทำอะไรไม่ทำอะไร)
+## 2. Scope (do / don't do)
 
 **ทำ:**
 - Export button บน data table component ( Tasks, Users, Projects tables)
@@ -25,7 +25,7 @@ User ต้อง copy data จาก table ใน UI ไป paste ใน Excel/
 - ไม่ทำ export ทั้ง database — เฉพาะ table ที่ user กำลังดูอยู่
 - ไม่ทำ custom column selection — export ทุก column ที่แสดงใน table
 
-## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
+## 3. Done criteria (how we know it's finished)
 
 - คลิก export → เลือก CSV → ไฟล์ download สำเร็จ
 - ไฟล์ CSV เปิดใน Excel ได้โดยไม่ broken (comma-separated ถูก, quote escape ถูก)
@@ -34,14 +34,14 @@ User ต้อง copy data จาก table ใน UI ไป paste ใน Excel/
 - Filtered rows → export เฉพาะ filtered data (ไม่ใช่ทั้ง table)
 - `npm run typecheck` ผ่าน
 
-## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
+## 4. Constraints / Hard rules (must not violate)
 
 - ห้ามส่ง data ไป server — ทุกอย่างเกิดใน browser (ไม่มี network request)
 - ห้าม export ถ้า table ไม่มี data — ปิด button + show tooltip "No data to export"
 - ห้ามใช้ third-party CSV library — เขียนเอง (fields ง่าย, ไม่ต้อง dependency)
 - ห้าม export column ที่ user ไม่ได้เปิดแสดง — ตาม table column config
 
-## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
+## 5. Risks & Escape hatches (if it fails)
 
 | เสี่ยง | โอกาส | ผลกระทบ | ทางหนี |
 |---|---|---|---|
@@ -49,7 +49,7 @@ User ต้อง copy data จาก table ใน UI ไป paste ใน Excel/
 | Memory หมด (table ใหญ่ 10k+ rows) | ต่ำ | browser crash | stream ไม่ได้ → chunk download ถ้า rows > 5k |
 | Unicode หาย (Thai chars, emoji) | กลาง | ไฟล์เปิดแล้วไม่เห็นตัวอักษร | prepend BOM สำหรับ CSV + charset=utf-8 |
 
-## 6. ขั้นตอน (ทำอะไรก่อน-หลัง)
+## 6. Steps (what in which order)
 
 1. **CSV export function** — toCSV(data, columns) ที่ return string · verify: unit test สร้าง CSV จาก sample data ได้ถูก
 2. **JSON export function** — toJSON(data, columns) ที่ return string · verify: unit test + `JSON.parse` ได้
@@ -57,7 +57,7 @@ User ต้อง copy data จาก table ใน UI ไป paste ใน Excel/
 4. **UI integration** — export dropdown button บน table component · verify: คลิกได้ + เลือก format ได้
 5. **Edge cases** — empty data, filtered data, special chars · verify: test 3 ตัว pass
 
-## 7. ตัวอย่าง (เห็นภาพ)
+## 7. Examples (make it concrete)
 
 ```bash
 # Manual test: export tasks table
@@ -80,7 +80,7 @@ cat tasks-export-2026-09-05.json | jq '.[0]'
 # { "id": 1, "title": "Fix login bug", "status": "in-progress" }
 ```
 
-## 8. อ้างอิง
+## 8. References
 
 - [spec/export.md](../spec/export.md) — column mapping + file naming rules
 - [templates/PLAN.md](../templates/PLAN.md) — Plan Core template

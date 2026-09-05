@@ -5,13 +5,13 @@
 
 ---
 
-## 1. เป้าหมาย (ทำไม)
+## 1. Goal (why)
 
 ตอนนี้ auth logic (JWT verify, permission check, role guard) กระจายอยู่ใน 5+ route handlers
 ทำให้แก้ auth flow ทีต้องแก้หลายที่ + ทดสอบซ้ำยาก ต้องย้ายออกมาเป็น middleware
 เดียวที่ test ได้แบบ isolated
 
-## 2. ขอบเขต (ทำอะไรไม่ทำอะไร)
+## 2. Scope (do / don't do)
 
 **ทำ:**
 - สร้าง `src/middleware/auth.ts` — verifyJWT + requireRole + requirePermission
@@ -24,7 +24,7 @@
 - ไม่เปลี่ยน JWT payload structure — เปลี่ยนแค่ location ของ logic
 - ไม่ทำ RBAC system ใหม่ — permission string เดิม ย้ายแค่ที่ check
 
-## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
+## 3. Done criteria (how we know it's finished)
 
 - `npm run typecheck` ผ่านหลัง refactor
 - `npm test` ไม่มี test ใหม่ fail (existing tests ยัง pass ทุกตัว)
@@ -32,14 +32,14 @@
 - Auth code ใน route handlers เหลือแค่ `router.get('/tasks', verifyJWT, requireRole('admin'), handler)`
 - ไม่มี auth logic ซ้ำกันใน route files (grep ไม่เจอ duplicate)
 
-## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
+## 4. Constraints / Hard rules (must not violate)
 
 - ห้ามเปลี่ยน behavior ของ auth — refactor คือย้าย ไม่ใช่แก้ logic
 - ห้ามลบ middleware เดิมที่ route level ก่อน unit test ใหม่เขียนเสร็จ — เขียน test ก่อน ค่อยลบ
 - ห้ามสร้าง dependency cycle — auth.ts ห้าม import จาก routes/
 - ห้าม-cache JWT verify result — verify ทุก request เสมอ
 
-## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
+## 5. Risks & Escape hatches (if it fails)
 
 | เสี่ยง | โอกาส | ผลกระทบ | ทางหนี |
 |---|---|---|---|
@@ -47,7 +47,7 @@
 | Existing tests break หลัง refactor | กลาง | ต้อง rollback | run full test suite ก่อน commit, compare coverage |
 | Middleware chain order mistake (permission check ก่อน auth) | ต่ำ | security hole | enforce order ใน test: auth → role → permission |
 
-## 6. ขั้นตอน (ทำอะไรก่อน-หลัง)
+## 6. Steps (what in which order)
 
 1. **Inventory auth patterns** — grep หา JWT verify / permission check ทุกที่ · verify: มี list ของ route files + pattern ที่ใช้
 2. **Write middleware unit tests** — test 3 ตัวก่อนเขียน code · verify: test 3 ตัว fail ก่อน (RED)
@@ -55,7 +55,7 @@
 4. **Migrate routes ทีละไฟล์** — เปลี่ยน tasks.ts → users.ts → projects.ts · verify: `npm test` pass หลังย้ายแต่ละไฟล์
 5. **Cleanup** — ลบ auth code เก่าที่ไม่ใช้แล้ว · verify: `grep -r "jwt.verify" src/routes/` ไม่เจอ
 
-## 7. ตัวอย่าง (เห็นภาพ)
+## 7. Examples (make it concrete)
 
 ```bash
 # ก่อน refactor — auth code ซ้ำใน route
@@ -75,7 +75,7 @@ npx vitest run src/middleware/auth.test.ts
 # ✓ requireRole wrong role → 403
 ```
 
-## 8. อ้างอิง
+## 8. References
 
 - [templates/PLAN.md](../templates/PLAN.md) — Plan Core template
 - [skill/plan-with-me.md](../skill/plan-with-me.md) — วิธีสร้าง plan นี้
