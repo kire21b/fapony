@@ -159,6 +159,14 @@ export function testTemplateArgsReplaceAll(): void {
   });
   assert.equal(filled, "run 7 in wt (7)");
 
+  // $ sequences in values must be literal, not replace() special patterns
+  const tricky = templateArgs(["echo", "{MSG}"], { MSG: "$& $' $` $$" });
+  assert.equal(tricky[1], "$& $' $` $$");
+  const trickyFilled = fillPrompt("PLAN:\n{{PLAN}}", {
+    PLAN: "costs $100 and $& more",
+  });
+  assert.equal(trickyFilled, "PLAN:\ncosts $100 and $& more");
+
   console.log("  ✓ templateArgs replaceAll + fillPrompt");
 }
 
