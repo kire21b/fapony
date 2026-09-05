@@ -54,8 +54,11 @@ Ask:
 
 ## Phase 2 — Draft (1 round)
 
-When all answers are in → write the plan according to **Plan Core template** (templates/PLAN.md).
-Then ask:
+When all answers are in, **before writing the file**: `ls plan/` (or `.fapony/plan/`) and check
+`PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite it — pick a more specific
+name (e.g. `PLAN-<feature>-v2.md`) or ask the dev which one is stale.
+
+Then write the plan according to **Plan Core template** (templates/PLAN.md) and ask:
 > "This is the draft plan based on what you told me.
 > - Is there anything I misunderstood?
 > - Is there anything you said that I didn't include?
@@ -82,6 +85,7 @@ Then draft spec/<filename>.md by:
 4. **Every output is a file** — not chat (so git can track it)
 5. **What wasn't discussed = not in the plan** — never add on your own
 6. **Plan must follow Plan Core** — sections 1–8, no shortcuts (see templates/PLAN.md)
+7. **Never overwrite an existing PLAN-<feature>.md** — check first, pick a different name if it exists
 
 ## Examples
 
