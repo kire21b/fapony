@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 import type { Config } from "./db.js";
 import { assertSafe } from "./safety.js";
+import { templateArgs } from "./util.js";
 
 /** Default memory commands — matches templates/memory/mem.ts CLI. */
 export const DEFAULT_MEMORY: Config["memory"] = {
@@ -30,14 +31,6 @@ export function resolveMemoryConfig(
   return null;
 }
 
-function templateArgs(arr: string[], vars: Record<string, string>): string[] {
-  return arr.map((s) => {
-    let out = s;
-    for (const [k, v] of Object.entries(vars)) out = out.replace(`{${k}}`, v);
-    return out;
-  });
-}
-
 export function closeMemory(
   config: Config,
   worktree: string,
@@ -59,15 +52,16 @@ export function claimMemory(
   config: Config,
   worktree: string,
   memId: string
-): void {
+): boolean {
   const mem = resolveMemoryConfig(config, worktree);
-  if (!mem) return;
+  if (!mem) return false;
   const cmd = templateArgs(mem.claim, { id: memId });
   assertSafe(cmd);
   execSync(cmd.join(" "), {
     cwd: worktree,
     stdio: ["pipe", "pipe", "pipe"],
   });
+  return true;
 }
 
 /** Runs memory.kickoff (if configured or default-wired) and returns its stdout, or null if unset/failed. */

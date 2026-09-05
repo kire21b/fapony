@@ -15,19 +15,7 @@ import {
 import { gitFacts, parseHandoff, renderHandoff, type GitFacts, type ParsedHandoff } from "./handoff.js";
 import { closeMemory, claimMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";
-
-export function templateArgs(
-  arr: string[],
-  vars: Record<string, string>
-): string[] {
-  return arr.map((s) => {
-    let out = s;
-    for (const [k, v] of Object.entries(vars)) {
-      out = out.replace(`{${k}}`, v);
-    }
-    return out;
-  });
-}
+import { templateArgs } from "./util.js";
 
 export interface RunOnceOpts {
   worktreeKey: string;
@@ -153,9 +141,13 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   // --- 3. MEMORY CLAIM (optional) ---
   if (memId) {
     try {
-      claimMemory(config, worktree, memId);
-      addEvent(db, runId, "memory_claim", { mem_id: memId });
-      console.error(`memory claimed: ${memId}`);
+      const claimed = claimMemory(config, worktree, memId);
+      if (claimed) {
+        addEvent(db, runId, "memory_claim", { mem_id: memId });
+        console.error(`memory claimed: ${memId}`);
+      } else {
+        console.error(`memory skipped (disabled or no .memory/mem.ts): ${memId}`);
+      }
     } catch (e) {
       console.error(`memory claim failed (non-fatal): ${(e as Error).message}`);
       addEvent(db, runId, "memory_claim_failed", {

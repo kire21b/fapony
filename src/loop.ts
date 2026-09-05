@@ -7,7 +7,8 @@ import {
   getLastPlanUpdate,
   type Config,
 } from "./db.js";
-import { runOnce, templateArgs } from "./run.js";
+import { runOnce } from "./run.js";
+import { templateArgs } from "./util.js";
 import { gateOnce } from "./gate.js";
 import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 import { assertSafe } from "./safety.js";
@@ -185,23 +186,24 @@ export async function cmdLoop(args: string[]): Promise<void> {
     }
 
     // --- Big diff route: spawn bigFixer instead of planner ---
+    // NOTE: bigFixer is fire-and-forget — it fixes and commits, then the loop
+    // continues to re-run executor. The fixerResult is not parsed or reviewed
+    // in this pass; the next executor run will pick up the fixes.
     if (result.isBig && config.roles?.bigFixer) {
       console.error(`\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`);
 
       const fixerResult = await spawnBigFixer(config, worktree, result);
       if (!fixerResult) {
-        console.error("bigFixer produced no HANDOFF — stopping loop");
+        console.error("bigFixer produced no output — stopping loop");
         break;
       }
 
-      // bigFixer output goes through gate
       if (autoLoop && hasGate) {
         const gateResult = await spawnGate(config, worktree, { id: runId, mem_id: memId, worktree: worktreeKey! });
         if (gateResult) {
           gateOnce(runId, gateResult.verdict, gateResult.note);
         }
       }
-      // Continue loop — re-run executor or planner
       continue;
     }
 
@@ -234,6 +236,8 @@ async function spawnGate(
   });
   assertSafe(cmd);
 
+  const timeoutMs = (roleConfig.timeoutMin ?? 10) * 60 * 1000;
+
   try {
     const proc = Bun.spawn(cmd, {
       cwd: worktree,
@@ -249,12 +253,15 @@ async function spawnGate(
     const decoder = new TextDecoder();
     let stdout = "";
 
+    const timeout = setTimeout(() => proc.kill(), timeoutMs);
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       stdout += decoder.decode(value, { stream: true });
     }
 
+    clearTimeout(timeout);
     const errBuf = await new Response(proc.stderr).text();
     if (errBuf) process.stderr.write(errBuf);
 
@@ -286,6 +293,8 @@ Review the current state and output your decision.`;
   });
   assertSafe(cmd);
 
+  const timeoutMs = (roleConfig.timeoutMin ?? 10) * 60 * 1000;
+
   try {
     const proc = Bun.spawn(cmd, {
       cwd: worktree,
@@ -301,12 +310,15 @@ Review the current state and output your decision.`;
     const decoder = new TextDecoder();
     let stdout = "";
 
+    const timeout = setTimeout(() => proc.kill(), timeoutMs);
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       stdout += decoder.decode(value, { stream: true });
     }
 
+    clearTimeout(timeout);
     const errBuf = await new Response(proc.stderr).text();
     if (errBuf) process.stderr.write(errBuf);
 
@@ -335,6 +347,8 @@ Fix any issues found. Output HANDOFF when done.`;
   });
   assertSafe(cmd);
 
+  const timeoutMs = (roleConfig.timeoutMin ?? 20) * 60 * 1000;
+
   try {
     const proc = Bun.spawn(cmd, {
       cwd: worktree,
@@ -350,12 +364,15 @@ Fix any issues found. Output HANDOFF when done.`;
     const decoder = new TextDecoder();
     let stdout = "";
 
+    const timeout = setTimeout(() => proc.kill(), timeoutMs);
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       stdout += decoder.decode(value, { stream: true });
     }
 
+    clearTimeout(timeout);
     const errBuf = await new Response(proc.stderr).text();
     if (errBuf) process.stderr.write(errBuf);
 
