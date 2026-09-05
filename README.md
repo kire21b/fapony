@@ -47,6 +47,31 @@ fapony ships with three portable skills (copy to any agent tool):
 | `skill/move-to-done.md` | Archive PLAN to plan/done/ after ship | `/move-to-done` |
 | `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
 
+## Using plan-with-me with any agent
+
+The `plan-with-me` prompt is vendor-neutral — pipe it to any agent:
+
+```bash
+# opencode
+cat prompts/plan-with-me.md | opencode run
+
+# Claude Code
+cat prompts/plan-with-me.md | claude -p
+
+# Any agent that reads stdin
+cat prompts/plan-with-me.md | <your-agent>
+```
+
+**Example plans** produced by this prompt (in [examples/](examples/)):
+
+| Plan | Type | Scope |
+|------|------|-------|
+| [PLAN-webapp-notifications.md](examples/PLAN-webapp-notifications.md) | Web app | Spec-heavy, wide (WebSocket + UI + backend) |
+| [PLAN-cli-logger.md](examples/PLAN-cli-logger.md) | CLI tool | Small, no spec |
+| [PLAN-refactor-auth.md](examples/PLAN-refactor-auth.md) | Refactor | Existing code, no new feature |
+| [PLAN-fix-race-condition.md](examples/PLAN-fix-race-condition.md) | Bug fix | Small, specific |
+| [PLAN-feature-export.md](examples/PLAN-feature-export.md) | New feature | Medium scope |
+
 ## Prompts
 
 | Prompt | Used by | Purpose |
@@ -55,6 +80,7 @@ fapony ships with three portable skills (copy to any agent tool):
 | `prompts/fixer.md` | fixer | Fix gate review notes + re-handoff |
 | `prompts/planner.md` | planner | Update PLAN, mark shipped, hand off next chunk |
 | `prompts/scrutinize-fix.md` | review agent | Two-phase review + fix in one round |
+| `prompts/plan-with-me.md` | any agent | Draft plan + spec from conversation (vendor-neutral) |
 
 ## Scope
 

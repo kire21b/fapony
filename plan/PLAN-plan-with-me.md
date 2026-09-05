@@ -1,6 +1,6 @@
 # PLAN-plan-with-me — prompt pack + ตัวอย่าง + vendor-neutral export
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-05
+> **Status:** ✅ shipped · **Owner:** delamind · **Created:** 2026-09-05
 > **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § เดือนที่ 2)
 
 ---
@@ -57,7 +57,15 @@ vendor-neutral prompt ที่ agent ไหนก็กิน stdin ได้ (
 
 ## 7. ตัวอย่าง (เห็นภาพ)
 
-_ยังไม่มี — จะแนบ path ตัวอย่างจริงหลังขั้นตอน 1–3 เสร็จ (plan นี้เขียนก่อนลงมือ)_
+ตัวอย่างทั้ง 5 อยู่ใน [examples/](../examples/):
+
+| ไฟล์ | ประเภท | ขอบเขต |
+|------|--------|--------|
+| [PLAN-webapp-notifications.md](../examples/PLAN-webapp-notifications.md) | Web app | spec เยอะ, scope กว้าง (WebSocket + UI + backend) |
+| [PLAN-cli-logger.md](../examples/PLAN-cli-logger.md) | CLI tool | เล็ก, ไม่มี spec |
+| [PLAN-refactor-auth.md](../examples/PLAN-refactor-auth.md) | Refactor | มี code เดิม, ไม่มี feature ใหม่ |
+| [PLAN-fix-race-condition.md](../examples/PLAN-fix-race-condition.md) | Bug fix | เล็ก, เจาะจง |
+| [PLAN-feature-export.md](../examples/PLAN-feature-export.md) | New feature | scope กลาง |
 
 ## 8. อ้างอิง
 
