@@ -110,6 +110,10 @@ fapony status
 # KPIs across all runs — pass/stall rate, avg rounds, exec/review time
 fapony stats
 
+# Print (or send, if configured) telemetry — see TELEMETRY.md for exactly what's in it
+fapony telemetry show
+fapony telemetry send
+
 # Reprint handoff for a run
 fapony handoff <run-id>
 

@@ -14,6 +14,7 @@ import { cmdPlanMv } from "./src/planmv.js";
 import { cmdInit } from "./src/init.js";
 import { cmdKickoff } from "./src/kickoff.js";
 import { cmdStats } from "./src/stats.js";
+import { cmdTelemetry } from "./src/telemetry.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -25,6 +26,8 @@ if (cmd === "run") {
   cmdStatus(a);
 } else if (cmd === "stats") {
   cmdStats(a);
+} else if (cmd === "telemetry") {
+  await cmdTelemetry(a);
 } else if (cmd === "handoff") {
   cmdHandoff(a);
 } else if (cmd === "stop") {
@@ -43,6 +46,6 @@ if (cmd === "run") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
-  console.error("usage: fapony <run|loop|status|stats|handoff|stop|gate|init|kickoff|init-mem|test> [args]");
+  console.error("usage: fapony <run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|test> [args]");
   process.exit(1);
 }

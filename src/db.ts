@@ -50,6 +50,10 @@ export interface Config {
     add: string[];
     kickoff?: string[];
   } | null;
+  // opt-in only — omit or leave null to keep everything local. See TELEMETRY.md
+  // for the exact payload shape (KPI numbers + event kind/timestamp, no
+  // plan/commit/gate-note content, ever).
+  telemetry: { enabled: boolean; endpoint: string } | null;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -62,6 +66,7 @@ const DEFAULT_CONFIG: Config = {
     prefilter: null,
   },
   memory: null,
+  telemetry: null,
 };
 
 // XDG Base Directory convention (macOS ignores Apple's ~/Library/Application Support

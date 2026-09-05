@@ -142,9 +142,12 @@ events(
     "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
     "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
     "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
-  }
+  },
+  "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" }
 }
 ```
+
+- `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
 
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
 - `prefilter: null` = ยังไม่ทำ prefilter DeepSeek (มีช่องรอไว้ใน config แต่ code path ยังไม่ใช้)
@@ -270,6 +273,7 @@ fapony loop <worktree-key> --plan <path>  # start loop
 fapony loop <run-id>                      # resume after gate pass
 fapony status                    # ตาราง active runs
 fapony stats                     # KPI ข้าม run ทั้งหมด — pass/stall rate, avg rounds, exec/review time
+fapony telemetry show|send       # opt-in เท่านั้น (default off) — ดู TELEMETRY.md ว่าส่งอะไรบ้าง
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close
