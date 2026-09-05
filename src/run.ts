@@ -68,6 +68,37 @@ function readSpec(worktree: string, specPath: string, maxLines: number): string 
   }
 }
 
+/**
+ * Build the executor prompt from a template. Values are inserted via function
+ * replacements so `$` sequences in plan/spec/feedback text are literal.
+ */
+export function buildExecutorPrompt(
+  template: string,
+  planContent: string,
+  memId: string | null,
+  specContent: string | null,
+  feedback: string | null
+): string {
+  return template
+    .replace("{{PLAN}}", () => planContent)
+    .replace("{{MEM_ID}}", () => memId ?? "none")
+    .replace("{{SPEC}}", () => specContent ?? "(no spec)")
+    .replace("{{FEEDBACK}}", () => feedback ?? "(none — first round)");
+}
+
+/**
+ * Executor spawn command: roles.executor.cmd wins when set ({{model}} filled
+ * from roles.executor.model), otherwise the plain executor.cmd.
+ */
+export function executorCmd(
+  config: Config,
+  memId: string | null
+): string[] {
+  const role = config.roles?.executor;
+  const cmd = role?.cmd ?? config.executor.cmd;
+  return templateArgs(cmd, { id: memId ?? "none", model: role?.model ?? "" });
+}
+
 export interface RunOnceResult {
   runId: number;
   status: RunStatus;
@@ -196,16 +227,10 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const feedback = memId ? getPendingFeedback(db, worktreeKey, memId, runId) : null;
   if (feedback) console.error(`carrying forward review feedback from previous round`);
 
-  const prompt = promptTemplate
-    .replace("{{PLAN}}", planContent)
-    .replace("{{MEM_ID}}", memId ?? "none")
-    .replace("{{SPEC}}", specContent ?? "(no spec)")
-    .replace("{{FEEDBACK}}", feedback ?? "(none — first round)");
+  const prompt = buildExecutorPrompt(promptTemplate, planContent, memId, specContent, feedback);
 
-  const executorCmd = templateArgs(config.executor.cmd, {
-    id: memId ?? "none",
-  });
-  assertSafe(executorCmd, safetyDeny(config));
+  const executorCmdArr = executorCmd(config, memId);
+  assertSafe(executorCmdArr, safetyDeny(config));
 
   const timeoutMs = config.executor.timeoutMin * 60 * 1000;
 
@@ -213,7 +238,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   let exitCode = 0;
 
   try {
-    const proc = Bun.spawn(executorCmd, {
+    const proc = Bun.spawn(executorCmdArr, {
       cwd: worktree,
       stdin: "pipe",
       stdout: "pipe",
@@ -226,6 +251,10 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     const reader = proc.stdout.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+
+    // Drain stderr concurrently — if the pipe fills (64KB) while we only read
+    // stdout, the executor blocks forever and we kill it as a false stall.
+    const stderrDrain = new Response(proc.stderr).text();
 
     const timeout = setTimeout(() => {
       proc.kill();
@@ -241,6 +270,8 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
     clearTimeout(timeout);
     stdout = buffer;
+    const errText = await stderrDrain;
+    if (errText) process.stderr.write(errText);
     exitCode = await proc.exited;
   } catch (e) {
     console.error(`executor failed: ${(e as Error).message}`);
@@ -267,6 +298,10 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   // --- 6. GIT FACTS + PARSE HANDOFF ---
   const facts = gitFacts(worktree, baseSha);
   const parsed = parseHandoff(stdout, handoffMarker(config));
+
+  // Persist the parsed handoff so `fapony handoff <run-id>` can reprint the
+  // executor report later, not just git facts.
+  addEvent(db, runId, "handoff", parsed);
 
   for (const hash of facts.commits) {
     addEvent(db, runId, "commit", { hash });

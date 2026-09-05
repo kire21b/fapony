@@ -57,6 +57,10 @@ import {
   testRenderRolePrompt,
   testSourceAndShippedRE,
 } from "./config.test.js";
+import {
+  testBuildExecutorPrompt,
+  testExecutorCmdRolePreference,
+} from "./run.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -102,5 +106,7 @@ export async function cmdTest(): Promise<void> {
   testTemplateArgsReplaceAll();
   testRenderRolePrompt();
   testSourceAndShippedRE();
+  testBuildExecutorPrompt();
+  testExecutorCmdRolePreference();
   console.log("\nall tests passed ✓");
 }
