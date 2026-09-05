@@ -5,8 +5,8 @@
 // Re-run to re-sync after editing the template — not automatic, on purpose.
 
 import { existsSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
-import { join } from "node:path";
-import { loadConfig } from "./db.js";
+import { join, dirname } from "node:path";
+import { loadConfig, memoryEntry } from "./db.js";
 
 export function copyDir(src: string, dest: string): string[] {
   mkdirSync(dest, { recursive: true });
@@ -40,11 +40,13 @@ export function cmdInitMem(args: string[]): void {
   }
 
   const templateDir = join(import.meta.dir, "..", "templates", "memory");
-  const destDir = join(worktree, ".fapony", ".memory");
+  const memEntry = memoryEntry(config);
+  const destDir = join(worktree, dirname(memEntry));
+  const destFile = join(worktree, memEntry);
 
-  if (existsSync(join(destDir, "mem.ts"))) {
+  if (existsSync(destFile)) {
     console.error(
-      `${destDir}/mem.ts already exists — re-running would overwrite local edits.\nDelete it first if you want a fresh copy from the template.`
+      `${destFile} already exists — re-running would overwrite local edits.\nDelete it first if you want a fresh copy from the template.`
     );
     process.exit(1);
   }
@@ -53,6 +55,6 @@ export function cmdInitMem(args: string[]): void {
   console.log(`scaffolded ${files.length} files into ${destDir}`);
   console.log(`\nAdd to fapony.config.json:`);
   console.log(
-    `  "memory": {\n    "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],\n    "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],\n    "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],\n    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]\n  }`
+    `  "memory": {\n    "claim": ["bun", "${memEntry}", "claim", "{id}"],\n    "close": ["bun", "${memEntry}", "close", "{id}", "{msg}"],\n    "add":   ["bun", "${memEntry}", "add", "{kind}", "{text}"],\n    "kickoff": ["bun", "${memEntry}", "kickoff"]\n  }`
   );
 }

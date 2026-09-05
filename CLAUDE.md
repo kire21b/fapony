@@ -152,6 +152,27 @@ events(
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
 - `prefilter: null` = ยังไม่ทำ prefilter DeepSeek (มีช่องรอไว้ใน config แต่ code path ยังไม่ใช้)
 
+### Config เสริม (optional ทั้งหมด — ไม่ใส่ = ค่าเดิมที่เคย hardcode)
+
+```json
+{
+  "prompts": { "executor": "prompts/execute.md", "gate": null, "planner": null, "bigFixer": null, "scrutinizeFix": "prompts/scrutinize-fix.md" },
+  "spec": { "maxLines": 200, "sourceMarker": "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$" },
+  "markers": { "handoff": "## HANDOFF", "verdict": "^VERDICT:\\s*(pass|fail)\\s*$", "nextPrompt": "## NEXT-PROMPT", "fileDone": "## FILE_DONE", "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*" },
+  "paths": { "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts", "doneDir": "done", "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"] },
+  "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
+  "plan": { "extensions": [".md"] },
+  "planmv": { "archiveMsg": "chore(plan): archive {file} (shipped {hash})", "inboundWarnAt": 5 },
+  "display": { "dirtyPreview": 10, "shortSha": 8 },
+  "defaults": { "timeoutMin": 10 }
+}
+```
+
+- `prompts.<role> = null` = ใช้ inline fallback เดิม · `gate/planner/bigFixer` มี `{{RUN_ID}} {{WORKTREE}} {{MEM_ID}} {{FILES}} {{LINES}}` ให้ใช้ใน template
+- `defaults.timeoutMin` = fallback เมื่อ `roles.<name>.timeoutMin` ไม่ได้ตั้ง (ไม่ตั้งเลย → gate/planner 10, bigFixer 20, scrutinizeFix 15)
+- env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db)
+- getters รวมศูนย์ใน `src/db.ts` (`specMaxLines()`, `shippedRE()`, `roleTimeoutMin()`, …) — ห้าม hardcode ค่าเดิมซ้ำที่ call site
+
 ---
 
 ## Key Design Decisions
@@ -240,7 +261,7 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 
 ### สิ่งที่กำลังจะทำต่อ
 ดู [ROADMAP.md](ROADMAP.md) — chunk ที่เสร็จ (1, 2) เก็บไว้ที่นี่เป็นประวัติ ส่วนงานที่ยังไม่เริ่ม
-อยู่ใน ROADMAP.md ที่เดียว (กัน duplicate 2 ที่ไม่ sync กัน) plan file รายละเอียดอยู่ใต้ `.fapony/plan/`
+อยู่ใน ROADMAP.md ที่เดียว (กัน duplicate 2 ที่ไม่ sync กัน) plan file รายละเอียดอยู่ใต้ `plan/`
 
 ---
 

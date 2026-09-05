@@ -5,19 +5,26 @@ import {
   setStatus,
   addEvent,
   getLastPlanUpdate,
+  roleTimeoutMin,
+  safetyDeny,
+  shippedRE,
+  archiveMsg,
+  inboundWarnAt,
+  promptFileFor,
+  handoffMarker,
   type Config,
 } from "./db.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { runOnce } from "./run.js";
-import { templateArgs } from "./util.js";
+import { templateArgs, fillPrompt } from "./util.js";
 import { gateOnce } from "./gate.js";
 import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 import { assertSafe } from "./safety.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 import { renderHandoff } from "./handoff.js";
-import { planMv, SHIPPED_RE, type PlanMvResult } from "./planmv.js";
+import { planMv, type PlanMvResult } from "./planmv.js";
 
 /**
  * fapony loop — run executor → review → planner → repeat until FILE_DONE.
@@ -159,7 +166,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
         }
 
         if (afterGate.plan) {
-          const archived = autoArchivePlan(worktree, afterGate.plan);
+          const archived = autoArchivePlan(worktree, afterGate.plan, config);
           if (archived.ok) {
             console.log(`archived: .fapony/plan/done/${afterGate.plan.split("/").pop()}`);
             addEvent(db, runId, "plan_archived", { plan: afterGate.plan });
@@ -257,15 +264,19 @@ async function spawnGate(
 ): Promise<{ verdict: "pass" | "fail"; note: string } | null> {
   const roleConfig = config.roles!.gate!;
 
-  const stdin = `Review run ${run.id} for worktree ${run.worktree}.`;
+  const stdin = renderRolePrompt(config, "gate", `Review run ${run.id} for worktree ${run.worktree}.`, {
+    RUN_ID: String(run.id),
+    WORKTREE: run.worktree,
+    MEM_ID: run.mem_id ?? "none",
+  });
 
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
     PROMPT: stdin,
   });
-  assertSafe(cmd);
+  assertSafe(cmd, safetyDeny(config));
 
-  const timeoutMs = (roleConfig.timeoutMin ?? 10) * 60 * 1000;
+  const timeoutMs = roleTimeoutMin(config, "gate") * 60 * 1000;
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -296,7 +307,7 @@ async function spawnGate(
 
     await proc.exited;
 
-    return parseGateVerdict(stdout);
+    return parseGateVerdict(stdout, config);
   } catch (e) {
     console.error(`gate spawn failed: ${(e as Error).message}`);
     return null;
@@ -310,19 +321,24 @@ async function spawnPlanner(
 ): Promise<{ kind: "next_prompt" | "file_done"; text: string } | null> {
   const roleConfig = config.roles!.planner!;
 
-  const stdin = `Run ID: ${run.id}
+  const fallback = `Run ID: ${run.id}
 Worktree: ${run.worktree}
 Memory ID: ${run.mem_id ?? "none"}
 
 Review the current state and output your decision.`;
+  const stdin = renderRolePrompt(config, "planner", fallback, {
+    RUN_ID: String(run.id),
+    WORKTREE: run.worktree,
+    MEM_ID: run.mem_id ?? "none",
+  });
 
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
     PROMPT: stdin,
   });
-  assertSafe(cmd);
+  assertSafe(cmd, safetyDeny(config));
 
-  const timeoutMs = (roleConfig.timeoutMin ?? 10) * 60 * 1000;
+  const timeoutMs = roleTimeoutMin(config, "planner") * 60 * 1000;
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -353,7 +369,7 @@ Review the current state and output your decision.`;
 
     await proc.exited;
 
-    return parsePlanUpdate(stdout);
+    return parsePlanUpdate(stdout, config);
   } catch (e) {
     console.error(`planner spawn failed: ${(e as Error).message}`);
     return null;
@@ -367,16 +383,22 @@ async function spawnBigFixer(
 ): Promise<string | null> {
   const roleConfig = config.roles!.bigFixer!;
 
-  const stdin = `Big diff detected: ${runResult.facts.files} files, ${runResult.facts.lines} lines.
+  const fallback = `Big diff detected: ${runResult.facts.files} files, ${runResult.facts.lines} lines.
 Fix any issues found. Output HANDOFF when done.`;
+  const stdin = renderRolePrompt(config, "bigFixer", fallback, {
+    FILES: String(runResult.facts.files),
+    LINES: String(runResult.facts.lines),
+    BRANCH: runResult.facts.branch,
+    HANDOFF: handoffMarker(config),
+  });
 
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
     PROMPT: stdin,
   });
-  assertSafe(cmd);
+  assertSafe(cmd, safetyDeny(config));
 
-  const timeoutMs = (roleConfig.timeoutMin ?? 20) * 60 * 1000;
+  const timeoutMs = roleTimeoutMin(config, "bigFixer") * 60 * 1000;
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -453,13 +475,35 @@ export function resolveChangedFiles(worktree: string, baseSha: string | null | u
 export function buildScrutinizePrompt(
   worktree: string,
   runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string } },
-  changedFiles: string
+  changedFiles: string,
+  config?: Config
 ): string {
-  const template = readFileSync(
-    join(import.meta.dir, "..", "prompts", "scrutinize-fix.md"),
-    "utf-8"
-  );
+  const promptPath =
+    (config ? promptFileFor(config, "scrutinizeFix") : null) ??
+    join(import.meta.dir, "..", "prompts", "scrutinize-fix.md");
+  const template = readFileSync(promptPath, "utf-8");
   return `${template}\n\n---\nRun ID: ${runResult.runId}\nrepo_root="${worktree}"\nChanged files (use these, do not auto-detect):\n${changedFiles}\nChanged: ${runResult.facts.files} files, ${runResult.facts.lines} lines, branch ${runResult.facts.branch}, commits ${runResult.facts.commits.join(", ") || "(none)"}\nReview the changed code then fix MAJOR/BLOCKER in place and commit.`;
+}
+
+/**
+ * Render a role prompt: when prompts.<role> points at a template file, fill
+ * its {{VARS}}; otherwise use the builtin inline fallback. A missing/unreadable
+ * file falls back instead of crashing the loop.
+ */
+export function renderRolePrompt(
+  config: Config,
+  role: "gate" | "planner" | "bigFixer",
+  fallback: string,
+  vars: Record<string, string>
+): string {
+  const file = promptFileFor(config, role);
+  if (!file) return fallback;
+  try {
+    return fillPrompt(readFileSync(file, "utf-8"), vars);
+  } catch {
+    console.error(`prompt file unreadable: ${file} — using builtin fallback`);
+    return fallback;
+  }
 }
 
 /**
@@ -473,12 +517,13 @@ export function buildScrutinizePrompt(
  * then commits the archive (rename + header) in one step — deterministic,
  * no agent involved.
  */
-export function autoArchivePlan(worktree: string, planRelPath: string): PlanMvResult {
+export function autoArchivePlan(worktree: string, planRelPath: string, config?: Config): PlanMvResult {
   const filePath = join(worktree, planRelPath);
+  const shipped = shippedRE(config);
   let hash: string;
   try {
     const content = readFileSync(filePath, "utf-8");
-    if (!SHIPPED_RE.test(content)) {
+    if (!shipped.test(content)) {
       hash = execSync("git rev-parse --short HEAD", { cwd: worktree, encoding: "utf-8" }).trim();
       writeFileSync(filePath, `> ✅ **shipped** (${hash})\n\n${content}`, "utf-8");
     } else {
@@ -488,12 +533,13 @@ export function autoArchivePlan(worktree: string, planRelPath: string): PlanMvRe
     return { ok: false, error: `cannot prepare shipped header: ${(e as Error).message}` };
   }
 
-  const result = planMv(filePath, { repoRoot: worktree });
+  const result = planMv(filePath, { repoRoot: worktree, config });
   if (!result.ok) return result;
 
   try {
     const fileName = planRelPath.split("/").pop();
-    execSync(`git commit -m "chore(plan): archive ${fileName} (shipped ${hash})"`, {
+    const msg = config ? archiveMsg(config, fileName!, hash) : `chore(plan): archive ${fileName} (shipped ${hash})`;
+    execSync(`git commit -m "${msg.replace(/"/g, "'")}"`, {
       cwd: worktree,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -521,15 +567,15 @@ export async function spawnScrutinizeFix(
   const run = getRun(db, runResult.runId);
   const changedFiles = resolveChangedFiles(worktree, run?.base_sha);
 
-  const stdin = buildScrutinizePrompt(worktree, runResult, changedFiles);
+  const stdin = buildScrutinizePrompt(worktree, runResult, changedFiles, config);
 
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
     PROMPT: stdin,
   });
-  assertSafe(cmd);
+  assertSafe(cmd, safetyDeny(config));
 
-  const timeoutMs = (roleConfig.timeoutMin ?? 15) * 60 * 1000;
+  const timeoutMs = roleTimeoutMin(config, "scrutinizeFix") * 60 * 1000;
 
   try {
     const proc = Bun.spawn(cmd, {

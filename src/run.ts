@@ -9,6 +9,13 @@ import {
   incrementRound,
   addEvent,
   getPendingFeedback,
+  specMaxLines,
+  sourceSpecRE,
+  handoffMarker,
+  safetyDeny,
+  dirtyPreviewLines,
+  shortShaLen,
+  promptFileFor,
   type Config,
   type RunStatus,
 } from "./db.js";
@@ -25,13 +32,11 @@ export interface RunOnceOpts {
   allowDirty: boolean;
 }
 
-const SPEC_RE = /^>\s*\*\*Source spec:\*\*\s*(.+)$/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
-const MAX_SPEC_LINES = 200;
 
 /** Parse Source spec link from plan header. Returns null if absent or text-only (ไม่มี). */
-function parseSourceSpec(planText: string): string | null {
-  const match = planText.match(SPEC_RE);
+function parseSourceSpec(planText: string, config?: Config): string | null {
+  const match = planText.match(sourceSpecRE(config));
   if (!match) return null;
   const raw = match[1].trim();
   // Check for markdown link [text](path)
@@ -43,18 +48,18 @@ function parseSourceSpec(planText: string): string | null {
   return raw;
 }
 
-/** Read spec file, truncate to MAX_SPEC_LINES, return content or null. */
-function readSpec(worktree: string, specPath: string): string | null {
+/** Read spec file, truncate to maxLines, return content or null. */
+function readSpec(worktree: string, specPath: string, maxLines: number): string | null {
   // Resolve relative to worktree root
   const resolved = join(worktree, specPath);
   if (!existsSync(resolved)) return null;
   try {
     const content = readFileSync(resolved, "utf-8");
     const lines = content.split("\n");
-    if (lines.length > MAX_SPEC_LINES) {
+    if (lines.length > maxLines) {
       return (
-        lines.slice(0, MAX_SPEC_LINES).join("\n") +
-        `\n\n... (truncated at ${MAX_SPEC_LINES} lines, ${lines.length - MAX_SPEC_LINES} omitted)`
+        lines.slice(0, maxLines).join("\n") +
+        `\n\n... (truncated at ${maxLines} lines, ${lines.length - maxLines} omitted)`
       );
     }
     return content;
@@ -101,9 +106,11 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     }).trim();
 
     if (porcelain && !allowDirty) {
-      const dirtyFiles = porcelain.split("\n").slice(0, 10).join("\n");
-      const more = porcelain.split("\n").length > 10
-        ? `\n  ... and ${porcelain.split("\n").length - 10} more`
+      const preview = dirtyPreviewLines(config);
+      const all = porcelain.split("\n");
+      const dirtyFiles = all.slice(0, preview).join("\n");
+      const more = all.length > preview
+        ? `\n  ... and ${all.length - preview} more`
         : "";
       return {
         runId: 0,
@@ -136,7 +143,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
   addEvent(db, runId, "spawn", { base_sha: baseSha, plan: planPath });
 
-  console.error(`run ${runId} started (base ${baseSha.slice(0, 8)})`);
+  console.error(`run ${runId} started (base ${baseSha.slice(0, shortShaLen(config))})`);
 
   // --- 3. MEMORY CLAIM (optional) ---
   if (memId) {
@@ -174,18 +181,18 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   // --- 4b. SPEC INJECTION ---
   let specContent: string | null = null;
   if (planContent && planContent !== "(no plan provided)" && !planContent.startsWith("(plan file not found")) {
-    const specPath = parseSourceSpec(planContent);
+    const specPath = parseSourceSpec(planContent, config);
     if (specPath) {
-      specContent = readSpec(worktree, specPath);
+      specContent = readSpec(worktree, specPath, specMaxLines(config));
       if (specContent) console.error(`spec attached: ${specPath}`);
     }
   }
 
   // --- 5. SPAWN EXECUTOR ---
-  const promptTemplate = readFileSync(
-    join(import.meta.dir, "..", "prompts", "execute.md"),
-    "utf-8"
-  );
+  const promptPath =
+    promptFileFor(config, "executor") ??
+    join(import.meta.dir, "..", "prompts", "execute.md");
+  const promptTemplate = readFileSync(promptPath, "utf-8");
   const feedback = memId ? getPendingFeedback(db, worktreeKey, memId, runId) : null;
   if (feedback) console.error(`carrying forward review feedback from previous round`);
 
@@ -198,7 +205,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const executorCmd = templateArgs(config.executor.cmd, {
     id: memId ?? "none",
   });
-  assertSafe(executorCmd);
+  assertSafe(executorCmd, safetyDeny(config));
 
   const timeoutMs = config.executor.timeoutMin * 60 * 1000;
 
@@ -259,7 +266,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
   // --- 6. GIT FACTS + PARSE HANDOFF ---
   const facts = gitFacts(worktree, baseSha);
-  const parsed = parseHandoff(stdout);
+  const parsed = parseHandoff(stdout, handoffMarker(config));
 
   for (const hash of facts.commits) {
     addEvent(db, runId, "commit", { hash });
@@ -306,11 +313,11 @@ export async function cmdRun(args: string[]): Promise<void> {
   }
 
   // Print handoff + next step (CLI-only output, loop handles this differently)
-  const handoff = renderHandoff(result.facts, result.parsed);
+  const config = loadConfig();
+  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config));
   console.log("\n" + handoff);
 
   console.log("\n--- next step (run manually) ---");
-  const config = loadConfig();
   const gate = config.review.gate.join(" ");
   console.log(
     `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`

@@ -1,6 +1,13 @@
 // src/parse.ts — parse structured markers from agent stdout.
 // §0 rule: orchestrator ไม่อ่านข้อความอื่นเป็นคำสั่ง — marker เท่านั้น
 
+import {
+  verdictRE,
+  nextPromptMarker,
+  fileDoneMarker,
+  type Config,
+} from "./db.js";
+
 export interface GateVerdict {
   verdict: "pass" | "fail";
   note: string;
@@ -11,16 +18,15 @@ export interface PlanUpdate {
   text: string;
 }
 
-const VERDICT_RE = /^VERDICT:\s*(pass|fail)\s*$/m;
-
 /**
  * Parse gate verdict from reviewer stdout.
  * Looks for `VERDICT: pass` or `VERDICT: fail` as a standalone line.
  * Everything after the verdict line is captured as `note` (trimmed).
  * §0.4: if no VERDICT marker found → returns null (caller must not guess)
  */
-export function parseGateVerdict(stdout: string): GateVerdict | null {
-  const match = stdout.match(VERDICT_RE);
+export function parseGateVerdict(stdout: string, config?: Config): GateVerdict | null {
+  const re = verdictRE(config);
+  const match = stdout.match(re);
   if (!match) return null;
 
   const verdict = match[1] as "pass" | "fail";
@@ -36,9 +42,11 @@ export function parseGateVerdict(stdout: string): GateVerdict | null {
  * §0 rule: orchestrator ไม่อ่านข้อความอื่น — marker เท่านั้น
  * Returns null if neither marker found (§0.4 fail-safe)
  */
-export function parsePlanUpdate(stdout: string): PlanUpdate | null {
-  const nextPromptIdx = stdout.lastIndexOf("## NEXT-PROMPT");
-  const fileDoneIdx = stdout.lastIndexOf("## FILE_DONE");
+export function parsePlanUpdate(stdout: string, config?: Config): PlanUpdate | null {
+  const nextMarker = nextPromptMarker(config);
+  const doneMarker = fileDoneMarker(config);
+  const nextPromptIdx = stdout.lastIndexOf(nextMarker);
+  const fileDoneIdx = stdout.lastIndexOf(doneMarker);
 
   // Use whichever marker appears last (the "most final" output)
   if (nextPromptIdx === -1 && fileDoneIdx === -1) return null;
@@ -46,7 +54,7 @@ export function parsePlanUpdate(stdout: string): PlanUpdate | null {
   const laterIdx = Math.max(nextPromptIdx, fileDoneIdx);
   const isNextPrompt = nextPromptIdx > fileDoneIdx;
 
-  const marker = isNextPrompt ? "## NEXT-PROMPT" : "## FILE_DONE";
+  const marker = isNextPrompt ? nextMarker : doneMarker;
   const text = stdout.slice(laterIdx + marker.length).trim();
 
   if (!text) return null;

@@ -48,6 +48,15 @@ import {
   testAutoArchivePlanNormalizesLinks,
   testAutoArchivePlanMissingFile,
 } from "./archive.test.js";
+import {
+  testConfigDefaults,
+  testConfigFileOverrides,
+  testCustomMarkersParse,
+  testCustomSafetyDeny,
+  testTemplateArgsReplaceAll,
+  testRenderRolePrompt,
+  testSourceAndShippedRE,
+} from "./config.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -86,5 +95,12 @@ export async function cmdTest(): Promise<void> {
   testAutoArchivePlanKeepsExistingHeader();
   testAutoArchivePlanNormalizesLinks();
   testAutoArchivePlanMissingFile();
+  testConfigDefaults();
+  testConfigFileOverrides();
+  testCustomMarkersParse();
+  testCustomSafetyDeny();
+  testTemplateArgsReplaceAll();
+  testRenderRolePrompt();
+  testSourceAndShippedRE();
   console.log("\nall tests passed ✓");
 }

@@ -4,8 +4,9 @@
 // never inside the worktree where agents have full write access.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { copyDir } from "./init-mem.js";
+import { planDir, specDir, memoryEntry, type Config } from "./db.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # Plans live in .fapony/plan/, specs in .fapony/spec/, memory in .fapony/.memory/.
@@ -18,7 +19,7 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 #   fapony run <key> --plan X  — explicit plan path
 `;
 
-export function initProject(targetPath: string): void {
+export function initProject(targetPath: string, config?: Config): void {
   // Create target root
   mkdirSync(targetPath, { recursive: true });
 
@@ -33,24 +34,25 @@ export function initProject(targetPath: string): void {
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
 
   // --- plan/ spec/ .memory/ — all under .fapony/ ---
-  const planDir = join(faponyDir, "plan");
-  if (existsSync(planDir)) {
-    throw new Error(`${planDir} already exists — not overwriting.`);
+  const planDirAbs = join(targetPath, planDir(config));
+  if (existsSync(planDirAbs)) {
+    throw new Error(`${planDirAbs} already exists — not overwriting.`);
   }
-  mkdirSync(planDir, { recursive: true });
+  mkdirSync(planDirAbs, { recursive: true });
 
   // --- spec/ ---
-  const specDir = join(faponyDir, "spec");
-  if (existsSync(specDir)) {
-    throw new Error(`${specDir} already exists — not overwriting.`);
+  const specDirAbs = join(targetPath, specDir(config));
+  if (existsSync(specDirAbs)) {
+    throw new Error(`${specDirAbs} already exists — not overwriting.`);
   }
-  mkdirSync(specDir, { recursive: true });
+  mkdirSync(specDirAbs, { recursive: true });
 
   // --- .memory/ (from template) ---
-  const memoryDir = join(faponyDir, ".memory");
-  if (existsSync(join(memoryDir, "mem.ts"))) {
+  const memEntry = memoryEntry(config); // e.g. .fapony/.memory/mem.ts
+  const memoryDir = join(targetPath, memEntry.split("/").slice(0, -1).join("/"));
+  if (existsSync(join(targetPath, memEntry))) {
     throw new Error(
-      `${memoryDir}/mem.ts already exists — delete it first if you want a fresh copy.`
+      `${join(targetPath, memEntry)} already exists — delete it first if you want a fresh copy.`
     );
   }
   const templateDir = join(import.meta.dir, "..", "templates", "memory");
@@ -58,9 +60,9 @@ export function initProject(targetPath: string): void {
 
   console.log(`scaffolded ${targetPath}/`);
   console.log(`  .fapony/         — project dir (plans, specs, memory)`);
-  console.log(`  .fapony/plan/    — plan files`);
-  console.log(`  .fapony/spec/    — spec files`);
-  console.log(`  .fapony/.memory/ — ${files.length} files from template`);
+  console.log(`  ${planDir(config)}/    — plan files`);
+  console.log(`  ${specDir(config)}/    — spec files`);
+  console.log(`  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`);
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
 }
 

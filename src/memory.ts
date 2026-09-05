@@ -4,22 +4,22 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import type { Config } from "./db.js";
+import { memoryEntry, safetyDeny, DEFAULT_MEMORY_ENTRY, type Config } from "./db.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
 /** Default memory commands — matches templates/memory/mem.ts CLI. */
 export const DEFAULT_MEMORY: Config["memory"] = {
-  claim: ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
-  close: ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
-  add: ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
-  kickoff: ["bun", ".fapony/.memory/mem.ts", "kickoff"],
+  claim: ["bun", DEFAULT_MEMORY_ENTRY, "claim", "{id}"],
+  close: ["bun", DEFAULT_MEMORY_ENTRY, "close", "{id}", "{msg}"],
+  add: ["bun", DEFAULT_MEMORY_ENTRY, "add", "{kind}", "{text}"],
+  kickoff: ["bun", DEFAULT_MEMORY_ENTRY, "kickoff"],
 };
 
 /**
  * Returns the effective memory config:
  * - explicit config.memory wins if set
- * - fallback: config.memory === null + .fapony/.memory/mem.ts exists → DEFAULT_MEMORY
+ * - fallback: config.memory === null + <memoryEntry> exists → DEFAULT_MEMORY
  * - otherwise null (no memory)
  */
 export function resolveMemoryConfig(
@@ -27,7 +27,7 @@ export function resolveMemoryConfig(
   worktree: string
 ): Config["memory"] {
   if (config.memory) return config.memory;
-  if (existsSync(join(worktree, ".fapony", ".memory", "mem.ts"))) return DEFAULT_MEMORY;
+  if (existsSync(join(worktree, memoryEntry(config)))) return DEFAULT_MEMORY;
   return null;
 }
 
@@ -41,7 +41,7 @@ export function closeMemory(
   if (!mem) return;
   try {
     const cmd = templateArgs(mem.close, { id: memId, msg });
-    assertSafe(cmd);
+    assertSafe(cmd, safetyDeny(config));
     execSync(cmd.join(" "), { cwd: worktree, stdio: "ignore" });
   } catch {
     // non-fatal, same as existing call sites
@@ -56,7 +56,7 @@ export function claimMemory(
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem) return false;
   const cmd = templateArgs(mem.claim, { id: memId });
-  assertSafe(cmd);
+  assertSafe(cmd, safetyDeny(config));
   execSync(cmd.join(" "), {
     cwd: worktree,
     stdio: ["pipe", "pipe", "pipe"],
@@ -72,7 +72,7 @@ export function kickoffMemory(
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem?.kickoff) return null;
   try {
-    assertSafe(mem.kickoff);
+    assertSafe(mem.kickoff, safetyDeny(config));
     return execSync(mem.kickoff.join(" "), {
       cwd: worktree,
       encoding: "utf-8",

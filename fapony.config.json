@@ -18,5 +18,39 @@
     "prefilter": null,
     "autoLoop": false
   },
-  "memory": null
+  "memory": null,
+  "prompts": {
+    "executor": "prompts/execute.md",
+    "gate": null,
+    "planner": null,
+    "bigFixer": null,
+    "scrutinizeFix": "prompts/scrutinize-fix.md"
+  },
+  "spec": {
+    "maxLines": 200,
+    "sourceMarker": "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$"
+  },
+  "markers": {
+    "handoff": "## HANDOFF",
+    "verdict": "^VERDICT:\\s*(pass|fail)\\s*$",
+    "nextPrompt": "## NEXT-PROMPT",
+    "fileDone": "## FILE_DONE",
+    "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*"
+  },
+  "paths": {
+    "planDir": ".fapony/plan",
+    "specDir": ".fapony/spec",
+    "memoryEntry": ".fapony/.memory/mem.ts",
+    "doneDir": "done",
+    "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"]
+  },
+  "safety": {
+    "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"]
+  },
+  "plan": { "extensions": [".md"] },
+  "planmv": {
+    "archiveMsg": "chore(plan): archive {file} (shipped {hash})",
+    "inboundWarnAt": 5
+  },
+  "display": { "dirtyPreview": 10, "shortSha": 8 }
 }

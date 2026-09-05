@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { openDb, getRun, getEvents, type Run } from "./db.js";
+import { openDb, getRun, getEvents, handoffMarker, type Run } from "./db.js";
 
 export interface GitFacts {
   files: number;
@@ -60,8 +60,9 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
   return { files, lines, commits, branch };
 }
 
-export function parseHandoff(stdout: string): ParsedHandoff {
-  const idx = stdout.indexOf(HANDOFF_START);
+export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
+  const start = marker ?? HANDOFF_START;
+  const idx = stdout.indexOf(start);
   if (idx === -1) return { missing: true };
 
   const block = stdout.slice(idx);
@@ -90,12 +91,12 @@ export function parseHandoff(stdout: string): ParsedHandoff {
   return result;
 }
 
-export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff): string {
+export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: string): string {
   const lines: string[] = [];
   lines.push("## HANDOFF SUMMARY");
 
   if (parsed.missing) {
-    lines.push("(no ## HANDOFF block in output — using git-only data)");
+    lines.push(`(no ${marker ?? HANDOFF_START} block in output — using git-only data)`);
   }
 
   lines.push("");

@@ -1,6 +1,14 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, dirname, relative, resolve } from "node:path";
+import {
+  shippedRE as shippedREFromConfig,
+  doneDirName,
+  linkScanDirs,
+  inboundWarnAt,
+  loadConfig,
+  type Config,
+} from "./db.js";
 
 export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;
@@ -14,23 +22,26 @@ export interface PlanMvResult {
 }
 
 /**
- * Validate + move a shipped PLAN to .fapony/plan/done/.
+ * Validate + move a shipped PLAN to its own dir's done/ subfolder
+ * (e.g. plan/PLAN-x.md -> plan/done/PLAN-x.md).
  *
  * Steps:
  * 1. Check shipped header covers the ENTIRE file
  * 2. Normalize relative links + add ../
  * 3. Check inbound links from other files
- * 4. git mv to .fapony/plan/done/
+ * 4. git mv to <dir>/done/
  */
 export function planMv(
   filePath: string,
-  opts: { dryRun?: boolean; repoRoot?: string } = {}
+  opts: { dryRun?: boolean; repoRoot?: string; config?: Config } = {}
 ): PlanMvResult {
-  const { dryRun = false, repoRoot = process.cwd() } = opts;
+  const { dryRun = false, repoRoot = process.cwd(), config } = opts;
+  const shipped = config ? shippedREFromConfig(config) : SHIPPED_RE;
+  const doneName = config ? doneDirName(config) : "done";
 
   // --- 1. Validate shipped header ---
   const content = readFileSync(filePath, "utf-8");
-  if (!SHIPPED_RE.test(content)) {
+  if (!shipped.test(content)) {
     return {
       ok: false,
       error: `File does not have shipped header. Need: > ✅ **shipped** (<hash>) at the top of the file.`,
@@ -39,7 +50,7 @@ export function planMv(
 
   // --- 2. Normalize + rewrite relative links ---
   const fileDir = dirname(resolve(filePath));
-  const newDir = join(fileDir, "done"); // destination is .fapony/plan/done/
+  const newDir = join(fileDir, doneName); // destination is <dir>/done/
   let normalizedCount = 0;
   let newContent = content.replace(LINK_RE, (match, text, href) => {
     if (ABSOLUTE_LINK_RE.test(href)) return match;
@@ -56,22 +67,24 @@ export function planMv(
   // --- 3. Check inbound links ---
   const fileName = filePath.split("/").pop()!;
   const inboundLinks: string[] = [];
+  const scanDirs = config ? linkScanDirs(config) : [".fapony/plan/", ".fapony/spec/", "docs/"];
+  const doneFrag = `/${doneName}/`;
 
   try {
     const output = execSync(
-      ["grep", "-rln", "--", fileName, ".fapony/plan/", ".fapony/spec/", "docs/"],
+      ["grep", "-rln", "--", fileName, ...scanDirs],
       { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     if (output) {
       inboundLinks.push(
-        ...output.split("\n").filter((l) => !l.includes(".fapony/plan/done/"))
+        ...output.split("\n").filter((l) => !l.includes(doneFrag))
       );
     }
   } catch {}
 
   // --- 4. git mv ---
   if (!dryRun) {
-    const doneDir = join(repoRoot, ".fapony", "plan", "done");
+    const doneDir = newDir; // ponytail: bug fix — was hardcoded to .fapony/plan/done, ignoring file's own dir
     if (!existsSync(doneDir)) mkdirSync(doneDir, { recursive: true });
 
     // Write updated content if links were normalized
@@ -101,7 +114,8 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const result = planMv(filePath);
+  const config = loadConfig();
+  const result = planMv(filePath, { config });
 
   if (!result.ok) {
     console.error(result.error);
@@ -112,15 +126,16 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
     console.log(`normalized ${result.normalizedLinks} link(s)`);
   }
 
+  const warnAt = inboundWarnAt(config);
   if (result.inboundLinks?.length) {
     console.log(`\ninbound links to update (${result.inboundLinks.length}):`);
     for (const link of result.inboundLinks) {
       console.log(`  ${link}`);
     }
-    if (result.inboundLinks.length > 5) {
-      console.log("  (more than 5 — report, don't fix yourself)");
+    if (result.inboundLinks.length > warnAt) {
+      console.log(`  (more than ${warnAt} — report, don't fix yourself)`);
     }
   }
 
-  console.log(`moved to .fapony/plan/done/${filePath.split("/").pop()}`);
+  console.log(`moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), filePath.split("/").pop()!))}`);
 }

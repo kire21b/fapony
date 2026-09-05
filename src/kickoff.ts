@@ -3,10 +3,9 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "./db.js";
+import { loadConfig, planDir, planExtensions, shippedRE, handoffMarker } from "./db.js";
 import { runOnce } from "./run.js";
 import { renderHandoff } from "./handoff.js";
-import { SHIPPED_RE } from "./planmv.js";
 
 export async function cmdKickoff(args: string[]): Promise<void> {
   const worktreeKey = args[0];
@@ -23,40 +22,43 @@ export async function cmdKickoff(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Scan .fapony/plan/ for .md files that are NOT shipped
-  const planDir = join(worktree, ".fapony", "plan");
+  // Scan <planDir>/ for plan files that are NOT shipped
+  const planDirRel = planDir(config);
+  const exts = planExtensions(config);
+  const shipped = shippedRE(config);
+  const planDirAbs = join(worktree, planDirRel);
   let pending: string[] = [];
   try {
-    const entries = readdirSync(planDir, { withFileTypes: true });
+    const entries = readdirSync(planDirAbs, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      if (entry.name === "done") continue; // skip .fapony/plan/done/ subdir
-      const content = readFileSync(join(planDir, entry.name), "utf-8");
-      if (!SHIPPED_RE.test(content)) {
+      if (!entry.isFile() || !exts.some((e) => entry.name.endsWith(e))) continue;
+      if (entry.name === "done") continue; // skip <planDir>/done/ subdir
+      const content = readFileSync(join(planDirAbs, entry.name), "utf-8");
+      if (!shipped.test(content)) {
         pending.push(entry.name);
       }
     }
   } catch {
-    console.error(`.fapony/plan/ not found in ${worktree} — run fapony init first?`);
+    console.error(`${planDirRel}/ not found in ${worktree} — run fapony init first?`);
     process.exit(1);
   }
 
   if (pending.length === 0) {
-    console.error("no pending plans found in .fapony/plan/");
+    console.error(`no pending plans found in ${planDirRel}/`);
     process.exit(1);
   }
 
   if (pending.length > 1) {
     console.error(`ambiguous: ${pending.length} pending plans found:`);
     for (const name of pending) {
-      console.error(`  .fapony/plan/${name}`);
+      console.error(`  ${planDirRel}/${name}`);
     }
-    console.error("\nPick one and run: fapony run <key> --plan .fapony/plan/<name>");
+    console.error(`\nPick one and run: fapony run <key> --plan ${planDirRel}/<name>`);
     process.exit(1);
   }
 
   // Exactly 1 — run it
-  const planPath = `.fapony/plan/${pending[0]}`;
+  const planPath = `${planDirRel}/${pending[0]}`;
   console.error(`kickoff: auto-detected ${planPath}`);
 
   const result = await runOnce({
@@ -72,7 +74,7 @@ export async function cmdKickoff(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const handoff = renderHandoff(result.facts, result.parsed);
+  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config));
   console.log("\n" + handoff);
 
   console.log("\n--- next step (run manually) ---");

@@ -54,7 +54,98 @@ export interface Config {
   // for the exact payload shape (KPI numbers + event kind/timestamp, no
   // plan/commit/gate-note content, ever).
   telemetry: { enabled: boolean; endpoint: string } | null;
+  // --- Flexible paths / markers / limits (all optional, defaults = old hardcodes) ---
+  // prompts: role name → prompt template file (relative to fapony repo root or
+  // absolute). Omit or null = fall back to the previous inline/builtin prompt.
+  prompts?: {
+    executor?: string | null;
+    gate?: string | null;
+    planner?: string | null;
+    bigFixer?: string | null;
+    scrutinizeFix?: string | null;
+  } | null;
+  spec?: {
+    maxLines?: number;
+    // regex source (no slashes/flags — always compiled with "m") matching the
+    // plan header line; capture group 1 = raw spec ref.
+    sourceMarker?: string;
+  } | null;
+  markers?: {
+    handoff?: string;
+    // regex sources for the gate verdict line; group 1 = pass|fail.
+    verdict?: string;
+    nextPrompt?: string;
+    fileDone?: string;
+    // regex source (no slashes/flags) for the shipped header; default matches
+    // "> ✅ **shipped** (<hash>)".
+    shipped?: string;
+  } | null;
+  paths?: {
+    // state dir override (default: $XDG_CONFIG_HOME/fapony or ~/.config/fapony).
+    // $FAPONY_STATE_DIR env wins over this when set.
+    stateDir?: string;
+    // plan/spec/memory layout inside each worktree (relative to worktree root).
+    planDir?: string;
+    specDir?: string;
+    memoryEntry?: string;
+    // archive subdir name for plan-mv (e.g. "done").
+    doneDir?: string;
+    // dirs scanned for inbound links by plan-mv (relative to repo root).
+    linkScanDirs?: string[];
+  } | null;
+  safety?: {
+    // regex sources tested against the joined argv; default = the 4 git patterns.
+    deny?: string[];
+  } | null;
+  plan?: {
+    extensions?: string[];
+  } | null;
+  planmv?: {
+    // "chore(plan): archive ..." commit template; vars {file} {hash}.
+    archiveMsg?: string;
+    inboundWarnAt?: number;
+  } | null;
+  display?: {
+    dirtyPreview?: number;
+    shortSha?: number;
+  } | null;
+  defaults?: {
+    // fallback role timeout (minutes) when roles.<name>.timeoutMin is unset.
+    timeoutMin?: number;
+  } | null;
 }
+
+export const DEFAULT_SPEC_MAX_LINES = 200;
+export const DEFAULT_SOURCE_MARKER = "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$";
+export const DEFAULT_HANDOFF_MARKER = "## HANDOFF";
+export const DEFAULT_VERDICT_RE = "^VERDICT:\\s*(pass|fail)\\s*$";
+export const DEFAULT_NEXT_PROMPT_MARKER = "## NEXT-PROMPT";
+export const DEFAULT_FILE_DONE_MARKER = "## FILE_DONE";
+export const DEFAULT_SHIPPED_RE = "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*";
+export const DEFAULT_SAFETY_DENY = [
+  "reset\\s+--hard",
+  "clean\\s+-[a-z]*f",
+  "checkout\\s+--\\s",
+  "git\\s+stash",
+];
+export const DEFAULT_PLAN_DIR = ".fapony/plan";
+export const DEFAULT_SPEC_DIR = ".fapony/spec";
+export const DEFAULT_MEMORY_ENTRY = ".fapony/.memory/mem.ts";
+export const DEFAULT_DONE_DIR = "done";
+export const DEFAULT_LINK_SCAN_DIRS = [".fapony/plan/", ".fapony/spec/", "docs/"];
+export const DEFAULT_PLAN_EXTENSIONS = [".md"];
+export const DEFAULT_ARCHIVE_MSG = "chore(plan): archive {file} (shipped {hash})";
+export const DEFAULT_INBOUND_WARN_AT = 5;
+export const DEFAULT_DIRTY_PREVIEW = 10;
+export const DEFAULT_SHORT_SHA = 8;
+// Per-role spawn timeout fallbacks (minutes) — used only when neither
+// roles.<name>.timeoutMin nor defaults.timeoutMin is set.
+export const DEFAULT_ROLE_TIMEOUTS: Record<string, number> = {
+  gate: 10,
+  planner: 10,
+  bigFixer: 20,
+  scrutinizeFix: 15,
+};
 
 const DEFAULT_CONFIG: Config = {
   worktrees: {},
@@ -67,21 +158,38 @@ const DEFAULT_CONFIG: Config = {
   },
   memory: null,
   telemetry: null,
+  prompts: null,
+  spec: null,
+  markers: null,
+  paths: null,
+  safety: null,
+  plan: null,
+  planmv: null,
+  display: null,
+  defaults: null,
 };
 
 // XDG Base Directory convention (macOS ignores Apple's ~/Library/Application Support
 // for CLI tools by common practice — gh, ripgrep-adjacent tools, etc. use ~/.config too)
-function faponyDir(): string {
+// Override order: $FAPONY_STATE_DIR > config.paths.stateDir > $XDG_CONFIG_HOME > ~/.config
+function faponyDir(config?: Config): string {
+  if (process.env.FAPONY_STATE_DIR) return process.env.FAPONY_STATE_DIR;
+  if (config?.paths?.stateDir) return config.paths.stateDir;
   const base = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
   return join(base, "fapony");
 }
 
-function dbPath(): string {
-  return join(faponyDir(), "state.db");
+function dbPath(config?: Config): string {
+  return join(faponyDir(config), "state.db");
 }
 
-export function openDb(): Database {
-  const dir = faponyDir();
+export function configFilePath(): string {
+  if (process.env.FAPONY_CONFIG) return process.env.FAPONY_CONFIG;
+  return join(process.cwd(), "fapony.config.json");
+}
+
+export function openDb(config?: Config): Database {
+  const dir = faponyDir(config);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const db = new Database(dbPath());
@@ -114,22 +222,147 @@ export function openDb(): Database {
   return db;
 }
 
-export function loadConfig(): Config {
-  const configPath = join(process.cwd(), "fapony.config.json");
-  if (!existsSync(configPath)) return DEFAULT_CONFIG;
+function freshDefaultConfig(): Config {
+  return {
+    ...DEFAULT_CONFIG,
+    worktrees: { ...DEFAULT_CONFIG.worktrees },
+    executor: { ...DEFAULT_CONFIG.executor },
+    review: {
+      ...DEFAULT_CONFIG.review,
+      bigDiff: { ...DEFAULT_CONFIG.review.bigDiff },
+    },
+  };
+}
+
+export function loadConfig(configPath?: string): Config {
+  const resolved = configPath ?? configFilePath();
+  if (!existsSync(resolved)) return freshDefaultConfig();
 
   try {
-    const raw = readFileSync(configPath, "utf-8");
+    const raw = readFileSync(resolved, "utf-8");
     const file = JSON.parse(raw) as Partial<Config>;
     return {
       ...DEFAULT_CONFIG,
       ...file,
       executor: { ...DEFAULT_CONFIG.executor, ...file.executor },
-      review: { ...DEFAULT_CONFIG.review, ...file.review },
+      review: {
+        ...DEFAULT_CONFIG.review,
+        ...file.review,
+        bigDiff: { ...DEFAULT_CONFIG.review.bigDiff, ...file.review?.bigDiff },
+      },
+      spec: file.spec ? { ...file.spec } : DEFAULT_CONFIG.spec,
+      markers: file.markers ? { ...file.markers } : DEFAULT_CONFIG.markers,
+      paths: file.paths ? { ...file.paths } : DEFAULT_CONFIG.paths,
+      safety: file.safety ? { ...file.safety } : DEFAULT_CONFIG.safety,
+      plan: file.plan ? { ...file.plan } : DEFAULT_CONFIG.plan,
+      planmv: file.planmv ? { ...file.planmv } : DEFAULT_CONFIG.planmv,
+      display: file.display ? { ...file.display } : DEFAULT_CONFIG.display,
+      defaults: file.defaults ? { ...file.defaults } : DEFAULT_CONFIG.defaults,
+      prompts: file.prompts ? { ...file.prompts } : DEFAULT_CONFIG.prompts,
     };
   } catch {
-    return DEFAULT_CONFIG;
+    return freshDefaultConfig();
   }
+}
+
+// --- Config getters (single place for every former hardcode) ---
+
+export function specMaxLines(config: Config): number {
+  return config.spec?.maxLines ?? DEFAULT_SPEC_MAX_LINES;
+}
+
+export function sourceSpecRE(config?: Config): RegExp {
+  return new RegExp(config?.spec?.sourceMarker ?? DEFAULT_SOURCE_MARKER, "m");
+}
+
+export function handoffMarker(config?: Config): string {
+  return config?.markers?.handoff ?? DEFAULT_HANDOFF_MARKER;
+}
+
+export function verdictRE(config?: Config): RegExp {
+  return new RegExp(config?.markers?.verdict ?? DEFAULT_VERDICT_RE, "m");
+}
+
+export function nextPromptMarker(config?: Config): string {
+  return config?.markers?.nextPrompt ?? DEFAULT_NEXT_PROMPT_MARKER;
+}
+
+export function fileDoneMarker(config?: Config): string {
+  return config?.markers?.fileDone ?? DEFAULT_FILE_DONE_MARKER;
+}
+
+export function shippedRE(config?: Config): RegExp {
+  return new RegExp(config?.markers?.shipped ?? DEFAULT_SHIPPED_RE, "m");
+}
+
+export function safetyDeny(config?: Config): string[] {
+  return config?.safety?.deny ?? DEFAULT_SAFETY_DENY;
+}
+
+export function planDir(config?: Config): string {
+  return config?.paths?.planDir ?? DEFAULT_PLAN_DIR;
+}
+
+export function specDir(config?: Config): string {
+  return config?.paths?.specDir ?? DEFAULT_SPEC_DIR;
+}
+
+export function memoryEntry(config?: Config): string {
+  return config?.paths?.memoryEntry ?? DEFAULT_MEMORY_ENTRY;
+}
+
+export function doneDirName(config?: Config): string {
+  return config?.paths?.doneDir ?? DEFAULT_DONE_DIR;
+}
+
+export function linkScanDirs(config?: Config): string[] {
+  return config?.paths?.linkScanDirs ?? DEFAULT_LINK_SCAN_DIRS;
+}
+
+export function planExtensions(config?: Config): string[] {
+  return config?.plan?.extensions ?? DEFAULT_PLAN_EXTENSIONS;
+}
+
+export function archiveMsg(config: Config, file: string, hash: string): string {
+  const tpl = config.planmv?.archiveMsg ?? DEFAULT_ARCHIVE_MSG;
+  return tpl.replaceAll("{file}", file).replaceAll("{hash}", hash);
+}
+
+export function inboundWarnAt(config?: Config): number {
+  return config?.planmv?.inboundWarnAt ?? DEFAULT_INBOUND_WARN_AT;
+}
+
+export function dirtyPreviewLines(config?: Config): number {
+  return config?.display?.dirtyPreview ?? DEFAULT_DIRTY_PREVIEW;
+}
+
+export function shortShaLen(config?: Config): number {
+  return config?.display?.shortSha ?? DEFAULT_SHORT_SHA;
+}
+
+/** Role spawn timeout (minutes): roles.<name>.timeoutMin > defaults.timeoutMin > builtin. */
+export function roleTimeoutMin(config: Config, role: string): number {
+  return (
+    config.roles?.[role]?.timeoutMin ??
+    config.defaults?.timeoutMin ??
+    DEFAULT_ROLE_TIMEOUTS[role] ??
+    10
+  );
+}
+
+/**
+ * Resolve a prompt template file for a role.
+ * Returns null when the role has no configured/file prompt (caller uses inline fallback).
+ * Relative paths resolve against the fapony repo root (cwd at runtime).
+ */
+export function promptFileFor(
+  config: Config,
+  role: "executor" | "gate" | "planner" | "bigFixer" | "scrutinizeFix"
+): string | null {
+  const p = config.prompts?.[role];
+  if (!p) return null;
+  if (p.startsWith("/")) return p;
+  return join(process.cwd(), p);
 }
 
 export function newRun(
