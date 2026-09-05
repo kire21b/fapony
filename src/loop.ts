@@ -4,7 +4,6 @@ import {
   getRun,
   setStatus,
   addEvent,
-  getLastPlanUpdate,
   roleTimeoutMin,
   safetyDeny,
   shippedRE,
@@ -46,6 +45,8 @@ export async function cmdLoop(args: string[]): Promise<void> {
   let planPath: string | null = null;
   let memId: string | null = null;
   let allowDirty = false;
+  // Planner NEXT-PROMPT text for the upcoming executor round (consumed once).
+  let nextPlanContent: string | null = null;
 
   if (firstArg && /^\d+$/.test(firstArg)) {
     runId = parseInt(firstArg, 10);
@@ -181,8 +182,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
         break;
       }
 
-      // NEXT-PROMPT → run executor with new plan
+      // NEXT-PROMPT → run executor with the planner's text as the plan
       console.error(`planner returned NEXT-PROMPT, starting next run...`);
+      nextPlanContent = planUpdate.text;
       planPath = null;
       runId = null;
     }
@@ -191,10 +193,11 @@ export async function cmdLoop(args: string[]): Promise<void> {
     const result = await runOnce({
       worktreeKey,
       planPath,
-      planContent: null,
+      planContent: nextPlanContent,
       memId,
       allowDirty: currentRun?.status === "fixing" ? true : allowDirty,
     });
+    nextPlanContent = null;
 
     if (result.error) {
       console.error(result.error);
