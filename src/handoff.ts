@@ -137,19 +137,7 @@ export function cmdHandoff(args: string[]): void {
     process.exit(1);
   }
 
-  const events = getEvents(db, runId);
-  const commitEvents = events.filter((e) => e.kind === "commit");
-  const commits = commitEvents.map((e) => {
-    const d = JSON.parse(e.data ?? "{}");
-    return d.hash ?? "";
-  }).filter(Boolean);
-
-  const facts: GitFacts = {
-    files: 0,
-    lines: 0,
-    commits,
-    branch: "",
-  };
+  const facts = gitFacts(run.worktree, run.base_sha);
 
   const parsed: ParsedHandoff = {
     missing: true,
