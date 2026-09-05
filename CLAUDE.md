@@ -44,7 +44,7 @@ fapony/
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
     init-mem.ts       # init-mem command (legacy, superseded by init)
     planlint.ts       # checkPlanHygiene() — warn เมื่อ spec content หลุดเข้า plan
-    test.ts           # self-check 31 ตัว
+    test.ts           # self-check 36 ตัว
   test/
     fixtures/
       executor.ts     # stub executor — commit + HANDOFF (no network)
@@ -222,6 +222,10 @@ events(
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Source spec ไม่มีไฟล์ | prompt ใส่ (no spec) — ไม่ error |
 | log.jsonl บวม (multi-agent, มี decision/note เยอะ) | `mem rotate --apply` — `git mv` archive แถวที่ resolved แล้ว (close/spec synced) เหลือแค่ open work + unresolved ใน log.jsonl (default threshold 3000 rows, `MEM_ROTATE_THRESHOLD` ปรับได้) |
+| ดูแต่ NEXT-PROMPT + mem_id ไม่เปิด plan เลย | `fapony status` แสดง plan path + mem_id ในตารางเดียวกัน ([src/status.ts](src/status.ts)) — ไม่เขียนกลับเข้า plan file (ผิดกฎ #5) |
+| AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls plan/` เช็คชื่อชนก่อนเขียนเสมอ |
+| `plan/done/` ต้องเปิดทีละไฟล์เพื่อดู ship date | `planMv()` prefix ชื่อไฟล์ด้วย `YYYY-MM-DD-` ตอน archive ([src/planmv.ts](src/planmv.ts)) — เห็นวันที่จาก `ls` ตรงๆ |
+| test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
 
@@ -313,5 +317,5 @@ fapony gate <run-id> pass|fail [note]  # review verdict + memory close
 fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
 fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
 fapony kickoff <worktree-key>  # auto-detect pending plan + run
-fapony test                      # self-check 31 ตัว
+fapony test                      # self-check 36 ตัว
 ```
