@@ -38,3 +38,19 @@ export function testStatusTableShowsPlanAndMemId(): void {
   });
   console.log("  ✓ status table (plan + mem_id visible)");
 }
+
+export function testStatusTableTruncatesLongMemId(): void {
+  withTmpDb((db) => {
+    // a real run hit this: mem_id "demo-status-1" (13 chars) broke column
+    // alignment because only `plan` was truncated, not `mem_id`.
+    newRun(db, "fapony", ".fapony/plan/PLAN-status-test.md", "demo-status-1", "abc123");
+    const table = renderStatusTable(db);
+    const [, header, , dataLine] = table.split("\n");
+    assert.equal(
+      dataLine.split("|").length,
+      header.split("|").length,
+      "long mem_id should not add an extra column separator"
+    );
+  });
+  console.log("  ✓ status table (long mem_id truncated, columns stay aligned)");
+}

@@ -23,7 +23,7 @@ export function renderStatusTable(db: Database): string {
       hasCommit && !hasMemoryEvent ? " ⚠ commit but no memory event" : "";
 
     const plan = (run.plan ?? "-").padEnd(31).slice(0, 31);
-    const memId = (run.mem_id ?? "-").padEnd(10);
+    const memId = (run.mem_id ?? "-").padEnd(10).slice(0, 10);
 
     lines.push(
       `  ${String(run.id).padStart(3)} | ${run.status.padEnd(15)} | ${String(run.round).padStart(5)} | ${run.worktree.padEnd(8)} | ${plan} | ${memId} | ${run.updated_at}${warn}`

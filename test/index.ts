@@ -71,6 +71,7 @@ import {
 import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
+  testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
 
 export async function cmdTest(): Promise<void> {
@@ -126,5 +127,6 @@ export async function cmdTest(): Promise<void> {
   testPlanHygieneNoSpecNoLeakWarning();
   testStatusTableShowsNothingWhenEmpty();
   testStatusTableShowsPlanAndMemId();
+  testStatusTableTruncatesLongMemId();
   console.log("\nall tests passed ✓");
 }
