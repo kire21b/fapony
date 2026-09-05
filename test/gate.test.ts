@@ -92,6 +92,13 @@ export function testGateOnceMaxRounds(): void {
     const result = gateOnce(runId, "fail", "round 3");
     assert.equal(result.status, "stopped");
     assert(result.error!.includes("maxRounds"), "should mention maxRounds");
+
+    // stopped must be persisted (run must not sit in 'fixing' forever)
+    assert.equal(getRun(db, runId)!.status, "stopped");
+    const stops = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'stop'")
+      .all(runId) as { data: string }[];
+    assert.equal(stops.length, 1);
   });
 
   console.log("  ✓ gateOnce max rounds");

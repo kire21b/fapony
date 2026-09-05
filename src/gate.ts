@@ -59,6 +59,16 @@ export function gateOnce(
   const updated = getRun(db, runId)!;
 
   if (updated.round > config.review.maxRounds) {
+    // Round cap reached — the plan is the problem, stop for real. Persist it
+    // (else the run sits in 'fixing' forever) and release the memory claim.
+    setStatus(db, runId, "stopped");
+    addEvent(db, runId, "stop", {
+      reason: `round ${updated.round} > maxRounds ${config.review.maxRounds}`,
+    });
+    if (run.mem_id) {
+      closeMemory(config, worktree, run.mem_id, `run ${runId} stopped at round cap`);
+      addEvent(db, runId, "memory_claim_closed", { mem_id: run.mem_id });
+    }
     return {
       runId,
       status: "stopped",
