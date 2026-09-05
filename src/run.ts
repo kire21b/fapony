@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import {
@@ -13,7 +13,7 @@ import {
   type RunStatus,
 } from "./db.js";
 import { gitFacts, parseHandoff, renderHandoff, type GitFacts, type ParsedHandoff } from "./handoff.js";
-import { closeMemory } from "./memory.js";
+import { closeMemory, claimMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";
 
 export function templateArgs(
@@ -35,6 +35,44 @@ export interface RunOnceOpts {
   planContent: string | null;
   memId: string | null;
   allowDirty: boolean;
+}
+
+const SPEC_RE = /^>\s*\*\*Source spec:\*\*\s*(.+)$/m;
+const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
+const MAX_SPEC_LINES = 200;
+
+/** Parse Source spec link from plan header. Returns null if absent or text-only (ไม่มี). */
+function parseSourceSpec(planText: string): string | null {
+  const match = planText.match(SPEC_RE);
+  if (!match) return null;
+  const raw = match[1].trim();
+  // Check for markdown link [text](path)
+  const linkMatch = raw.match(LINK_RE);
+  if (linkMatch) return linkMatch[2]; // the path part
+  // Text-only like "ไม่มี" — not a real spec
+  if (raw.startsWith("ไม่มี")) return null;
+  // Plain path without link syntax
+  return raw;
+}
+
+/** Read spec file, truncate to MAX_SPEC_LINES, return content or null. */
+function readSpec(worktree: string, specPath: string): string | null {
+  // Resolve relative to worktree root
+  const resolved = join(worktree, specPath);
+  if (!existsSync(resolved)) return null;
+  try {
+    const content = readFileSync(resolved, "utf-8");
+    const lines = content.split("\n");
+    if (lines.length > MAX_SPEC_LINES) {
+      return (
+        lines.slice(0, MAX_SPEC_LINES).join("\n") +
+        `\n\n... (truncated at ${MAX_SPEC_LINES} lines, ${lines.length - MAX_SPEC_LINES} omitted)`
+      );
+    }
+    return content;
+  } catch {
+    return null;
+  }
 }
 
 export interface RunOnceResult {
@@ -113,14 +151,9 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   console.error(`run ${runId} started (base ${baseSha.slice(0, 8)})`);
 
   // --- 3. MEMORY CLAIM (optional) ---
-  if (memId && config.memory) {
+  if (memId) {
     try {
-      const claimCmd = templateArgs(config.memory.claim, { id: memId });
-      assertSafe(claimCmd);
-      execSync(claimCmd.join(" "), {
-        cwd: worktree,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      claimMemory(config, worktree, memId);
       addEvent(db, runId, "memory_claim", { mem_id: memId });
       console.error(`memory claimed: ${memId}`);
     } catch (e) {
@@ -146,6 +179,16 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   }
   if (!planContent) planContent = "(no plan provided)";
 
+  // --- 4b. SPEC INJECTION ---
+  let specContent: string | null = null;
+  if (planContent && planContent !== "(no plan provided)" && !planContent.startsWith("(plan file not found")) {
+    const specPath = parseSourceSpec(planContent);
+    if (specPath) {
+      specContent = readSpec(worktree, specPath);
+      if (specContent) console.error(`spec attached: ${specPath}`);
+    }
+  }
+
   // --- 5. SPAWN EXECUTOR ---
   const promptTemplate = readFileSync(
     join(import.meta.dir, "..", "prompts", "execute.md"),
@@ -157,6 +200,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const prompt = promptTemplate
     .replace("{{PLAN}}", planContent)
     .replace("{{MEM_ID}}", memId ?? "none")
+    .replace("{{SPEC}}", specContent ?? "(no spec)")
     .replace("{{FEEDBACK}}", feedback ?? "(none — first round)");
 
   const executorCmd = templateArgs(config.executor.cmd, {

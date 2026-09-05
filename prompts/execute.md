@@ -8,6 +8,10 @@ You are working in a worktree managed by fapony.
 
 {{MEM_ID}}
 
+## Spec (reference)
+
+{{SPEC}}
+
 ## Review feedback (previous round, if any)
 
 {{FEEDBACK}}
