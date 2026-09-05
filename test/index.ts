@@ -18,6 +18,7 @@ import {
   testPlanMvWithHeader,
   testPlanMvNormalizeLinks,
   testPlanMvDryRun,
+  testPlanMvAlreadyDatedNotDoublePrefixed,
 } from "./planmv.test.js";
 import {
   testInitCreatesDirectories,
@@ -67,6 +68,10 @@ import {
   testPlanHygieneSpecLeak,
   testPlanHygieneNoSpecNoLeakWarning,
 } from "./planlint.test.js";
+import {
+  testStatusTableShowsNothingWhenEmpty,
+  testStatusTableShowsPlanAndMemId,
+} from "./status.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -86,6 +91,7 @@ export async function cmdTest(): Promise<void> {
   testPlanMvWithHeader();
   testPlanMvNormalizeLinks();
   testPlanMvDryRun();
+  testPlanMvAlreadyDatedNotDoublePrefixed();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
@@ -118,5 +124,7 @@ export async function cmdTest(): Promise<void> {
   testPlanHygieneTooLong();
   testPlanHygieneSpecLeak();
   testPlanHygieneNoSpecNoLeakWarning();
+  testStatusTableShowsNothingWhenEmpty();
+  testStatusTableShowsPlanAndMemId();
   console.log("\nall tests passed ✓");
 }

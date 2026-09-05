@@ -1,21 +1,17 @@
-import { openDb, getActiveRuns, getEvents, type Run, type Event } from "./db.js";
+import type { Database } from "bun:sqlite";
+import { openDb, getActiveRuns, getEvents } from "./db.js";
 
-export function cmdStatus(_args: string[]): void {
-  const db = openDb();
+/** Table of active runs — plan + mem_id shown so you don't have to open the
+ * plan file or dig through .fapony/.memory/ to know what a run maps to. */
+export function renderStatusTable(db: Database): string {
   const runs = getActiveRuns(db);
+  if (runs.length === 0) return "no active runs";
 
-  if (runs.length === 0) {
-    console.log("no active runs");
-    return;
-  }
-
-  console.log("active runs:");
-  console.log(
-    "  id  | status          | round | worktree | updated_at"
-  );
-  console.log(
-    "  ----|-----------------|-------|----------|-----------"
-  );
+  const lines = [
+    "active runs:",
+    "  id  | status          | round | worktree | plan                            | mem_id     | updated_at",
+    "  ----|-----------------|-------|----------|---------------------------------|------------|-----------",
+  ];
 
   for (const run of runs) {
     const events = getEvents(db, run.id);
@@ -26,8 +22,18 @@ export function cmdStatus(_args: string[]): void {
     const warn =
       hasCommit && !hasMemoryEvent ? " ⚠ commit but no memory event" : "";
 
-    console.log(
-      `  ${String(run.id).padStart(3)} | ${run.status.padEnd(15)} | ${String(run.round).padStart(5)} | ${run.worktree.padEnd(8)} | ${run.updated_at}${warn}`
+    const plan = (run.plan ?? "-").padEnd(31).slice(0, 31);
+    const memId = (run.mem_id ?? "-").padEnd(10);
+
+    lines.push(
+      `  ${String(run.id).padStart(3)} | ${run.status.padEnd(15)} | ${String(run.round).padStart(5)} | ${run.worktree.padEnd(8)} | ${plan} | ${memId} | ${run.updated_at}${warn}`
     );
   }
+
+  return lines.join("\n");
+}
+
+export function cmdStatus(_args: string[]): void {
+  const db = openDb();
+  console.log(renderStatusTable(db));
 }
