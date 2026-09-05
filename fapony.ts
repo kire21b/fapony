@@ -11,6 +11,8 @@ import { cmdGate } from "./src/gate.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdLoop } from "./src/loop.js";
 import { cmdPlanMv } from "./src/planmv.js";
+import { cmdInit } from "./src/init.js";
+import { cmdKickoff } from "./src/kickoff.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -28,12 +30,16 @@ if (cmd === "run") {
   await cmdGate(a);
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
+} else if (cmd === "init") {
+  cmdInit(a);
+} else if (cmd === "kickoff") {
+  await cmdKickoff(a);
 } else if (cmd === "plan-mv") {
   await cmdPlanMv(a);
 } else if (cmd === "test") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
-  console.error("usage: fapony <run|loop|status|handoff|stop|gate|init-mem|test> [args]");
+  console.error("usage: fapony <run|loop|status|handoff|stop|gate|init|kickoff|init-mem|test> [args]");
   process.exit(1);
 }
