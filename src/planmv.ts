@@ -59,7 +59,7 @@ export function planMv(
 
   try {
     const output = execSync(
-      `grep -rln '${fileName}' plan/ spec/ docs/ 2>/dev/null || true`,
+      ["grep", "-rln", "--", fileName, "plan/", "spec/", "docs/"],
       { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     if (output) {
