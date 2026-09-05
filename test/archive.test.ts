@@ -1,9 +1,19 @@
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import assert from "node:assert";
 import { autoArchivePlan } from "../src/loop.js";
 import { createTestRepo } from "./fixtures/repo.js";
+
+const DATED_NAME_RE = /^\d{4}-\d{2}-\d{2}-PLAN-test\.md$/;
+
+/** Find the one file archive put in done/ — its name is now date-prefixed. */
+function archivedFile(dir: string): string {
+  const doneDir = join(dir, ".fapony", "plan", "done");
+  const [name] = readdirSync(doneDir).filter((f) => DATED_NAME_RE.test(f));
+  assert(name, `expected a date-prefixed PLAN-test.md in ${doneDir}`);
+  return join(doneDir, name);
+}
 
 function writePlan(dir: string, content: string): string {
   mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
@@ -24,7 +34,7 @@ export function testAutoArchivePlanSynthesizesHeader(): void {
     const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
 
-    const moved = join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md");
+    const moved = archivedFile(repo.dir);
     assert(existsSync(moved), "plan should be moved to .fapony/plan/done/");
     assert(/^>\s*✅\s*\*\*.*shipped.*\*\*/.test(readFileSync(moved, "utf-8")), "should synthesize shipped header");
 
@@ -45,7 +55,7 @@ export function testAutoArchivePlanKeepsExistingHeader(): void {
     const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
 
-    const moved = readFileSync(join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
+    const moved = readFileSync(archivedFile(repo.dir), "utf-8");
     assert.equal(
       (moved.match(/shipped/g) || []).length,
       1,
@@ -68,7 +78,7 @@ export function testAutoArchivePlanNormalizesLinks(): void {
     assert.equal(result.ok, true, `should archive: ${result.error}`);
     assert(result.normalizedLinks! >= 1, "should pass through planMv's link normalization, not swallow it");
 
-    const moved = readFileSync(join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
+    const moved = readFileSync(archivedFile(repo.dir), "utf-8");
     assert(moved.includes("](../spec/foo.md)"), "link should be rewritten for its new depth under .fapony/plan/done/");
   } finally {
     repo.cleanup();

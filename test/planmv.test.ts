@@ -1,9 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 import assert from "node:assert";
 import { planMv } from "../src/planmv.js";
+
+const DATED_NAME_RE = /^\d{4}-\d{2}-\d{2}-PLAN-test\.md$/;
 
 function withTmpRepo(fn: (dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-planmv-"));
@@ -45,9 +47,10 @@ export function testPlanMvWithHeader(): void {
     const result = planMv(planPath, { repoRoot: dir });
     assert.equal(result.ok, true, "should pass with shipped header");
     assert.equal(result.normalizedLinks, 0);
+    assert(DATED_NAME_RE.test(result.destName!), `destName should be date-prefixed, got ${result.destName}`);
 
     assert(!require("node:fs").existsSync(planPath), "old path should not exist");
-    assert(require("node:fs").existsSync(join(dir, ".fapony", "plan", "done", "PLAN-test.md")), "should be in done/");
+    assert(require("node:fs").existsSync(join(dir, ".fapony", "plan", "done", result.destName!)), "should be in done/ under the dated name");
   });
 
   console.log("  ✓ planMv with header");
@@ -68,7 +71,7 @@ export function testPlanMvNormalizeLinks(): void {
     assert.equal(result.ok, true);
     assert(result.normalizedLinks! >= 1, "should normalize at least 1 link");
 
-    const moved = readFileSync(join(dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
+    const moved = readFileSync(join(dir, ".fapony", "plan", "done", result.destName!), "utf-8");
     // After moving .fapony/plan/PLAN.md → .fapony/plan/done/PLAN.md (1 level deeper):
     // spec/foo.md → ../spec/foo.md (up one, then into spec/)
     // ../README.md → ../../README.md (up two from done/)
@@ -93,4 +96,21 @@ export function testPlanMvDryRun(): void {
   });
 
   console.log("  ✓ planMv dry run");
+}
+
+export function testPlanMvAlreadyDatedNotDoublePrefixed(): void {
+  withTmpRepo((dir) => {
+    const planPath = join(dir, ".fapony", "plan", "2020-01-01-PLAN-test.md");
+    writeFileSync(planPath, "> ✅ **shipped** (abc123)\n\n# Plan\n\nDone.\n");
+    execSync("git add . && git commit -m 'add plan'", { cwd: dir, stdio: "ignore" });
+
+    const result = planMv(planPath, { repoRoot: dir });
+    assert.equal(result.ok, true);
+    assert.equal(result.destName, "2020-01-01-PLAN-test.md", "should not stack a second date prefix");
+
+    const files = readdirSync(join(dir, ".fapony", "plan", "done"));
+    assert(files.includes("2020-01-01-PLAN-test.md"));
+  });
+
+  console.log("  ✓ planMv already-dated filename not double-prefixed");
 }

@@ -13,12 +13,25 @@ import {
 export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;
 const ABSOLUTE_LINK_RE = /^(https?:|\/)/;
+const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}-/;
 
 export interface PlanMvResult {
   ok: boolean;
   error?: string;
   inboundLinks?: string[];
   normalizedLinks?: number;
+  // final filename in done/ (date-prefixed), so callers don't have to
+  // recompute it just to report where the file landed.
+  destName?: string;
+}
+
+// ponytail: archive-time date, not the shipped commit's date — the plan
+// is archived right after shipping in the automated path (autoArchivePlan),
+// so they're the same day in practice. Upgrade to `git show -s --format=%cs
+// <hash>` on the shipped header's hash if manual/late archiving makes this drift.
+function datePrefix(fileName: string): string {
+  if (DATE_PREFIX_RE.test(fileName)) return fileName;
+  return `${new Date().toISOString().slice(0, 10)}-${fileName}`;
 }
 
 /**
@@ -82,7 +95,8 @@ export function planMv(
     }
   } catch {}
 
-  // --- 4. git mv ---
+  // --- 4. git mv (dest filename gets a YYYY-MM-DD- prefix) ---
+  const destName = datePrefix(fileName);
   if (!dryRun) {
     const doneDir = newDir; // ponytail: bug fix — was hardcoded to .fapony/plan/done, ignoring file's own dir
     if (!existsSync(doneDir)) mkdirSync(doneDir, { recursive: true });
@@ -92,7 +106,7 @@ export function planMv(
       writeFileSync(filePath, newContent, "utf-8");
     }
 
-    const dest = join(doneDir, fileName);
+    const dest = join(doneDir, destName);
     execSync(`git mv "${filePath}" "${dest}"`, {
       cwd: repoRoot,
       stdio: ["pipe", "pipe", "pipe"],
@@ -103,6 +117,7 @@ export function planMv(
     ok: true,
     inboundLinks,
     normalizedLinks: normalizedCount,
+    destName,
   };
 }
 
@@ -137,5 +152,6 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
     }
   }
 
-  console.log(`moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), filePath.split("/").pop()!))}`);
+  const destName = result.destName ?? filePath.split("/").pop()!;
+  console.log(`moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), destName))}`);
 }
