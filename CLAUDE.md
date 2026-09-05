@@ -196,6 +196,7 @@ events(
 | kickoff ambiguous (>1 pending) | คืน error list ชื่อไฟล์ ห้ามเดา |
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Source spec ไม่มีไฟล์ | prompt ใส่ (no spec) — ไม่ error |
+| log.jsonl บวม (multi-agent, มี decision/note เยอะ) | `mem rotate --apply` — `git mv` archive แถวที่ resolved แล้ว (close/spec synced) เหลือแค่ open work + unresolved ใน log.jsonl (default threshold 3000 rows, `MEM_ROTATE_THRESHOLD` ปรับได้) |
 
 ---
 

@@ -89,6 +89,7 @@ cat prompts/plan-with-me.md | <your-agent>
 - SQLite via `bun:sqlite` for run state
 - Git worktree coordination (guard, handoff, routing)
 - Memory integration via shell commands (configurable)
+- Memory log rotation (`bun .fapony/.memory/mem.ts rotate --apply`) once `log.jsonl` crosses a row threshold — archives resolved rows via `git mv`, keeps open work + unresolved decisions/notes
 - Manual review gate (chunk 1 — you run the review command yourself)
 
 **Not supported (yet):**
