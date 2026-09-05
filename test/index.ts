@@ -61,6 +61,12 @@ import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
 } from "./run.test.js";
+import {
+  testPlanHygieneOk,
+  testPlanHygieneTooLong,
+  testPlanHygieneSpecLeak,
+  testPlanHygieneNoSpecNoLeakWarning,
+} from "./planlint.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -108,5 +114,9 @@ export async function cmdTest(): Promise<void> {
   testSourceAndShippedRE();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
+  testPlanHygieneOk();
+  testPlanHygieneTooLong();
+  testPlanHygieneSpecLeak();
+  testPlanHygieneNoSpecNoLeakWarning();
   console.log("\nall tests passed ✓");
 }
