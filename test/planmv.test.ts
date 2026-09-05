@@ -10,8 +10,8 @@ function withTmpRepo(fn: (dir: string) => void): void {
   execSync("git init", { cwd: dir, stdio: "ignore" });
   execSync("git config user.email 'test@test.com'", { cwd: dir, stdio: "ignore" });
   execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
-  mkdirSync(join(dir, "plan", "done"), { recursive: true });
-  writeFileSync(join(dir, "plan", "placeholder.md"), "placeholder\n");
+  mkdirSync(join(dir, ".fapony", "plan", "done"), { recursive: true });
+  writeFileSync(join(dir, ".fapony", "plan", "placeholder.md"), "placeholder\n");
   execSync("git add . && git commit -m 'init'", { cwd: dir, stdio: "ignore" });
 
   try {
@@ -23,7 +23,7 @@ function withTmpRepo(fn: (dir: string) => void): void {
 
 export function testPlanMvNoHeader(): void {
   withTmpRepo((dir) => {
-    const planPath = join(dir, "plan", "PLAN-test.md");
+    const planPath = join(dir, ".fapony", "plan", "PLAN-test.md");
     writeFileSync(planPath, "# Test Plan\n\nSome content here.\n");
 
     const result = planMv(planPath, { repoRoot: dir });
@@ -36,9 +36,9 @@ export function testPlanMvNoHeader(): void {
 
 export function testPlanMvWithHeader(): void {
   withTmpRepo((dir) => {
-    const planPath = join(dir, "plan", "PLAN-test.md");
+    const planPath = join(dir, ".fapony", "plan", "PLAN-test.md");
     writeFileSync(planPath, "> ✅ **shipped** (abc123)\n\n# Test Plan\n\nDone.\n");
-    execSync("git add plan/PLAN-test.md && git commit -m 'add plan'", {
+    execSync("git add .fapony/plan/PLAN-test.md && git commit -m 'add plan'", {
       cwd: dir, stdio: "ignore",
     });
 
@@ -47,7 +47,7 @@ export function testPlanMvWithHeader(): void {
     assert.equal(result.normalizedLinks, 0);
 
     assert(!require("node:fs").existsSync(planPath), "old path should not exist");
-    assert(require("node:fs").existsSync(join(dir, "plan", "done", "PLAN-test.md")), "should be in done/");
+    assert(require("node:fs").existsSync(join(dir, ".fapony", "plan", "done", "PLAN-test.md")), "should be in done/");
   });
 
   console.log("  ✓ planMv with header");
@@ -55,12 +55,12 @@ export function testPlanMvWithHeader(): void {
 
 export function testPlanMvNormalizeLinks(): void {
   withTmpRepo((dir) => {
-    const planPath = join(dir, "plan", "PLAN-test.md");
+    const planPath = join(dir, ".fapony", "plan", "PLAN-test.md");
     writeFileSync(
       planPath,
       "> ✅ **shipped** (abc123)\n\n# Plan\n\n[spec](spec/foo.md) [link](../README.md)\n"
     );
-    execSync("git add plan/PLAN-test.md && git commit -m 'add plan'", {
+    execSync("git add .fapony/plan/PLAN-test.md && git commit -m 'add plan'", {
       cwd: dir, stdio: "ignore",
     });
 
@@ -68,8 +68,8 @@ export function testPlanMvNormalizeLinks(): void {
     assert.equal(result.ok, true);
     assert(result.normalizedLinks! >= 1, "should normalize at least 1 link");
 
-    const moved = readFileSync(join(dir, "plan", "done", "PLAN-test.md"), "utf-8");
-    // After moving plan/PLAN.md → plan/done/PLAN.md (1 level deeper):
+    const moved = readFileSync(join(dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
+    // After moving .fapony/plan/PLAN.md → .fapony/plan/done/PLAN.md (1 level deeper):
     // spec/foo.md → ../spec/foo.md (up one, then into spec/)
     // ../README.md → ../../README.md (up two from done/)
     assert(moved.includes("](../spec/foo.md)"), "spec link should be ../spec/foo.md from done/");
@@ -81,9 +81,9 @@ export function testPlanMvNormalizeLinks(): void {
 
 export function testPlanMvDryRun(): void {
   withTmpRepo((dir) => {
-    const planPath = join(dir, "plan", "PLAN-test.md");
+    const planPath = join(dir, ".fapony", "plan", "PLAN-test.md");
     writeFileSync(planPath, "> ✅ **shipped** (abc123)\n\n# Plan\n\nDone.\n");
-    execSync("git add plan/PLAN-test.md && git commit -m 'add plan'", {
+    execSync("git add .fapony/plan/PLAN-test.md && git commit -m 'add plan'", {
       cwd: dir, stdio: "ignore",
     });
 

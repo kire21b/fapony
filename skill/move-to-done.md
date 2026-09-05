@@ -1,6 +1,6 @@
 ---
 name: move-to-done
-description: Move PLAN to plan/done/ after ship + archive related spec. Trigger on /move-to-done and when the user asks to archive a completed plan.
+description: Move PLAN to .fapony/plan/done/ after ship + archive related spec. Trigger on /move-to-done and when the user asks to archive a completed plan.
 ---
 
 # Move to Done — archive PLAN after ship
@@ -12,19 +12,19 @@ You are about to move a PLAN that has been shipped to the archive.
 1. **PLAN must have shipped header** — regex: `^> ✅ \*\*.*shipped.*\*\*$`
    If missing → STOP, report what's needed
 
-2. **Rewrite relative links first** — `plan/done/` is 1 level deeper than `plan/`
+2. **Rewrite relative links first** — `.fapony/plan/done/` is 1 level deeper than `.fapony/plan/`
    - Normalize first (remove stacked `../`)
    - Then prepend `../` to every link
 
 3. **Check inbound links** from other files (use grep):
    ```bash
-   grep -rln 'PLAN-foo.md' plan/ spec/ docs/
+   grep -rln 'PLAN-foo.md' .fapony/plan/ .fapony/spec/ docs/
    ```
    If fewer than 5 → fix yourself · If more → report
 
 4. **Use `git mv` not rm + add** — preserves history:
    ```bash
-   git mv plan/PLAN-foo.md plan/done/PLAN-foo.md
+   git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/PLAN-foo.md
    ```
 
 5. **Commit split by concern**:
@@ -35,10 +35,10 @@ You are about to move a PLAN that has been shipped to the archive.
 ## Example
 
 ```
-Input: plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)"
+Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)"
 Steps:
 1. normalize links: [prompts/](../prompts/) → [../prompts/](../prompts/)
-2. inbound: README.md, plan/PLAN-loop.md
+2. inbound: README.md, .fapony/plan/PLAN-loop.md
 3. git mv
 4. commit
 ```

@@ -19,9 +19,9 @@ export function testInitCreatesDirectories(): void {
     initProject(target);
 
     assert(existsSync(join(target, ".fapony", "README")), ".fapony/README");
-    assert(existsSync(join(target, "plan")), "plan/");
-    assert(existsSync(join(target, "spec")), "spec/");
-    assert(existsSync(join(target, ".memory", "mem.ts")), ".memory/mem.ts");
+    assert(existsSync(join(target, ".fapony", "plan")), ".fapony/plan/");
+    assert(existsSync(join(target, ".fapony", "spec")), ".fapony/spec/");
+    assert(existsSync(join(target, ".fapony", ".memory", "mem.ts")), ".fapony/.memory/mem.ts");
   });
 
   console.log("  ✓ init creates directories");

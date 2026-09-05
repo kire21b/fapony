@@ -6,10 +6,10 @@ import { autoArchivePlan } from "../src/loop.js";
 import { createTestRepo } from "./fixtures/repo.js";
 
 function writePlan(dir: string, content: string): string {
-  mkdirSync(join(dir, "plan"), { recursive: true });
-  const planPath = join(dir, "plan", "PLAN-test.md");
+  mkdirSync(join(dir, ".fapony", "plan"), { recursive: true });
+  const planPath = join(dir, ".fapony", "plan", "PLAN-test.md");
   writeFileSync(planPath, content);
-  execSync("git add plan/PLAN-test.md && git commit -m 'add plan'", {
+  execSync("git add .fapony/plan/PLAN-test.md && git commit -m 'add plan'", {
     cwd: dir,
     stdio: "ignore",
   });
@@ -21,11 +21,11 @@ export function testAutoArchivePlanSynthesizesHeader(): void {
   try {
     writePlan(repo.dir, "# Test Plan\n\nAll items done.\n");
 
-    const result = autoArchivePlan(repo.dir, "plan/PLAN-test.md");
+    const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
 
-    const moved = join(repo.dir, "plan", "done", "PLAN-test.md");
-    assert(existsSync(moved), "plan should be moved to plan/done/");
+    const moved = join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md");
+    assert(existsSync(moved), "plan should be moved to .fapony/plan/done/");
     assert(/^>\s*✅\s*\*\*.*shipped.*\*\*/.test(readFileSync(moved, "utf-8")), "should synthesize shipped header");
 
     const log = execSync("git log --oneline", { cwd: repo.dir, encoding: "utf-8" });
@@ -42,10 +42,10 @@ export function testAutoArchivePlanKeepsExistingHeader(): void {
   try {
     writePlan(repo.dir, "> ✅ **shipped** (deadbee)\n\n# Test Plan\n\nDone.\n");
 
-    const result = autoArchivePlan(repo.dir, "plan/PLAN-test.md");
+    const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
 
-    const moved = readFileSync(join(repo.dir, "plan", "done", "PLAN-test.md"), "utf-8");
+    const moved = readFileSync(join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
     assert.equal(
       (moved.match(/shipped/g) || []).length,
       1,
@@ -64,12 +64,12 @@ export function testAutoArchivePlanNormalizesLinks(): void {
   try {
     writePlan(repo.dir, "# Test Plan\n\n[spec](spec/foo.md)\n");
 
-    const result = autoArchivePlan(repo.dir, "plan/PLAN-test.md");
+    const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
     assert(result.normalizedLinks! >= 1, "should pass through planMv's link normalization, not swallow it");
 
-    const moved = readFileSync(join(repo.dir, "plan", "done", "PLAN-test.md"), "utf-8");
-    assert(moved.includes("](../spec/foo.md)"), "link should be rewritten for its new depth under plan/done/");
+    const moved = readFileSync(join(repo.dir, ".fapony", "plan", "done", "PLAN-test.md"), "utf-8");
+    assert(moved.includes("](../spec/foo.md)"), "link should be rewritten for its new depth under .fapony/plan/done/");
   } finally {
     repo.cleanup();
   }
@@ -80,7 +80,7 @@ export function testAutoArchivePlanNormalizesLinks(): void {
 export function testAutoArchivePlanMissingFile(): void {
   const repo = createTestRepo();
   try {
-    const result = autoArchivePlan(repo.dir, "plan/does-not-exist.md");
+    const result = autoArchivePlan(repo.dir, ".fapony/plan/does-not-exist.md");
     assert.equal(result.ok, false, "missing plan file should fail, not throw");
     assert(result.error!.includes("shipped header"), `error should explain the failure: ${result.error}`);
   } finally {

@@ -1,6 +1,7 @@
 // src/init-mem.ts — scaffold the canonical .memory/ system into a new worktree.
-// Source of truth lives in fapony/templates/memory/ (copied from wt-vela, generalized
-// to fall back to repo-root .memory when there's no apps/<name>/ monorepo layout).
+// Source of truth lives in fapony/templates/memory/.
+// Destination is <worktree>/.fapony/.memory/ (plans/specs/memory all live under
+// .fapony/; run state stays in ~/.config/fapony/state.db, never in the worktree).
 // Re-run to re-sync after editing the template — not automatic, on purpose.
 
 import { existsSync, mkdirSync, readdirSync, copyFileSync } from "node:fs";
@@ -39,7 +40,7 @@ export function cmdInitMem(args: string[]): void {
   }
 
   const templateDir = join(import.meta.dir, "..", "templates", "memory");
-  const destDir = join(worktree, ".memory");
+  const destDir = join(worktree, ".fapony", ".memory");
 
   if (existsSync(join(destDir, "mem.ts"))) {
     console.error(
@@ -52,6 +53,6 @@ export function cmdInitMem(args: string[]): void {
   console.log(`scaffolded ${files.length} files into ${destDir}`);
   console.log(`\nAdd to fapony.config.json:`);
   console.log(
-    `  "memory": {\n    "claim": ["bun", ".memory/mem.ts", "claim", "{id}"],\n    "close": ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],\n    "add":   ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],\n    "kickoff": ["bun", ".memory/mem.ts", "kickoff"]\n  }`
+    `  "memory": {\n    "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],\n    "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],\n    "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],\n    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]\n  }`
   );
 }

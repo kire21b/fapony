@@ -20,7 +20,7 @@ const BASE_CONFIG: Config = {
 export function testMemoryDefaultWiringWithFile(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
-    const memDir = join(dir, ".memory");
+    const memDir = join(dir, ".fapony", ".memory");
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, "mem.ts"), "// stub");
 
@@ -30,7 +30,7 @@ export function testMemoryDefaultWiringWithFile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log("  ✓ memory default-wiring with .memory/mem.ts");
+  console.log("  ✓ memory default-wiring with .fapony/.memory/mem.ts");
 }
 
 export function testMemoryDefaultWiringNoFile(): void {
@@ -42,13 +42,13 @@ export function testMemoryDefaultWiringNoFile(): void {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log("  ✓ memory default-wiring without .memory/mem.ts");
+  console.log("  ✓ memory default-wiring without .fapony/.memory/mem.ts");
 }
 
 export function testMemoryExplicitConfigWins(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
-    const memDir = join(dir, ".memory");
+    const memDir = join(dir, ".fapony", ".memory");
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, "mem.ts"), "// stub");
 

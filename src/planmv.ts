@@ -14,13 +14,13 @@ export interface PlanMvResult {
 }
 
 /**
- * Validate + move a shipped PLAN to plan/done/.
+ * Validate + move a shipped PLAN to .fapony/plan/done/.
  *
  * Steps:
  * 1. Check shipped header covers the ENTIRE file
  * 2. Normalize relative links + add ../
  * 3. Check inbound links from other files
- * 4. git mv to plan/done/
+ * 4. git mv to .fapony/plan/done/
  */
 export function planMv(
   filePath: string,
@@ -39,14 +39,14 @@ export function planMv(
 
   // --- 2. Normalize + rewrite relative links ---
   const fileDir = dirname(resolve(filePath));
-  const newDir = join(fileDir, "done"); // destination is plan/done/
+  const newDir = join(fileDir, "done"); // destination is .fapony/plan/done/
   let normalizedCount = 0;
   let newContent = content.replace(LINK_RE, (match, text, href) => {
     if (ABSOLUTE_LINK_RE.test(href)) return match;
 
     // Resolve relative to file's current dir
     const target = resolve(fileDir, href);
-    // New relative from plan/done/ (one level deeper)
+    // New relative from .fapony/plan/done/ (one level deeper)
     const newHref = relative(newDir, target);
 
     if (href !== newHref) normalizedCount++;
@@ -59,19 +59,19 @@ export function planMv(
 
   try {
     const output = execSync(
-      ["grep", "-rln", "--", fileName, "plan/", "spec/", "docs/"],
+      ["grep", "-rln", "--", fileName, ".fapony/plan/", ".fapony/spec/", "docs/"],
       { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     if (output) {
       inboundLinks.push(
-        ...output.split("\n").filter((l) => !l.includes("plan/done/"))
+        ...output.split("\n").filter((l) => !l.includes(".fapony/plan/done/"))
       );
     }
   } catch {}
 
   // --- 4. git mv ---
   if (!dryRun) {
-    const doneDir = join(repoRoot, "plan", "done");
+    const doneDir = join(repoRoot, ".fapony", "plan", "done");
     if (!existsSync(doneDir)) mkdirSync(doneDir, { recursive: true });
 
     // Write updated content if links were normalized
@@ -122,5 +122,5 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
     }
   }
 
-  console.log(`moved to plan/done/${filePath.split("/").pop()}`);
+  console.log(`moved to .fapony/plan/done/${filePath.split("/").pop()}`);
 }

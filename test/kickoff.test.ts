@@ -27,7 +27,7 @@ function getPendingPlans(planDir: string): string[] {
 export function testKickoffSinglePending(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-kickoff-"));
   try {
-    const planDir = join(dir, "plan");
+    const planDir = join(dir, ".fapony", "plan");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "PLAN-alpha.md"), "# Plan Alpha\n\nDo stuff.\n");
 
@@ -43,7 +43,7 @@ export function testKickoffSinglePending(): void {
 export function testKickoffShippedFiltered(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-kickoff-"));
   try {
-    const planDir = join(dir, "plan");
+    const planDir = join(dir, ".fapony", "plan");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
       join(planDir, "PLAN-done.md"),
@@ -63,7 +63,7 @@ export function testKickoffShippedFiltered(): void {
 export function testKickoffMultiplePending(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-kickoff-"));
   try {
-    const planDir = join(dir, "plan");
+    const planDir = join(dir, ".fapony", "plan");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, "PLAN-a.md"), "# Plan A\n");
     writeFileSync(join(planDir, "PLAN-b.md"), "# Plan B\n");
@@ -80,7 +80,7 @@ export function testKickoffMultiplePending(): void {
 export function testKickoffNoPending(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-kickoff-"));
   try {
-    const planDir = join(dir, "plan");
+    const planDir = join(dir, ".fapony", "plan");
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
       join(planDir, "PLAN-done.md"),

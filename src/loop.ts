@@ -161,11 +161,11 @@ export async function cmdLoop(args: string[]): Promise<void> {
         if (afterGate.plan) {
           const archived = autoArchivePlan(worktree, afterGate.plan);
           if (archived.ok) {
-            console.log(`archived: plan/done/${afterGate.plan.split("/").pop()}`);
+            console.log(`archived: .fapony/plan/done/${afterGate.plan.split("/").pop()}`);
             addEvent(db, runId, "plan_archived", { plan: afterGate.plan });
           } else {
             console.error(`auto plan-mv skipped: ${archived.error}`);
-            console.error(`Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in plan/)`);
+            console.error(`Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in .fapony/plan/)`);
           }
         }
 
@@ -503,7 +503,7 @@ export function autoArchivePlan(worktree: string, planRelPath: string): PlanMvRe
     return {
       ...result,
       ok: false,
-      error: `moved to plan/done/ but commit failed: ${(e as Error).message} — run: git commit`,
+      error: `moved to .fapony/plan/done/ but commit failed: ${(e as Error).message} — run: git commit`,
     };
   }
 

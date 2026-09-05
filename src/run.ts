@@ -146,7 +146,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
         addEvent(db, runId, "memory_claim", { mem_id: memId });
         console.error(`memory claimed: ${memId}`);
       } else {
-        console.error(`memory skipped (disabled or no .memory/mem.ts): ${memId}`);
+        console.error(`memory skipped (disabled or no .fapony/.memory/mem.ts): ${memId}`);
       }
     } catch (e) {
       console.error(`memory claim failed (non-fatal): ${(e as Error).message}`);

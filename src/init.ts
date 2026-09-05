@@ -1,13 +1,16 @@
 // src/init.ts — scaffold fapony project structure at a target path.
-// Creates plan/, spec/, .memory/ (from template), and .fapony/ marker.
+// Creates .fapony/plan/, .fapony/spec/, .fapony/.memory/ (from template).
+// state.db stays in ~/.config/fapony/ by design (security boundary — see db.ts),
+// never inside the worktree where agents have full write access.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { copyDir } from "./init-mem.js";
 
-const FAPONY_README = `# .fapony/ — local marker
-# This directory marks the project root for fapony.
-# Do not commit this directory — add .fapony/ to .gitignore.
+const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
+# Plans live in .fapony/plan/, specs in .fapony/spec/, memory in .fapony/.memory/.
+# state.db is NOT here by design — it lives in ~/.config/fapony/ where agents
+# running in this worktree cannot rewrite run state / audit trail.
 #
 # Usage:
 #   fapony init <path>         — scaffold (this directory is created here)
@@ -29,22 +32,22 @@ export function initProject(targetPath: string): void {
   mkdirSync(faponyDir, { recursive: true });
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
 
-  // --- plan/ ---
-  const planDir = join(targetPath, "plan");
+  // --- plan/ spec/ .memory/ — all under .fapony/ ---
+  const planDir = join(faponyDir, "plan");
   if (existsSync(planDir)) {
     throw new Error(`${planDir} already exists — not overwriting.`);
   }
   mkdirSync(planDir, { recursive: true });
 
   // --- spec/ ---
-  const specDir = join(targetPath, "spec");
+  const specDir = join(faponyDir, "spec");
   if (existsSync(specDir)) {
     throw new Error(`${specDir} already exists — not overwriting.`);
   }
   mkdirSync(specDir, { recursive: true });
 
   // --- .memory/ (from template) ---
-  const memoryDir = join(targetPath, ".memory");
+  const memoryDir = join(faponyDir, ".memory");
   if (existsSync(join(memoryDir, "mem.ts"))) {
     throw new Error(
       `${memoryDir}/mem.ts already exists — delete it first if you want a fresh copy.`
@@ -54,10 +57,10 @@ export function initProject(targetPath: string): void {
   const files = copyDir(templateDir, memoryDir);
 
   console.log(`scaffolded ${targetPath}/`);
-  console.log(`  .fapony/     — local marker`);
-  console.log(`  plan/        — plan files`);
-  console.log(`  spec/        — spec files`);
-  console.log(`  .memory/     — ${files.length} files from template`);
+  console.log(`  .fapony/         — project dir (plans, specs, memory)`);
+  console.log(`  .fapony/plan/    — plan files`);
+  console.log(`  .fapony/spec/    — spec files`);
+  console.log(`  .fapony/.memory/ — ${files.length} files from template`);
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
 }
 

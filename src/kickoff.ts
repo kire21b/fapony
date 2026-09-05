@@ -1,5 +1,5 @@
 // src/kickoff.ts — auto-detect pending plan and run.
-// Scans plan/*.md, filters shipped plans, runs if exactly 1 pending.
+// Scans .fapony/plan/*.md, filters shipped plans, runs if exactly 1 pending.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,40 +23,40 @@ export async function cmdKickoff(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Scan plan/ for .md files that are NOT shipped
-  const planDir = join(worktree, "plan");
+  // Scan .fapony/plan/ for .md files that are NOT shipped
+  const planDir = join(worktree, ".fapony", "plan");
   let pending: string[] = [];
   try {
     const entries = readdirSync(planDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      if (entry.name === "done") continue; // skip plan/done/ subdir
+      if (entry.name === "done") continue; // skip .fapony/plan/done/ subdir
       const content = readFileSync(join(planDir, entry.name), "utf-8");
       if (!SHIPPED_RE.test(content)) {
         pending.push(entry.name);
       }
     }
   } catch {
-    console.error(`plan/ not found in ${worktree} — run fapony init first?`);
+    console.error(`.fapony/plan/ not found in ${worktree} — run fapony init first?`);
     process.exit(1);
   }
 
   if (pending.length === 0) {
-    console.error("no pending plans found in plan/");
+    console.error("no pending plans found in .fapony/plan/");
     process.exit(1);
   }
 
   if (pending.length > 1) {
     console.error(`ambiguous: ${pending.length} pending plans found:`);
     for (const name of pending) {
-      console.error(`  plan/${name}`);
+      console.error(`  .fapony/plan/${name}`);
     }
-    console.error("\nPick one and run: fapony run <key> --plan plan/<name>");
+    console.error("\nPick one and run: fapony run <key> --plan .fapony/plan/<name>");
     process.exit(1);
   }
 
   // Exactly 1 — run it
-  const planPath = `plan/${pending[0]}`;
+  const planPath = `.fapony/plan/${pending[0]}`;
   console.error(`kickoff: auto-detected ${planPath}`);
 
   const result = await runOnce({

@@ -10,16 +10,16 @@ import { templateArgs } from "./util.js";
 
 /** Default memory commands — matches templates/memory/mem.ts CLI. */
 export const DEFAULT_MEMORY: Config["memory"] = {
-  claim: ["bun", ".memory/mem.ts", "claim", "{id}"],
-  close: ["bun", ".memory/mem.ts", "close", "{id}", "{msg}"],
-  add: ["bun", ".memory/mem.ts", "add", "{kind}", "{text}"],
-  kickoff: ["bun", ".memory/mem.ts", "kickoff"],
+  claim: ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
+  close: ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
+  add: ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
+  kickoff: ["bun", ".fapony/.memory/mem.ts", "kickoff"],
 };
 
 /**
  * Returns the effective memory config:
  * - explicit config.memory wins if set
- * - fallback: config.memory === null + .memory/mem.ts exists → DEFAULT_MEMORY
+ * - fallback: config.memory === null + .fapony/.memory/mem.ts exists → DEFAULT_MEMORY
  * - otherwise null (no memory)
  */
 export function resolveMemoryConfig(
@@ -27,7 +27,7 @@ export function resolveMemoryConfig(
   worktree: string
 ): Config["memory"] {
   if (config.memory) return config.memory;
-  if (existsSync(join(worktree, ".memory", "mem.ts"))) return DEFAULT_MEMORY;
+  if (existsSync(join(worktree, ".fapony", ".memory", "mem.ts"))) return DEFAULT_MEMORY;
   return null;
 }
 
