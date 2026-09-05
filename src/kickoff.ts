@@ -59,13 +59,12 @@ export async function cmdKickoff(args: string[]): Promise<void> {
   const planPath = `plan/${pending[0]}`;
   console.error(`kickoff: auto-detected ${planPath}`);
 
-  // Allow dirty for kickoff (user explicitly starting)
   const result = await runOnce({
     worktreeKey,
     planPath,
     planContent: null,
     memId: null,
-    allowDirty: true,
+    allowDirty: false,
   });
 
   if (result.error) {
