@@ -1,7 +1,8 @@
 # PLAN-plan-with-me — prompt pack + ตัวอย่าง + vendor-neutral export
 
-> **Status:** ✅ shipped · **Owner:** delamind · **Created:** 2026-09-05
-> **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § เดือนที่ 2)
+> ✅ **shipped** (4a997d6)
+> **Owner:** delamind · **Created:** 2026-09-05
+> **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../../ROADMAP.md) § เดือนที่ 2)
 
 ---
 
@@ -57,20 +58,20 @@ vendor-neutral prompt ที่ agent ไหนก็กิน stdin ได้ (
 
 ## 7. ตัวอย่าง (เห็นภาพ)
 
-ตัวอย่างทั้ง 5 อยู่ใน [examples/](../examples/):
+ตัวอย่างทั้ง 5 อยู่ใน [examples/](../../examples):
 
 | ไฟล์ | ประเภท | ขอบเขต |
 |------|--------|--------|
-| [PLAN-webapp-notifications.md](../examples/PLAN-webapp-notifications.md) | Web app | spec เยอะ, scope กว้าง (WebSocket + UI + backend) |
-| [PLAN-cli-logger.md](../examples/PLAN-cli-logger.md) | CLI tool | เล็ก, ไม่มี spec |
-| [PLAN-refactor-auth.md](../examples/PLAN-refactor-auth.md) | Refactor | มี code เดิม, ไม่มี feature ใหม่ |
-| [PLAN-fix-race-condition.md](../examples/PLAN-fix-race-condition.md) | Bug fix | เล็ก, เจาะจง |
-| [PLAN-feature-export.md](../examples/PLAN-feature-export.md) | New feature | scope กลาง |
+| [PLAN-webapp-notifications.md](../../examples/PLAN-webapp-notifications.md) | Web app | spec เยอะ, scope กว้าง (WebSocket + UI + backend) |
+| [PLAN-cli-logger.md](../../examples/PLAN-cli-logger.md) | CLI tool | เล็ก, ไม่มี spec |
+| [PLAN-refactor-auth.md](../../examples/PLAN-refactor-auth.md) | Refactor | มี code เดิม, ไม่มี feature ใหม่ |
+| [PLAN-fix-race-condition.md](../../examples/PLAN-fix-race-condition.md) | Bug fix | เล็ก, เจาะจง |
+| [PLAN-feature-export.md](../../examples/PLAN-feature-export.md) | New feature | scope กลาง |
 
 ## 8. อ้างอิง
 
-- [skill/plan-with-me.md](../skill/plan-with-me.md)
-- [prompts/scrutinize-fix.md](../prompts/scrutinize-fix.md) — pattern การ port skill →
+- [skill/plan-with-me.md](../../skill/plan-with-me.md)
+- [prompts/scrutinize-fix.md](../../prompts/scrutinize-fix.md) — pattern การ port skill →
   vendor-neutral prompt ที่จะทำตาม
-- [CLAUDE.md](../CLAUDE.md) — Plan Core template
-- [ROADMAP.md](../ROADMAP.md) — เดือนที่ 2
+- [CLAUDE.md](../../CLAUDE.md) — Plan Core template
+- [ROADMAP.md](../../ROADMAP.md) — เดือนที่ 2

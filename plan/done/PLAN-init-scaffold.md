@@ -1,7 +1,8 @@
 # PLAN-init-scaffold — `fapony init` + `fapony kickoff` + spec เป็น contract
 
-> **Status:** ✅ shipped · **Owner:** delamind · **Created:** 2026-09-05
-> **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § สัปดาห์ 3–4)
+> ✅ **shipped** (40dd61b)
+> **Owner:** delamind · **Created:** 2026-09-05
+> **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../../ROADMAP.md) § สัปดาห์ 3–4)
 
 ---
 
@@ -16,7 +17,7 @@ contract ก่อน executor เริ่มงานจริง
 
 **ทำ:**
 - `fapony init <path>` — scaffold `.fapony/plan/`, `.fapony/spec/`, `.fapony/.memory/` (reuse `copyDir` จาก
-  [init-mem.ts](../src/init-mem.ts)) + README ไฟล์เดียวใน `.fapony/`
+  [init-mem.ts](../../src/init-mem.ts)) + README ไฟล์เดียวใน `.fapony/`
 - `fapony kickoff <worktree-key>` — หา plan ที่ยังไม่ shipped ใน `.fapony/plan/` ให้เอง ถ้ามีใบเดียว
   รันเหมือน `fapony run <key> --plan <path>` เป๊ะ
 - Memory adapter: `config.memory === null` แต่เจอ `.fapony/.memory/mem.ts` จริงในเป้าหมาย → ใช้ default
@@ -70,7 +71,7 @@ contract ก่อน executor เริ่มงานจริง
 4. **Spec injection ใน `src/run.ts`** — parse `Source spec` link จาก plan header, มีไฟล์จริง →
    ต่อท้าย prompt ก่อน spawn, truncate เหมือน handoff — verify: fixture plan มี Source spec →
    prompt มีเนื้อ spec
-5. `bun run src/test.ts` เขียวครบ + sync [CLAUDE.md](../CLAUDE.md) (architecture tree, CLI
+5. `bun run src/test.ts` เขียวครบ + sync [CLAUDE.md](../../CLAUDE.md) (architecture tree, CLI
    commands, chunk roadmap)
 
 ## 7. ตัวอย่าง (เห็นภาพ)
@@ -86,7 +87,7 @@ fapony kickoff vela                   # auto หา plan pending เอง
 
 ## 8. อ้างอิง
 
-- [src/init-mem.ts](../src/init-mem.ts) — copyDir + template source ที่ reuse
-- [src/planmv.ts](../src/planmv.ts) — shipped-header regex ที่ reuse
-- [ROADMAP.md](../ROADMAP.md) — สัปดาห์ 3–4
-- [CLAUDE.md](../CLAUDE.md) — Plan Core template, Config Schema
+- [src/init-mem.ts](../../src/init-mem.ts) — copyDir + template source ที่ reuse
+- [src/planmv.ts](../../src/planmv.ts) — shipped-header regex ที่ reuse
+- [ROADMAP.md](../../ROADMAP.md) — สัปดาห์ 3–4
+- [CLAUDE.md](../../CLAUDE.md) — Plan Core template, Config Schema
