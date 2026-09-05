@@ -269,6 +269,7 @@ fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]
 fapony loop <worktree-key> --plan <path>  # start loop
 fapony loop <run-id>                      # resume after gate pass
 fapony status                    # ตาราง active runs
+fapony stats                     # KPI ข้าม run ทั้งหมด — pass/stall rate, avg rounds, exec/review time
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close

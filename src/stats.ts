@@ -1,9 +1,35 @@
-import { openDb, type Run } from "./db.js";
+import { openDb, type Run, type Event } from "./db.js";
 
 function minutesBetween(a: string, b: string): number {
   const t0 = new Date(a.replace(" ", "T") + "Z").getTime();
   const t1 = new Date(b.replace(" ", "T") + "Z").getTime();
   return (t1 - t0) / 60000;
+}
+
+function avg(xs: number[]): number {
+  return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;
+}
+
+// Walks events per run in order and pairs up spawn→route (executor time)
+// and route→gate (review turnaround) per round, since one run row can span
+// multiple rounds (spawn/commit/route/gate repeating).
+function stageMinutes(events: Event[]): { exec: number[]; review: number[] } {
+  const exec: number[] = [];
+  const review: number[] = [];
+  let spawnTs: string | null = null;
+  let routeTs: string | null = null;
+
+  for (const e of events) {
+    if (e.kind === "spawn") spawnTs = e.ts;
+    else if (e.kind === "route") {
+      if (spawnTs) exec.push(minutesBetween(spawnTs, e.ts));
+      routeTs = e.ts;
+    } else if (e.kind === "gate") {
+      if (routeTs) review.push(minutesBetween(routeTs, e.ts));
+      routeTs = null;
+    }
+  }
+  return { exec, review };
 }
 
 export function cmdStats(_args: string[]): void {
@@ -38,6 +64,26 @@ export function cmdStats(_args: string[]): void {
   console.log(`runs: ${runs.length}  (${Object.entries(byStatus).map(([k, v]) => `${k}=${v}`).join(", ")})`);
   console.log(`pass rate: ${(passRate * 100).toFixed(0)}%  stall rate: ${(stallRate * 100).toFixed(0)}%`);
   console.log(`avg rounds to pass: ${avgRounds.toFixed(1)}  avg time to pass: ${avgMinutes.toFixed(0)}m`);
+
+  const events = db
+    .prepare("SELECT * FROM events ORDER BY run_id, id")
+    .all() as Event[];
+  const eventsByRun: Record<number, Event[]> = {};
+  for (const e of events) (eventsByRun[e.run_id] ??= []).push(e);
+
+  const execAll: number[] = [];
+  const reviewAll: number[] = [];
+  for (const es of Object.values(eventsByRun)) {
+    const { exec, review } = stageMinutes(es);
+    execAll.push(...exec);
+    reviewAll.push(...review);
+  }
+  console.log(
+    `avg exec time (spawn→route): ${avg(execAll).toFixed(1)}m over ${execAll.length} rounds`
+  );
+  console.log(
+    `avg review turnaround (route→gate): ${avg(reviewAll).toFixed(1)}m over ${reviewAll.length} rounds`
+  );
 
   const byWorktree: Record<string, Run[]> = {};
   for (const r of runs) (byWorktree[r.worktree] ??= []).push(r);

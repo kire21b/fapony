@@ -107,6 +107,9 @@ fapony run vela --plan .fapony/plan/PLAN-foo.md --mem-id abc123
 # Check active runs
 fapony status
 
+# KPIs across all runs — pass/stall rate, avg rounds, exec/review time
+fapony stats
+
 # Reprint handoff for a run
 fapony handoff <run-id>
 
