@@ -89,10 +89,10 @@ plan นี้เป็น schema ล่วงหน้า.
 
 ## 8. อ้างอิง
 
-- [ROADMAP.md](../ROADMAP.md) — วิสัยทัศน์ model-agnostic ของ fapony
-- [templates/PLAN.md](../templates/PLAN.md) — กฎของ plan core
-- [src/run.ts](../src/run.ts) — executor spawn และ route ปัจจุบัน
-- [src/loop.ts](../src/loop.ts) — gate/planner/fixer spawn paths
-- [src/db.ts](../src/db.ts) — config และ event persistence
-- [src/stats.ts](../src/stats.ts) — human-facing KPI
-- [src/telemetry.ts](../src/telemetry.ts) — opt-in remote payload
+- [ROADMAP.md](../../ROADMAP.md) — วิสัยทัศน์ model-agnostic ของ fapony
+- [templates/PLAN.md](../../templates/PLAN.md) — กฎของ plan core
+- [src/run.ts](../../src/run.ts) — executor spawn และ route ปัจจุบัน
+- [src/loop.ts](../../src/loop.ts) — gate/planner/fixer spawn paths
+- [src/db.ts](../../src/db.ts) — config และ event persistence
+- [src/stats.ts](../../src/stats.ts) — human-facing KPI
+- [src/telemetry.ts](../../src/telemetry.ts) — opt-in remote payload
