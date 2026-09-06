@@ -78,6 +78,14 @@ import {
   testSpawnScrutinizeFixRejectsDangerousCmd,
 } from "./scrutinize.test.js";
 import {
+  testSplitCmdEmptyQuotedString,
+  testSplitCmdEmptyString,
+  testSplitCmdMultipleQuotedArgs,
+  testSplitCmdNoQuotes,
+  testSplitCmdQuotedArg,
+  testSplitCmdSimpleArgs,
+} from "./setup.test.js";
+import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
@@ -143,5 +151,11 @@ export async function cmdTest(): Promise<void> {
   testCostBeginEndRoundTrip();
   testCostHandoffAndFormat();
   testCostTelemetryAllowlist();
+  testSplitCmdSimpleArgs();
+  testSplitCmdQuotedArg();
+  testSplitCmdMultipleQuotedArgs();
+  testSplitCmdEmptyString();
+  testSplitCmdNoQuotes();
+  testSplitCmdEmptyQuotedString();
   console.log("\nall tests passed ✓");
 }

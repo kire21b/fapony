@@ -32,7 +32,7 @@ function detectGitRoot(): string | null {
   }
 }
 
-function splitCmd(input: string): string[] {
+export function splitCmd(input: string): string[] {
   return (input.match(/"[^"]*"|\S+/g) ?? []).map((s) =>
     s.replace(/^"|"$/g, ""),
   );
