@@ -4,9 +4,22 @@ node_modules/
 wt-*/
 ROADMAP.md
 
+# Added by code-review-graph
+.code-review-graph/
+
 # Local env files
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# IDE / tool configs (local paths)
+.claude/
+.mcp.json
+.opencode/
+.vscode/
+.cursor/
+.cursorrules
+.windsurfrules
+opencode.jsonc
