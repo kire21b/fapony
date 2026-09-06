@@ -6,6 +6,13 @@
   "bin": {
     "fapony": "./fapony.ts"
   },
+  "scripts": {
+    "git:sync": "git fetch origin && git rebase origin/main",
+    "git:push": "git push --force-with-lease",
+    "git:merge-pr": "gh pr create --base main --fill 2>/dev/null; gh pr merge --squash",
+    "git:reset": "git fetch origin main -q && git diff --quiet && git diff --cached --quiet && git diff --quiet HEAD origin/main && git reset --hard origin/main || echo '❌ มี uncommitted changes หรือ commit ที่ยังไม่ landing เข้า main — push + merge PR ก่อนแล้วค่อย reset'",
+    "git:mr": "bun run git:merge-pr && bun run git:reset"
+  },
   "devDependencies": {
     "@types/bun": "^1.4.0"
   }
