@@ -16,7 +16,8 @@ bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 fapony init /path/to/your-worktree
 
 # 3. Point fapony at your worktree and your agents
-#    (fapony.config.json in the fapony checkout — see "Config" below)
+cp fapony.config.example.json fapony.config.json
+#    (edit worktrees/executor/gate to match your setup — see "Config" below)
 
 # 4. Write a plan — use the template, or draft one with your agent
 cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
@@ -196,7 +197,7 @@ fapony test                              # self-check
 
 ## Config
 
-`fapony.config.json` lives in the fapony checkout. The checked-in [fapony.config.json](fapony.config.json) is a complete working example; every section is optional with sane defaults. Key fields:
+`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) to get a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
 - `executor.cmd` — command to spawn (receives the prompt via stdin); `roles.executor` overrides it per-role with `{model}` support
