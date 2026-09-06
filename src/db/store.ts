@@ -3,15 +3,22 @@ import { existsSync, mkdirSync } from "node:fs";
 import { faponyDir } from "./load.js";
 import type { Config, Event, Run, RunStatus } from "./types.js";
 
-export function openDb(config?: Config): Database {
-  const dir = faponyDir(config);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+/**
+ * Schema version for state.db — tracked via `PRAGMA user_version`.
+ *
+ * v1 = the original runs/events tables (no version stamp; legacy DBs that
+ * already have tables but user_version 0 are treated as v1).
+ *
+ * To change the schema: bump SCHEMA_VERSION and append the ALTER/CREATE
+ * statements as a new entry in MIGRATIONS (index = version - 1). openDb()
+ * applies every entry newer than the stored version, in order.
+ */
+export const SCHEMA_VERSION = 1;
 
-  const db = new Database(`${dir}/state.db`);
-  db.exec("PRAGMA journal_mode=WAL");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS runs(
+const MIGRATIONS: string[][] = [
+  // v1 — base schema
+  [
+    `CREATE TABLE IF NOT EXISTS runs(
       id INTEGER PRIMARY KEY,
       worktree TEXT NOT NULL,
       plan TEXT,
@@ -21,18 +28,59 @@ export function openDb(config?: Config): Database {
       round INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS events(
+    )`,
+    `CREATE TABLE IF NOT EXISTS events(
       id INTEGER PRIMARY KEY,
       run_id INTEGER NOT NULL,
       ts TEXT NOT NULL DEFAULT (datetime('now')),
       kind TEXT NOT NULL,
       data TEXT
-    )
-  `);
+    )`,
+  ],
+];
+
+function getUserVersion(db: Database): number {
+  const row = db.prepare("PRAGMA user_version").get() as {
+    user_version: number;
+  };
+  return row.user_version ?? 0;
+}
+
+function tableExists(db: Database, name: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(name) as { name: string } | null;
+  return row !== null;
+}
+
+/** Apply pending migrations; exported for tests. */
+export function migrateDb(db: Database): void {
+  const current = getUserVersion(db);
+  if (current > SCHEMA_VERSION) {
+    throw new Error(
+      `state.db schema version ${current} is newer than supported ${SCHEMA_VERSION} — upgrade fapony first`,
+    );
+  }
+  if (current === SCHEMA_VERSION) return;
+  if (current === 0 && tableExists(db, "runs")) {
+    // Legacy DB from before versioning — schema matches v1, just stamp it.
+    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+    return;
+  }
+  for (let v = current; v < SCHEMA_VERSION; v++) {
+    for (const stmt of MIGRATIONS[v] ?? []) db.exec(stmt);
+    db.exec(`PRAGMA user_version = ${v + 1}`);
+  }
+}
+
+export function openDb(config?: Config): Database {
+  const dir = faponyDir(config);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+  const db = new Database(`${dir}/state.db`);
+  db.exec("PRAGMA journal_mode=WAL");
+
+  migrateDb(db);
 
   return db;
 }
