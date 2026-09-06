@@ -6,6 +6,13 @@
   "bin": {
     "fapony": "./fapony.ts"
   },
+  "files": [
+    "fapony.ts",
+    "src/",
+    "prompts/",
+    "templates/",
+    "skill/"
+  ],
   "scripts": {
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",

@@ -11,11 +11,13 @@ import { cmdKickoff } from "./src/kickoff.js";
 import { cmdLoop } from "./src/loop/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
 import { cmdRun } from "./src/run/index.js";
+import { cmdSetup } from "./src/setup.js";
 import { cmdStats } from "./src/stats.js";
 import { cmdStatus } from "./src/status.js";
 import { cmdStop } from "./src/stop.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
+import { cmdUpdate } from "./src/update.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -43,12 +45,16 @@ if (cmd === "run") {
   await cmdKickoff(a);
 } else if (cmd === "plan-mv") {
   await cmdPlanMv(a);
+} else if (cmd === "setup") {
+  await cmdSetup();
+} else if (cmd === "update") {
+  await cmdUpdate();
 } else if (cmd === "test") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|test> [args]",
+    "usage: fapony <setup|update|run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|test> [args]",
   );
   process.exit(1);
 }
