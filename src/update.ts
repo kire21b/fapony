@@ -10,7 +10,7 @@ import { isAffirmative } from "./util.js";
 
 const ROOT = import.meta.dir;
 
-function git(args: string): string {
+function defaultGit(args: string): string {
   return execSync(`git ${args}`, {
     encoding: "utf-8",
     cwd: ROOT,
@@ -19,12 +19,18 @@ function git(args: string): string {
   }).trim();
 }
 
-function gitQuiet(args: string): string | null {
-  try {
-    return git(args);
-  } catch {
-    return null;
-  }
+function defaultInstall(): void {
+  execSync("bun install", { cwd: ROOT, stdio: "pipe" });
+}
+
+/** Minimal seam for cmdUpdate — git runner (map args→result, throws on failure),
+ *  prompt, exit, and bun-install. Every field is used by both the default
+ *  (production) path and the test path. */
+export interface UpdateDeps {
+  git?: (args: string) => string;
+  install?: () => void;
+  prompt?: (question: string, defaultVal?: string) => Promise<string>;
+  exit?: (code: number) => never;
 }
 
 function readVersion(): string {
@@ -60,7 +66,7 @@ export function isUpToDate(oldSha: string, newSha: string): boolean {
   return oldSha === newSha;
 }
 
-function prompt(question: string, defaultVal?: string): Promise<string> {
+function defaultPrompt(question: string, defaultVal?: string): Promise<string> {
   return new Promise((resolve) => {
     const rl = createInterface({
       input: process.stdin,
@@ -74,7 +80,19 @@ function prompt(question: string, defaultVal?: string): Promise<string> {
   });
 }
 
-export async function cmdUpdate(): Promise<void> {
+export async function cmdUpdate(deps: UpdateDeps = {}): Promise<void> {
+  const git = deps.git ?? defaultGit;
+  const installFn = deps.install ?? defaultInstall;
+  const promptFn = deps.prompt ?? defaultPrompt;
+  const exitFn = deps.exit ?? ((code: number): never => process.exit(code));
+  const gitQuiet = (args: string): string | null => {
+    try {
+      return git(args);
+    } catch {
+      return null;
+    }
+  };
+
   console.log("\n🔄 fapony update\n");
 
   // --- sanity: must be a git repo ---
@@ -84,7 +102,7 @@ export async function cmdUpdate(): Promise<void> {
     console.error(
       "   Reinstall via: git clone https://github.com/kire21b/fapony.git",
     );
-    process.exit(1);
+    exitFn(1);
   }
 
   // --- check uncommitted changes ---
@@ -93,7 +111,7 @@ export async function cmdUpdate(): Promise<void> {
     console.log("⚠  You have uncommitted changes in the fapony repo:\n");
     console.log(formatDirtyBlock(dirty));
     console.log();
-    const proceed = await prompt(
+    const proceed = await promptFn(
       "   Stash changes and pull anyway? (y/n)",
       "n",
     );
@@ -128,7 +146,7 @@ export async function cmdUpdate(): Promise<void> {
         console.error("   ✓  Your stashed changes were restored.");
       }
     }
-    process.exit(1);
+    exitFn(1);
   }
 
   // --- capture new version ---
@@ -171,7 +189,7 @@ export async function cmdUpdate(): Promise<void> {
   if (lockChanged) {
     console.log("\n  Lockfile changed — running bun install...");
     try {
-      execSync("bun install", { cwd: ROOT, stdio: "pipe" });
+      installFn();
       console.log("  ✓  Dependencies updated.");
     } catch {
       console.log("  ⚠  bun install failed — run manually: bun install");

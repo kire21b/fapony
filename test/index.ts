@@ -86,6 +86,13 @@ import {
 import {
   testBuildSetupConfigNoMemory,
   testBuildSetupConfigWithMemory,
+  testCmdSetupBunMissing,
+  testCmdSetupGitMissing,
+  testCmdSetupHappyPathScaffolds,
+  testCmdSetupInvalidPath,
+  testCmdSetupOverwriteNoKeepsFile,
+  testCmdSetupOverwriteYesWritesThrough,
+  testCmdSetupScaffoldAlreadyExists,
   testParseTimeoutMinutes,
   testShouldOverwriteConfig,
   testSplitCmdEmptyQuotedString,
@@ -102,6 +109,14 @@ import {
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
 import {
+  testCmdUpdateAlreadyUpToDate,
+  testCmdUpdateDirtyDeclined,
+  testCmdUpdateDirtyPullOk,
+  testCmdUpdateInstallFailureWarns,
+  testCmdUpdateLockfileTriggersInstall,
+  testCmdUpdateNotARepo,
+  testCmdUpdatePullFailPopFail,
+  testCmdUpdatePullFailPopOk,
   testFormatDirtyBlock,
   testIsUpToDate,
   testParseDirtyLines,
@@ -183,10 +198,25 @@ export async function cmdTest(): Promise<void> {
   testValidateWorktreePath();
   testShouldOverwriteConfig();
   testParseTimeoutMinutes();
+  await testCmdSetupGitMissing();
+  await testCmdSetupBunMissing();
+  await testCmdSetupInvalidPath();
+  await testCmdSetupOverwriteNoKeepsFile();
+  await testCmdSetupOverwriteYesWritesThrough();
+  await testCmdSetupHappyPathScaffolds();
+  await testCmdSetupScaffoldAlreadyExists();
   testIsAffirmative();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
   testIsUpToDate();
+  await testCmdUpdateNotARepo();
+  await testCmdUpdateDirtyDeclined();
+  await testCmdUpdateDirtyPullOk();
+  await testCmdUpdatePullFailPopOk();
+  await testCmdUpdatePullFailPopFail();
+  await testCmdUpdateAlreadyUpToDate();
+  await testCmdUpdateLockfileTriggersInstall();
+  await testCmdUpdateInstallFailureWarns();
   console.log("\nall tests passed ✓");
 }

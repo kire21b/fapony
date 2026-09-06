@@ -21,7 +21,7 @@ function ask(
   });
 }
 
-function detectGitRoot(): string | null {
+function defaultDetectGitRoot(): string | null {
   try {
     const root = execSync("git rev-parse --show-toplevel", {
       encoding: "utf-8",
@@ -40,13 +40,24 @@ export function splitCmd(input: string): string[] {
   );
 }
 
-function checkCmd(cmd: string): boolean {
+function defaultCheckCmd(cmd: string): boolean {
   try {
     execSync(`command -v ${cmd}`, { stdio: "pipe", timeout: 15_000 });
     return true;
   } catch {
     return false;
   }
+}
+
+/** Minimal seam for cmdSetup — only the I/O cmdSetup calls directly (the
+ *  prerequisites check, git-root detection, prompting, and exit). fs/cwd stay
+ *  real: tests run against a temp dir. Every field is used by both the
+ *  default (production) path and the test path. */
+export interface SetupDeps {
+  checkCmd?: (cmd: string) => boolean;
+  detectGitRoot?: () => string | null;
+  ask?: (question: string, defaultVal?: string) => Promise<string>;
+  exit?: (code: number) => never;
 }
 
 export interface SetupAnswers {
@@ -105,38 +116,47 @@ export function parseTimeoutMinutes(input: string, fallback = 45): number {
   return Number.isNaN(n) || n <= 0 ? fallback : n;
 }
 
-export async function cmdSetup(): Promise<void> {
+export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   console.log("\n🔧 fapony setup — interactive wizard\n");
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const checkCmdFn = deps.checkCmd ?? defaultCheckCmd;
+  const detectGitRootFn = deps.detectGitRoot ?? defaultDetectGitRoot;
+  const exitFn = deps.exit ?? ((code: number): never => process.exit(code));
+  // Real readline only exists on the default path — injected ask (tests)
+  // never touches stdin.
+  const rl = deps.ask
+    ? null
+    : createInterface({ input: process.stdin, output: process.stdout });
+  const askFn =
+    deps.ask ??
+    ((question: string, defaultVal?: string) => ask(rl!, question, defaultVal));
 
   try {
     // --- prerequisites ---
-    if (!checkCmd("git")) {
+    if (!checkCmdFn("git")) {
       console.error("❌ git is required but not found on PATH.");
-      process.exit(1);
+      exitFn(1);
     }
-    if (!checkCmd("bun")) {
+    if (!checkCmdFn("bun")) {
       console.error("❌ bun is required but not found on PATH.");
       console.error("   Install: curl -fsSL https://bun.sh/install | bash");
-      process.exit(1);
+      exitFn(1);
     }
 
     // --- worktree path ---
-    const gitRoot = detectGitRoot();
+    const gitRoot = detectGitRootFn();
     const defaultPath = gitRoot || process.cwd();
-    const worktreePath = resolve(await ask(rl, "Worktree path", defaultPath));
+    const worktreePath = resolve(await askFn("Worktree path", defaultPath));
 
     const pathError = validateWorktreePath(worktreePath);
     if (pathError) {
       console.error(`❌ ${pathError}`);
-      process.exit(1);
+      exitFn(1);
     }
 
     // --- worktree name ---
     const defaultName = worktreePath.split("/").pop() || "myapp";
-    const worktreeName = await ask(
-      rl,
+    const worktreeName = await askFn(
       "Worktree name (key for CLI)",
       defaultName,
     );
@@ -144,33 +164,31 @@ export async function cmdSetup(): Promise<void> {
     // --- executor ---
     console.log();
     const defaultExecutor = "opencode run";
-    const executorInput = await ask(rl, "Executor command", defaultExecutor);
+    const executorInput = await askFn("Executor command", defaultExecutor);
     const executorCmd = splitCmd(executorInput);
     const executorTimeout = parseTimeoutMinutes(
-      await ask(rl, "Executor timeout (minutes)", "45"),
+      await askFn("Executor timeout (minutes)", "45"),
     );
 
     // --- gate ---
     console.log();
     const defaultGate = 'claude -p "/code-review high"';
-    const gateInput = await ask(rl, "Review gate command", defaultGate);
+    const gateInput = await askFn("Review gate command", defaultGate);
     const gateCmd = splitCmd(gateInput);
 
     // --- auto-loop ---
     console.log();
-    const autoLoop = isAffirmative(
-      await ask(rl, "Enable auto-loop? (y/n)", "n"),
-    );
+    const autoLoop = isAffirmative(await askFn("Enable auto-loop? (y/n)", "n"));
 
     // --- memory ---
     const enableMemory = isAffirmative(
-      await ask(rl, "Enable project memory? (y/n)", "n"),
+      await askFn("Enable project memory? (y/n)", "n"),
     );
 
     // --- detect agents ---
     console.log("\n  Checking installed agents...");
-    const hasOpencode = checkCmd("opencode");
-    const hasClaude = checkCmd("claude");
+    const hasOpencode = checkCmdFn("opencode");
+    const hasClaude = checkCmdFn("claude");
     if (!hasOpencode)
       console.log("    ⚠  opencode not found on PATH (needed for executor)");
     if (!hasClaude)
@@ -191,14 +209,12 @@ export async function cmdSetup(): Promise<void> {
 
     const configPath = join(process.cwd(), "fapony.config.json");
     if (existsSync(configPath)) {
-      const overwrite = await ask(
-        rl,
+      const overwrite = await askFn(
         "⚠  fapony.config.json already exists. Overwrite? (y/n)",
         "n",
       );
       if (!shouldOverwriteConfig(overwrite)) {
         console.log("\n  Skipped config write. Existing file kept.");
-        rl.close();
         return;
       }
     }
@@ -235,6 +251,6 @@ export async function cmdSetup(): Promise<void> {
   └─────────────────────────────────────────┘
 `);
   } finally {
-    rl.close();
+    rl?.close();
   }
 }
