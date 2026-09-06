@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import assert from "node:assert";
-import { autoArchivePlan } from "../src/loop.js";
+import { autoArchivePlan } from "../src/loop/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
 
 const DATED_NAME_RE = /^\d{4}-\d{2}-\d{2}-PLAN-test\.md$/;

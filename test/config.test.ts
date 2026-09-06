@@ -29,7 +29,7 @@ import { assertSafe } from "../src/safety.js";
 import { templateArgs, fillPrompt } from "../src/util.js";
 import { parseHandoff } from "../src/handoff.js";
 import { parseGateVerdict, parsePlanUpdate } from "../src/parse.js";
-import { renderRolePrompt } from "../src/loop.js";
+import { renderRolePrompt } from "../src/loop/index.js";
 
 function baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");

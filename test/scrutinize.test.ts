@@ -9,7 +9,7 @@ import {
   buildScrutinizePrompt,
   resolveChangedFiles,
   spawnScrutinizeFix,
-} from "../src/loop.js";
+} from "../src/loop/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
 
 function makeConfig(withRole: boolean): Config {
