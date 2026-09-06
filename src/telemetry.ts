@@ -1,5 +1,5 @@
-import { openDb, loadConfig, type Run, type Event } from "./db/index.js";
 import { sumSpawnCost } from "./cost.js";
+import { type Event, loadConfig, openDb, type Run } from "./db/index.js";
 
 // Exact payload shape sent when `fapony telemetry send` runs — see TELEMETRY.md.
 // No plan text, commit messages, or gate notes: only the `data` column of
@@ -8,16 +8,27 @@ import { sumSpawnCost } from "./cost.js";
 // events — never raw `data` (which holds plan/commit/gate-note content).
 export interface TelemetryPayload {
   sent_at: string;
-  runs: Array<Pick<Run, "id" | "worktree" | "status" | "round" | "created_at" | "updated_at">>;
+  runs: Array<
+    Pick<
+      Run,
+      "id" | "worktree" | "status" | "round" | "created_at" | "updated_at"
+    >
+  >;
   events: Array<{ run_id: number; kind: string; ts: string }>;
-  cost: Array<{ run_id: number; spawns: number; bytes_in: number; bytes_out: number; usd_estimate: number | null }>;
+  cost: Array<{
+    run_id: number;
+    spawns: number;
+    bytes_in: number;
+    bytes_out: number;
+    usd_estimate: number | null;
+  }>;
 }
 
 export function buildPayload(): TelemetryPayload {
   const db = openDb();
   const runs = db
     .prepare(
-      "SELECT id, worktree, status, round, created_at, updated_at FROM runs ORDER BY id"
+      "SELECT id, worktree, status, round, created_at, updated_at FROM runs ORDER BY id",
     )
     .all() as TelemetryPayload["runs"];
   const events = db
@@ -54,7 +65,7 @@ export async function cmdTelemetry(args: string[]): Promise<void> {
     const config = loadConfig();
     if (!config.telemetry?.enabled) {
       console.error(
-        'telemetry is off — set "telemetry": { "enabled": true, "endpoint": "https://..." } in fapony.config.json to turn it on'
+        'telemetry is off — set "telemetry": { "enabled": true, "endpoint": "https://..." } in fapony.config.json to turn it on',
       );
       process.exit(1);
     }
@@ -68,7 +79,7 @@ export async function cmdTelemetry(args: string[]): Promise<void> {
       process.exit(1);
     }
     console.log(
-      `sent ${payload.runs.length} runs / ${payload.events.length} events / ${payload.cost.length} cost entries to ${config.telemetry.endpoint}`
+      `sent ${payload.runs.length} runs / ${payload.events.length} events / ${payload.cost.length} cost entries to ${config.telemetry.endpoint}`,
     );
     return;
   }

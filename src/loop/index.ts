@@ -7,18 +7,23 @@
 // When autoLoop: true + roles.gate exists:
 //   Loop spawns gate agent automatically instead of waiting for human.
 
-import { loadConfig, openDb, getRun, addEvent, type Config } from "../db/index.js";
-import { runOnce } from "../run/index.js";
+import { addEvent, getRun, loadConfig, openDb } from "../db/index.js";
 import { gateOnce } from "../gate.js";
 import { closeMemory, kickoffMemory } from "../memory.js";
-import { spawnGate, spawnPlanner, spawnBigFixer, spawnScrutinizeFix } from "./spawn.js";
-import { shouldScrutinizeFix } from "./scrutinize.js";
+import { runOnce } from "../run/index.js";
 import { autoArchivePlan } from "./archive.js";
+import { shouldScrutinizeFix } from "./scrutinize.js";
+import {
+  spawnBigFixer,
+  spawnGate,
+  spawnPlanner,
+  spawnScrutinizeFix,
+} from "./spawn.js";
 
+export * from "./archive.js";
 // Re-export public symbols for backward compatibility (src/loop.ts shim)
 export * from "./prompt.js";
 export * from "./scrutinize.js";
-export * from "./archive.js";
 export { spawnScrutinizeFix } from "./spawn.js";
 
 export async function cmdLoop(args: string[]): Promise<void> {
@@ -61,14 +66,20 @@ export async function cmdLoop(args: string[]): Promise<void> {
     planPath = run.plan;
     memId = run.mem_id;
 
-    if (run.status === "passed" || run.status === "stopped" || run.status === "stalled") {
+    if (
+      run.status === "passed" ||
+      run.status === "stopped" ||
+      run.status === "stalled"
+    ) {
       console.error(`run ${runId} is already ${run.status}`);
       process.exit(0);
     }
   }
 
   if (!worktreeKey) {
-    console.error("usage: fapony loop <worktree-key> --plan <path> [--mem-id <id>]");
+    console.error(
+      "usage: fapony loop <worktree-key> --plan <path> [--mem-id <id>]",
+    );
     process.exit(1);
   }
 
@@ -83,10 +94,14 @@ export async function cmdLoop(args: string[]): Promise<void> {
   const hasGate = !!config.roles?.gate;
 
   if (!hasPlanner) {
-    console.error("config.roles.planner not set — loop will stop at awaiting_review");
+    console.error(
+      "config.roles.planner not set — loop will stop at awaiting_review",
+    );
   }
   if (autoLoop && !hasGate) {
-    console.error("config.review.autoLoop is true but no roles.gate — auto-gate disabled");
+    console.error(
+      "config.review.autoLoop is true but no roles.gate — auto-gate disabled",
+    );
   }
 
   // --- Main loop ---
@@ -101,11 +116,17 @@ export async function cmdLoop(args: string[]): Promise<void> {
 
         const gateResult = await spawnGate(config, worktree, currentRun);
         if (!gateResult) {
-          console.error("gate produced no VERDICT — stopping loop (§0.4 fail-safe)");
+          console.error(
+            "gate produced no VERDICT — stopping loop (§0.4 fail-safe)",
+          );
           break;
         }
 
-        const gateOutcome = gateOnce(runId!, gateResult.verdict, gateResult.note);
+        const gateOutcome = gateOnce(
+          runId!,
+          gateResult.verdict,
+          gateResult.note,
+        );
         console.log(`gate: ${gateResult.verdict} — ${gateOutcome.status}`);
 
         if (gateOutcome.status === "passed") {
@@ -120,7 +141,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
       } else {
         // Manual gate: stop and wait for human
         if (!hasPlanner) {
-          console.log(`\nrun ${runId} awaiting review — stopping loop (no planner)`);
+          console.log(
+            `\nrun ${runId} awaiting review — stopping loop (no planner)`,
+          );
           console.log(`Review: fapony gate ${runId} pass|fail [note]`);
           break;
         }
@@ -138,7 +161,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
 
       const planUpdate = await spawnPlanner(config, worktree, afterGate);
       if (!planUpdate) {
-        console.error("planner produced no valid marker — stopping loop (§0.4 fail-safe)");
+        console.error(
+          "planner produced no valid marker — stopping loop (§0.4 fail-safe)",
+        );
         break;
       }
 
@@ -154,7 +179,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
         if (afterGate.plan) {
           const archived = autoArchivePlan(worktree, afterGate.plan, config);
           if (archived.ok) {
-            console.log(`archived: .fapony/plan/done/${afterGate.plan.split("/").pop()}`);
+            console.log(
+              `archived: .fapony/plan/done/${afterGate.plan.split("/").pop()}`,
+            );
             addEvent(db, runId!, "plan_archived", { plan: afterGate.plan });
           } else {
             console.error(`auto plan-mv skipped: ${archived.error}`);
@@ -214,7 +241,11 @@ export async function cmdLoop(args: string[]): Promise<void> {
       }
 
       if (autoLoop && hasGate) {
-        const gateResult = await spawnGate(config, worktree, { id: runId!, mem_id: memId, worktree: worktreeKey! });
+        const gateResult = await spawnGate(config, worktree, {
+          id: runId!,
+          mem_id: memId,
+          worktree: worktreeKey!,
+        });
         if (gateResult) {
           gateOnce(runId!, gateResult.verdict, gateResult.note);
         }
@@ -231,7 +262,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
       console.error(`\n--- scrutinize-fix pass for run ${runId} ---`);
       const fixed = await spawnScrutinizeFix(config, worktree, result);
       if (!fixed) {
-        console.error("scrutinize-fix produced no output — continuing to gate with original diff");
+        console.error(
+          "scrutinize-fix produced no output — continuing to gate with original diff",
+        );
       }
     }
 
@@ -243,8 +276,6 @@ export async function cmdLoop(args: string[]): Promise<void> {
         console.log(`Resume loop: fapony loop ${runId}`);
         break;
       }
-      // autoLoop: continue to top of loop to auto-gate
-      continue;
     }
   }
 }

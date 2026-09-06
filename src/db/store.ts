@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import type { Run, Event, RunStatus, Config } from "./types.js";
 import { faponyDir } from "./load.js";
+import type { Config, Event, Run, RunStatus } from "./types.js";
 
 export function openDb(config?: Config): Database {
   const dir = faponyDir(config);
@@ -42,11 +42,11 @@ export function newRun(
   worktree: string,
   plan: string | null,
   memId: string | null,
-  baseSha: string
+  baseSha: string,
 ): number {
   const stmt = db.prepare(
     `INSERT INTO runs (worktree, plan, mem_id, status, base_sha, round)
-     VALUES (?, ?, ?, 'running', ?, 0)`
+     VALUES (?, ?, ?, 'running', ?, 0)`,
   );
   const result = stmt.run(worktree, plan, memId, baseSha);
   return Number(result.lastInsertRowid);
@@ -55,16 +55,16 @@ export function newRun(
 export function setStatus(
   db: Database,
   runId: number,
-  status: RunStatus
+  status: RunStatus,
 ): void {
   db.prepare(
-    `UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ?`
+    `UPDATE runs SET status = ?, updated_at = datetime('now') WHERE id = ?`,
   ).run(status, runId);
 }
 
 export function incrementRound(db: Database, runId: number): void {
   db.prepare(
-    `UPDATE runs SET round = round + 1, updated_at = datetime('now') WHERE id = ?`
+    `UPDATE runs SET round = round + 1, updated_at = datetime('now') WHERE id = ?`,
   ).run(runId);
 }
 
@@ -72,10 +72,10 @@ export function addEvent(
   db: Database,
   runId: number,
   kind: string,
-  data: unknown
+  data: unknown,
 ): number {
   const stmt = db.prepare(
-    `INSERT INTO events (run_id, kind, data) VALUES (?, ?, ?)`
+    `INSERT INTO events (run_id, kind, data) VALUES (?, ?, ?)`,
   );
   const result = stmt.run(runId, kind, JSON.stringify(data));
   return Number(result.lastInsertRowid);
@@ -90,7 +90,7 @@ export function addEvent(
 export function updateEventData(
   db: Database,
   eventId: number,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
 ): void {
   const row = db
     .prepare("SELECT data FROM events WHERE id = ?")
@@ -107,20 +107,18 @@ export function updateEventData(
   }
   db.prepare("UPDATE events SET data = ? WHERE id = ?").run(
     JSON.stringify({ ...base, ...patch }),
-    eventId
+    eventId,
   );
 }
 
 export function getRun(db: Database, runId: number): Run | null {
-  return db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as
-    | Run
-    | null;
+  return db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as Run | null;
 }
 
 export function getActiveRuns(db: Database): Run[] {
   return db
     .prepare(
-      "SELECT * FROM runs WHERE status NOT IN ('passed', 'stopped') ORDER BY id"
+      "SELECT * FROM runs WHERE status NOT IN ('passed', 'stopped') ORDER BY id",
     )
     .all() as Run[];
 }
@@ -141,24 +139,27 @@ export function getPendingFeedback(
   db: Database,
   worktree: string,
   memId: string,
-  excludeRunId?: number
+  excludeRunId?: number,
 ): string | null {
   const run = db
     .prepare(
-      `SELECT * FROM runs WHERE worktree = ? AND mem_id = ? AND id != ? ORDER BY id DESC LIMIT 1`
+      `SELECT * FROM runs WHERE worktree = ? AND mem_id = ? AND id != ? ORDER BY id DESC LIMIT 1`,
     )
     .get(worktree, memId, excludeRunId ?? -1) as Run | null;
-  if (!run || run.status !== "fixing") return null;
+  if (run?.status !== "fixing") return null;
 
   const event = db
     .prepare(
-      `SELECT * FROM events WHERE run_id = ? AND kind = 'gate' ORDER BY id DESC LIMIT 1`
+      `SELECT * FROM events WHERE run_id = ? AND kind = 'gate' ORDER BY id DESC LIMIT 1`,
     )
     .get(run.id) as Event | null;
-  if (!event || !event.data) return null;
+  if (!event?.data) return null;
 
   try {
-    const parsed = JSON.parse(event.data) as { verdict?: string; note?: string };
+    const parsed = JSON.parse(event.data) as {
+      verdict?: string;
+      note?: string;
+    };
     return parsed.verdict === "fail" && parsed.note ? parsed.note : null;
   } catch {
     return null;
@@ -173,26 +174,29 @@ export function getPendingFeedback(
 export function getLastPlanUpdate(
   db: Database,
   worktree: string,
-  memId: string
+  memId: string,
 ): { kind: "next_prompt" | "file_done"; text: string } | null {
   const run = db
     .prepare(
-      `SELECT id FROM runs WHERE worktree = ? AND mem_id = ? ORDER BY id DESC LIMIT 1`
+      `SELECT id FROM runs WHERE worktree = ? AND mem_id = ? ORDER BY id DESC LIMIT 1`,
     )
     .get(worktree, memId) as { id: number } | null;
   if (!run) return null;
 
   const event = db
     .prepare(
-      `SELECT data FROM events WHERE run_id = ? AND kind = 'plan' ORDER BY id DESC LIMIT 1`
+      `SELECT data FROM events WHERE run_id = ? AND kind = 'plan' ORDER BY id DESC LIMIT 1`,
     )
     .get(run.id) as { data: string | null } | null;
-  if (!event || !event.data) return null;
+  if (!event?.data) return null;
 
   try {
     const parsed = JSON.parse(event.data) as { kind?: string; text?: string };
     if (parsed.kind && parsed.text) {
-      return { kind: parsed.kind as "next_prompt" | "file_done", text: parsed.text };
+      return {
+        kind: parsed.kind as "next_prompt" | "file_done",
+        text: parsed.text,
+      };
     }
   } catch {}
   return null;

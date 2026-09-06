@@ -10,11 +10,11 @@
 import type { Database } from "bun:sqlite";
 import {
   addEvent,
-  updateEventData,
-  pricingFor,
-  roleModel,
   type Config,
   type Event,
+  pricingFor,
+  roleModel,
+  updateEventData,
 } from "./db/index.js";
 
 /** Proxy: bytes per token. Fixed for slice 1 — no per-role override (see PLAN-cost-routing §ไม่ทำ). */
@@ -37,12 +37,15 @@ export function byteLength(s: string): number {
 export function estimateUsd(
   bytesIn: number,
   bytesOut: number,
-  pricing: { inputPer1k: number; outputPer1k: number } | null
+  pricing: { inputPer1k: number; outputPer1k: number } | null,
 ): number | null {
   if (!pricing) return null;
   const tokensIn = bytesIn / BYTES_PER_TOKEN;
   const tokensOut = bytesOut / BYTES_PER_TOKEN;
-  return (tokensIn / 1000) * pricing.inputPer1k + (tokensOut / 1000) * pricing.outputPer1k;
+  return (
+    (tokensIn / 1000) * pricing.inputPer1k +
+    (tokensOut / 1000) * pricing.outputPer1k
+  );
 }
 
 /** Full spawn cost record for one agent invocation. */
@@ -51,7 +54,7 @@ export function buildSpawnCost(
   model: string,
   prompt: string,
   output: string,
-  config: Config
+  config: Config,
 ): SpawnCost {
   const bytes_in = byteLength(prompt);
   const bytes_out = byteLength(output);
@@ -75,7 +78,7 @@ export function beginSpawn(
   config: Config,
   role: string,
   prompt: string,
-  extra?: Record<string, unknown>
+  extra?: Record<string, unknown>,
 ): number {
   return addEvent(db, runId, "spawn", {
     ...extra,
@@ -91,14 +94,14 @@ export function endSpawn(
   eventId: number,
   config: Config,
   role: string,
-  output: string
+  output: string,
 ): void {
   const bytes_out = byteLength(output);
   const patch: Record<string, unknown> = { bytes_out };
   const usd = estimateUsd(
     currentBytesIn(db, eventId),
     bytes_out,
-    pricingFor(config, role)
+    pricingFor(config, role),
   );
   if (usd !== null) patch.usd_estimate = usd;
   updateEventData(db, eventId, patch);
@@ -154,5 +157,7 @@ export function sumSpawnCost(events: Event[]): RunCost {
 /** One-line human summary. USD shown only when priced (never fake $0). */
 export function formatCost(c: RunCost): string {
   const base = `${c.bytes_in} bytes in / ${c.bytes_out} bytes out over ${c.spawns} spawn${c.spawns === 1 ? "" : "s"}`;
-  return c.usd_estimate !== null ? `${base} (~$${c.usd_estimate.toFixed(4)} est.)` : base;
+  return c.usd_estimate !== null
+    ? `${base} (~$${c.usd_estimate.toFixed(4)} est.)`
+    : base;
 }

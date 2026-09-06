@@ -1,8 +1,7 @@
 // src/loop/prompt.ts — render a role prompt from template file or inline fallback.
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { promptFileFor, type Config } from "../db/index.js";
+import { type Config, promptFileFor } from "../db/index.js";
 import { fillPrompt } from "../util.js";
 
 /**
@@ -14,7 +13,7 @@ export function renderRolePrompt(
   config: Config,
   role: "gate" | "planner" | "bigFixer",
   fallback: string,
-  vars: Record<string, string>
+  vars: Record<string, string>,
 ): string {
   const file = promptFileFor(config, role);
   if (!file) return fallback;

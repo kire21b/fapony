@@ -1,8 +1,8 @@
+import assert from "node:assert";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
-import assert from "node:assert";
-import { openDb, newRun } from "../src/db/index.js";
+import { newRun, openDb } from "../src/db/index.js";
 import { renderStatusTable } from "../src/status.js";
 
 function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
@@ -43,13 +43,19 @@ export function testStatusTableTruncatesLongMemId(): void {
   withTmpDb((db) => {
     // a real run hit this: mem_id "demo-status-1" (13 chars) broke column
     // alignment because only `plan` was truncated, not `mem_id`.
-    newRun(db, "fapony", ".fapony/plan/PLAN-status-test.md", "demo-status-1", "abc123");
+    newRun(
+      db,
+      "fapony",
+      ".fapony/plan/PLAN-status-test.md",
+      "demo-status-1",
+      "abc123",
+    );
     const table = renderStatusTable(db);
     const [, header, , dataLine] = table.split("\n");
     assert.equal(
       dataLine.split("|").length,
       header.split("|").length,
-      "long mem_id should not add an extra column separator"
+      "long mem_id should not add an extra column separator",
     );
   });
   console.log("  ✓ status table (long mem_id truncated, columns stay aligned)");

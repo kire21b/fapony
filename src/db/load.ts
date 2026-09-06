@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "./types.js";
 import { DEFAULT_CONFIG } from "./defaults.js";
+import type { Config } from "./types.js";
 
 // XDG Base Directory convention (macOS ignores Apple's ~/Library/Application Support
 // for CLI tools by common practice — gh, ripgrep-adjacent tools, etc. use ~/.config too)
@@ -14,7 +14,7 @@ export function faponyDir(config?: Config): string {
   return join(base, "fapony");
 }
 
-function dbPath(config?: Config): string {
+function _dbPath(config?: Config): string {
   return join(faponyDir(config), "state.db");
 }
 

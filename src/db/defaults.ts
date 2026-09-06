@@ -18,9 +18,14 @@ export const DEFAULT_PLAN_DIR = ".fapony/plan";
 export const DEFAULT_SPEC_DIR = ".fapony/spec";
 export const DEFAULT_MEMORY_ENTRY = ".fapony/.memory/mem.ts";
 export const DEFAULT_DONE_DIR = "done";
-export const DEFAULT_LINK_SCAN_DIRS = [".fapony/plan/", ".fapony/spec/", "docs/"];
+export const DEFAULT_LINK_SCAN_DIRS = [
+  ".fapony/plan/",
+  ".fapony/spec/",
+  "docs/",
+];
 export const DEFAULT_PLAN_EXTENSIONS = [".md"];
-export const DEFAULT_ARCHIVE_MSG = "chore(plan): archive {file} (shipped {hash})";
+export const DEFAULT_ARCHIVE_MSG =
+  "chore(plan): archive {file} (shipped {hash})";
 export const DEFAULT_INBOUND_WARN_AT = 5;
 export const DEFAULT_DIRTY_PREVIEW = 10;
 export const DEFAULT_SHORT_SHA = 8;

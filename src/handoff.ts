@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
-import { openDb, getRun, getEvents, handoffMarker, type Run } from "./db/index.js";
-import { sumSpawnCost, formatCost, type RunCost } from "./cost.js";
+import { formatCost, type RunCost, sumSpawnCost } from "./cost.js";
+import { getEvents, getRun, handoffMarker, openDb } from "./db/index.js";
 
 export interface GitFacts {
   files: number;
@@ -27,10 +27,11 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
   let branch = "";
 
   try {
-    const stat = execSync(
-      `git diff --stat ${baseSha}..HEAD -- .`,
-      { cwd: worktree, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    );
+    const stat = execSync(`git diff --stat ${baseSha}..HEAD -- .`, {
+      cwd: worktree,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     const match = stat.match(/(\d+) files? changed/);
     files = match ? parseInt(match[1], 10) : 0;
     const ins = stat.match(/(\d+) insertions?\(\+\)/);
@@ -39,10 +40,11 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
   } catch {}
 
   try {
-    const log = execSync(
-      `git log --oneline ${baseSha}..HEAD`,
-      { cwd: worktree, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    );
+    const log = execSync(`git log --oneline ${baseSha}..HEAD`, {
+      cwd: worktree,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     commits = log
       .trim()
       .split("\n")
@@ -75,9 +77,8 @@ export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
       result.claimed = line.slice("claimed:".length).trim();
     } else if (line.startsWith("commits:")) {
       const val = line.slice("commits:".length).trim();
-      result.commits = val && val !== "none"
-        ? val.split(/\s+/).filter(Boolean)
-        : [];
+      result.commits =
+        val && val !== "none" ? val.split(/\s+/).filter(Boolean) : [];
     } else if (line.startsWith("checks:")) {
       result.checks = line.slice("checks:".length).trim();
     } else if (line.startsWith("uncertain:")) {
@@ -92,12 +93,19 @@ export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
   return result;
 }
 
-export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: string, cost?: RunCost): string {
+export function renderHandoff(
+  facts: GitFacts,
+  parsed: ParsedHandoff,
+  marker?: string,
+  cost?: RunCost,
+): string {
   const lines: string[] = [];
   lines.push("## HANDOFF SUMMARY");
 
   if (parsed.missing) {
-    lines.push(`(no ${marker ?? HANDOFF_START} block in output — using git-only data)`);
+    lines.push(
+      `(no ${marker ?? HANDOFF_START} block in output — using git-only data)`,
+    );
   }
 
   lines.push("");
@@ -106,7 +114,7 @@ export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: s
   lines.push(`files changed: ${facts.files}`);
   lines.push(`lines changed: ${facts.lines}`);
   lines.push(
-    `commits: ${facts.commits.length ? facts.commits.join(", ") : "(none)"}`
+    `commits: ${facts.commits.length ? facts.commits.join(", ") : "(none)"}`,
   );
 
   if (!parsed.missing) {
@@ -135,7 +143,7 @@ export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: s
 
 export function cmdHandoff(args: string[]): void {
   const runId = parseInt(args[0], 10);
-  if (!runId || isNaN(runId)) {
+  if (!runId || Number.isNaN(runId)) {
     console.error("usage: fapony handoff <run-id>");
     process.exit(1);
   }
@@ -163,5 +171,7 @@ export function cmdHandoff(args: string[]): void {
     break;
   }
 
-  console.log(renderHandoff(facts, parsed, handoffMarker(), sumSpawnCost(events)));
+  console.log(
+    renderHandoff(facts, parsed, handoffMarker(), sumSpawnCost(events)),
+  );
 }

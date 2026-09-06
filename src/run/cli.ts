@@ -1,19 +1,16 @@
 // src/run/cli.ts — cmdRun: CLI wrapper for runOnce
 
-import {
-  loadConfig,
-  openDb,
-  getEvents,
-  handoffMarker,
-} from "../db/index.js";
+import { type RunCost, sumSpawnCost } from "../cost.js";
+import { getEvents, handoffMarker, loadConfig, openDb } from "../db/index.js";
 import { renderHandoff } from "../handoff.js";
-import { sumSpawnCost } from "../cost.js";
 import { runOnce } from "./flow.js";
 
 export async function cmdRun(args: string[]): Promise<void> {
   const worktreeKey = args[0];
   if (!worktreeKey) {
-    console.error("usage: fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]");
+    console.error(
+      "usage: fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]",
+    );
     process.exit(1);
   }
 
@@ -31,7 +28,13 @@ export async function cmdRun(args: string[]): Promise<void> {
     }
   }
 
-  const result = await runOnce({ worktreeKey, planPath, planContent: null, memId, allowDirty });
+  const result = await runOnce({
+    worktreeKey,
+    planPath,
+    planContent: null,
+    memId,
+    allowDirty,
+  });
 
   if (result.error) {
     console.error(result.error);
@@ -39,19 +42,24 @@ export async function cmdRun(args: string[]): Promise<void> {
   }
 
   const config = loadConfig();
-  let cost = undefined;
+  let cost: RunCost | undefined;
   if (result.runId) {
     const costDb = openDb();
     cost = sumSpawnCost(getEvents(costDb, result.runId));
     costDb.close();
   }
-  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config), cost);
-  console.log("\n" + handoff);
+  const handoff = renderHandoff(
+    result.facts,
+    result.parsed,
+    handoffMarker(config),
+    cost,
+  );
+  console.log(`\n${handoff}`);
 
   console.log("\n--- next step (run manually) ---");
   const gate = config.review.gate.join(" ");
   console.log(
-    `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`
+    `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`,
   );
   console.log(`Run review: ${gate}`);
   console.log(`After review: fapony status`);

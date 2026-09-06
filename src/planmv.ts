@@ -1,13 +1,13 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, dirname, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import {
-  shippedRE as shippedREFromConfig,
-  doneDirName,
-  linkScanDirs,
-  inboundWarnAt,
-  loadConfig,
   type Config,
+  doneDirName,
+  inboundWarnAt,
+  linkScanDirs,
+  loadConfig,
+  shippedRE as shippedREFromConfig,
 } from "./db/index.js";
 
 export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
@@ -46,7 +46,7 @@ function datePrefix(fileName: string): string {
  */
 export function planMv(
   filePath: string,
-  opts: { dryRun?: boolean; repoRoot?: string; config?: Config } = {}
+  opts: { dryRun?: boolean; repoRoot?: string; config?: Config } = {},
 ): PlanMvResult {
   const { dryRun = false, repoRoot = process.cwd(), config } = opts;
   const shipped = config ? shippedREFromConfig(config) : SHIPPED_RE;
@@ -65,7 +65,7 @@ export function planMv(
   const fileDir = dirname(resolve(filePath));
   const newDir = join(fileDir, doneName); // destination is <dir>/done/
   let normalizedCount = 0;
-  let newContent = content.replace(LINK_RE, (match, text, href) => {
+  const newContent = content.replace(LINK_RE, (match, text, href) => {
     if (ABSOLUTE_LINK_RE.test(href)) return match;
 
     // Resolve relative to file's current dir
@@ -80,18 +80,20 @@ export function planMv(
   // --- 3. Check inbound links ---
   const fileName = filePath.split("/").pop()!;
   const inboundLinks: string[] = [];
-  const scanDirs = config ? linkScanDirs(config) : [".fapony/plan/", ".fapony/spec/", "docs/"];
+  const scanDirs = config
+    ? linkScanDirs(config)
+    : [".fapony/plan/", ".fapony/spec/", "docs/"];
   const doneFrag = `/${doneName}/`;
 
   try {
-    const output = execFileSync(
-      "grep",
-      ["-rln", "--", fileName, ...scanDirs],
-      { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-    ).trim();
+    const output = execFileSync("grep", ["-rln", "--", fileName, ...scanDirs], {
+      cwd: repoRoot,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
     if (output) {
       inboundLinks.push(
-        ...output.split("\n").filter((l) => !l.includes(doneFrag))
+        ...output.split("\n").filter((l) => !l.includes(doneFrag)),
       );
     }
   } catch {}
@@ -154,5 +156,7 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
   }
 
   const destName = result.destName ?? filePath.split("/").pop()!;
-  console.log(`moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), destName))}`);
+  console.log(
+    `moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), destName))}`,
+  );
 }

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.json",
+      "**/*.md",
+      "!!**/node_modules",
+      "!!**/wt-*",
+      "!!**/*.db*",
+      "!!**/.cursor",
+      "!!**/.gemini",
+      "!!**/.vscode",
+      "!!**/.mcp.json",
+      "!!**/.github",
+      "!!**/.qoder"
+    ]
+  },
+  "linter": {
+    "rules": {
+      "correctness": {
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noNonNullAssertedOptionalChain": "off",
+        "noAssignInExpressions": "off"
+      }
+    }
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2
+  }
+}

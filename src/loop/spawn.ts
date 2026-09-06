@@ -1,12 +1,19 @@
 // src/loop/spawn.ts — generic agent spawn + role-specific wrappers for gate/planner/bigFixer/scrutinizeFix.
 
-import { openDb, getRun, roleTimeoutMin, safetyDeny, handoffMarker, type Config } from "../db/index.js";
+import { beginSpawn, endSpawn } from "../cost.js";
+import {
+  type Config,
+  getRun,
+  handoffMarker,
+  openDb,
+  roleTimeoutMin,
+  safetyDeny,
+} from "../db/index.js";
+import { parseGateVerdict, parsePlanUpdate } from "../parse.js";
+import { assertSafe } from "../safety.js";
+import { templateArgs } from "../util.js";
 import { renderRolePrompt } from "./prompt.js";
 import { buildScrutinizePrompt, resolveChangedFiles } from "./scrutinize.js";
-import { templateArgs } from "../util.js";
-import { assertSafe } from "../safety.js";
-import { parseGateVerdict, parsePlanUpdate } from "../parse.js";
-import { beginSpawn, endSpawn } from "../cost.js";
 
 /**
  * Generic agent spawn — renders stdin, runs assertSafe (outside try so
@@ -20,9 +27,9 @@ async function runSpawn(
   worktree: string,
   runId: number,
   role: string,
-  stdin: string
+  stdin: string,
 ): Promise<string | null> {
-  const roleConfig = config.roles![role]!;
+  const roleConfig = config.roles?.[role]!;
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
     PROMPT: stdin,
@@ -76,13 +83,18 @@ async function runSpawn(
 export async function spawnGate(
   config: Config,
   worktree: string,
-  run: { id: number; mem_id: string | null; worktree: string }
+  run: { id: number; mem_id: string | null; worktree: string },
 ): Promise<{ verdict: "pass" | "fail"; note: string } | null> {
-  const stdin = renderRolePrompt(config, "gate", `Review run ${run.id} for worktree ${run.worktree}.`, {
-    RUN_ID: String(run.id),
-    WORKTREE: run.worktree,
-    MEM_ID: run.mem_id ?? "none",
-  });
+  const stdin = renderRolePrompt(
+    config,
+    "gate",
+    `Review run ${run.id} for worktree ${run.worktree}.`,
+    {
+      RUN_ID: String(run.id),
+      WORKTREE: run.worktree,
+      MEM_ID: run.mem_id ?? "none",
+    },
+  );
 
   const stdout = await runSpawn(config, worktree, run.id, "gate", stdin);
   if (!stdout) return null;
@@ -92,7 +104,7 @@ export async function spawnGate(
 export async function spawnPlanner(
   config: Config,
   worktree: string,
-  run: { id: number; mem_id: string | null; worktree: string }
+  run: { id: number; mem_id: string | null; worktree: string },
 ): Promise<{ kind: "next_prompt" | "file_done"; text: string } | null> {
   const fallback = `Run ID: ${run.id}
 Worktree: ${run.worktree}
@@ -113,7 +125,11 @@ Review the current state and output your decision.`;
 export async function spawnBigFixer(
   config: Config,
   worktree: string,
-  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
+  runResult: {
+    runId: number;
+    facts: { files: number; lines: number; commits: string[]; branch: string };
+    parsed: { missing: boolean; checks?: string };
+  },
 ): Promise<string | null> {
   const fallback = `Big diff detected: ${runResult.facts.files} files, ${runResult.facts.lines} lines.
 Fix any issues found. Output HANDOFF when done.`;
@@ -130,13 +146,22 @@ Fix any issues found. Output HANDOFF when done.`;
 export async function spawnScrutinizeFix(
   config: Config,
   worktree: string,
-  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
+  runResult: {
+    runId: number;
+    facts: { files: number; lines: number; commits: string[]; branch: string };
+    parsed: { missing: boolean; checks?: string };
+  },
 ): Promise<string | null> {
   const db = openDb();
   const run = getRun(db, runResult.runId);
   const changedFiles = resolveChangedFiles(worktree, run?.base_sha);
 
-  const stdin = buildScrutinizePrompt(worktree, runResult, changedFiles, config);
+  const stdin = buildScrutinizePrompt(
+    worktree,
+    runResult,
+    changedFiles,
+    config,
+  );
 
   return runSpawn(config, worktree, runResult.runId, "scrutinizeFix", stdin);
 }

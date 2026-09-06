@@ -1,10 +1,10 @@
 import {
-  openDb,
-  getRun,
-  setStatus,
-  incrementRound,
   addEvent,
+  getRun,
+  incrementRound,
   loadConfig,
+  openDb,
+  setStatus,
 } from "./db/index.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 
@@ -22,7 +22,7 @@ export interface GateResult {
 export function gateOnce(
   runId: number,
   verdict: "pass" | "fail",
-  note: string
+  note: string,
 ): GateResult {
   const db = openDb();
   const run = getRun(db, runId);
@@ -30,7 +30,11 @@ export function gateOnce(
     return { runId, status: "stopped", error: `run ${runId} not found` };
   }
   if (run.status === "passed" || run.status === "stopped") {
-    return { runId, status: run.status, error: `run ${runId} is already ${run.status}` };
+    return {
+      runId,
+      status: run.status,
+      error: `run ${runId} is already ${run.status}`,
+    };
   }
 
   const config = loadConfig();
@@ -66,7 +70,12 @@ export function gateOnce(
       reason: `round ${updated.round} > maxRounds ${config.review.maxRounds}`,
     });
     if (run.mem_id) {
-      closeMemory(config, worktree, run.mem_id, `run ${runId} stopped at round cap`);
+      closeMemory(
+        config,
+        worktree,
+        run.mem_id,
+        `run ${runId} stopped at round cap`,
+      );
       addEvent(db, runId, "memory_claim_closed", { mem_id: run.mem_id });
     }
     return {
@@ -85,14 +94,21 @@ export async function cmdGate(args: string[]): Promise<void> {
   const runId = parseInt(args[0], 10);
   const verdict = args[1];
 
-  if (!runId || isNaN(runId) || (verdict !== "pass" && verdict !== "fail")) {
+  if (
+    !runId ||
+    Number.isNaN(runId) ||
+    (verdict !== "pass" && verdict !== "fail")
+  ) {
     console.error("usage: fapony gate <run-id> pass|fail [note]");
-    console.error("       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)");
+    console.error(
+      "       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)",
+    );
     process.exit(1);
   }
 
   const inline = args.slice(2).join(" ");
-  const note = inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
+  const note =
+    inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
 
   const result = gateOnce(runId, verdict, note);
 
@@ -104,6 +120,8 @@ export async function cmdGate(args: string[]): Promise<void> {
   if (result.status === "passed") {
     console.log(`run ${runId} passed`);
   } else if (result.status === "fixing") {
-    console.log(`run ${runId} needs fixes (round ${result.round}): ${note || "(no note)"}`);
+    console.log(
+      `run ${runId} needs fixes (round ${result.round}): ${note || "(no note)"}`,
+    );
   }
 }
