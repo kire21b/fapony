@@ -172,7 +172,7 @@ events(
 - `prompts.<role> = null` = ใช้ inline fallback เดิม · `gate/planner/bigFixer` มี `{{RUN_ID}} {{WORKTREE}} {{MEM_ID}} {{FILES}} {{LINES}}` ให้ใช้ใน template
 - `defaults.timeoutMin` = fallback เมื่อ `roles.<name>.timeoutMin` ไม่ได้ตั้ง (ไม่ตั้งเลย → gate/planner 10, bigFixer 20, scrutinizeFix 15)
 - env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db)
-- getters รวมศูนย์ใน `src/db.ts` (`specMaxLines()`, `shippedRE()`, `roleTimeoutMin()`, …) — ห้าม hardcode ค่าเดิมซ้ำที่ call site
+- getters รวมศูนย์ใน `src/db/getters.ts` (`specMaxLines()`, `shippedRE()`, `roleTimeoutMin()`, …) — ห้าม hardcode ค่าเดิมซ้ำที่ call site
 
 ---
 
