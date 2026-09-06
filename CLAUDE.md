@@ -44,6 +44,8 @@ fapony/
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
     init-mem.ts       # init-mem command (legacy, superseded by init)
     planlint.ts       # checkPlanHygiene() — warn เมื่อ spec content หลุดเข้า plan
+    stats.ts          # fapony stats — KPI + cost total ข้าม run
+    telemetry.ts      # opt-in payload (runs/events/cost allowlist เท่านั้น)
     test.ts           # self-check 36 ตัว
   test/
     fixtures/
@@ -144,9 +146,12 @@ events(
     "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
     "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
   },
-  "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" }
+  "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
+  "pricing": { "<role>": { "inputPer1k": 3.0, "outputPer1k": 15.0 } }
 }
 ```
+
+- `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, and USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
 
 - `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
 
@@ -259,7 +264,7 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 - DeepSeek prefilter (prefilter: null ยังคงเดิม — deferred ไม่ใช่ chunk 2 scope)
 - [x] ย้าย scrutinize-fix skill → prompts/scrutinize-fix.md (ถอด vela แล้ว)
 - [x] skill/git-commit-conventional.md + skill/move-to-done.md + skill/plan-with-me.md
-- Plan file: [plan/done/PLAN-loop.md](plan/done/PLAN-loop.md) (shipped 2fd51e5)
+- Plan file: [plan/done/2026-09-05-PLAN-loop.md](plan/done/2026-09-05-PLAN-loop.md) (shipped 2fd51e5)
 
 ### Pre-condition ก่อน chunk 2
 - ต้องรัน chunk 1 กับ vela จริงสัก 2-3 รอบแล้วเห็นว่า handoff template ใช้ได้จริง

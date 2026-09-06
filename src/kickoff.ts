@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig, planDir, planExtensions, shippedRE, handoffMarker } from "./db/index.js";
-import { runOnce } from "./run.js";
+import { runOnce } from "./run/index.js";
 import { renderHandoff } from "./handoff.js";
 
 export async function cmdKickoff(args: string[]): Promise<void> {

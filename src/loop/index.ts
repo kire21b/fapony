@@ -8,7 +8,7 @@
 //   Loop spawns gate agent automatically instead of waiting for human.
 
 import { loadConfig, openDb, getRun, addEvent, type Config } from "../db/index.js";
-import { runOnce } from "../run.js";
+import { runOnce } from "../run/index.js";
 import { gateOnce } from "../gate.js";
 import { closeMemory, kickoffMemory } from "../memory.js";
 import { spawnGate, spawnPlanner, spawnBigFixer, spawnScrutinizeFix } from "./spawn.js";
@@ -158,7 +158,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
             addEvent(db, runId!, "plan_archived", { plan: afterGate.plan });
           } else {
             console.error(`auto plan-mv skipped: ${archived.error}`);
-            console.error(`Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in .fapony/plan/)`);
+            console.error(
+              `Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in .fapony/plan/)`,
+            );
           }
         }
 
@@ -201,7 +203,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
     // continues to re-run executor. The fixerResult is not parsed or reviewed
     // in this pass; the next executor run will pick up the fixes.
     if (result.isBig && config.roles?.bigFixer) {
-      console.error(`\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`);
+      console.error(
+        `\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`,
+      );
 
       const fixerResult = await spawnBigFixer(config, worktree, result);
       if (!fixerResult) {
@@ -210,7 +214,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
       }
 
       if (autoLoop && hasGate) {
-        const gateResult = await spawnGate(config, worktree, { id: runId, mem_id: memId, worktree: worktreeKey! });
+        const gateResult = await spawnGate(config, worktree, { id: runId!, mem_id: memId, worktree: worktreeKey! });
         if (gateResult) {
           gateOnce(runId!, gateResult.verdict, gateResult.note);
         }

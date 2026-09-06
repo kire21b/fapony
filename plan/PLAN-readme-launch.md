@@ -22,7 +22,7 @@ implementation ไม่ใช่มุมคนอ่านครั้งแ�
   OpenCode (fapony + mem.ts memory), Codex (fapony + spec/ เป็น contract)
 - แต่ละ case มีคำสั่งรันจริงที่ copy-paste ได้ (ไม่ pseudo-code)
 - ลิงก์จาก README ไปยัง examples/, prompts/plan-with-me.md ที่มีอยู่แล้ว (จาก
-  [PLAN-plan-with-me.md](done/PLAN-plan-with-me.md))
+  [PLAN-plan-with-me.md](done/2026-09-05-PLAN-plan-with-me.md))
 
 **ไม่ทำ:**
 - ไม่เขียน landing page หรือเว็บไซต์แยก — README เดียวพอสำหรับเปิดตัว ไม่ใช่ product launch
@@ -81,6 +81,6 @@ implementation ไม่ใช่มุมคนอ่านครั้งแ�
 ## 8. อ้างอิง
 
 - [ROADMAP.md](../ROADMAP.md) — เดือนที่ 3
-- [plan/done/PLAN-plan-with-me.md](done/PLAN-plan-with-me.md) — examples/ ที่มีอยู่แล้วให้ลิงก์ไป
-- [plan/done/PLAN-init-scaffold.md](done/PLAN-init-scaffold.md) — spec injection behavior ที่ case 3 อ้างอิง
+- [plan/done/PLAN-plan-with-me.md](done/2026-09-05-PLAN-plan-with-me.md) — examples/ ที่มีอยู่แล้วให้ลิงก์ไป
+- [plan/done/PLAN-init-scaffold.md](done/2026-09-05-PLAN-init-scaffold.md) — spec injection behavior ที่ case 3 อ้างอิง
 - [CLAUDE.md](../CLAUDE.md) — Plan Core template, CLI Commands

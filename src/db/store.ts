@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import type { Run, Event, RunStatus } from "./types.js";
+import type { Run, Event, RunStatus, Config } from "./types.js";
 import { faponyDir } from "./load.js";
 
-export function openDb(config?: { paths?: { stateDir?: string } }): Database {
+export function openDb(config?: Config): Database {
   const dir = faponyDir(config);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 

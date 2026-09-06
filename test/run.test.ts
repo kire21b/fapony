@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { buildExecutorPrompt, executorCmd } from "../src/run.js";
+import { buildExecutorPrompt, executorCmd } from "../src/run/index.js";
 import { loadConfig, type Config } from "../src/db/index.js";
 
 export function testBuildExecutorPrompt(): void {

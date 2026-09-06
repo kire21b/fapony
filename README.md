@@ -203,6 +203,7 @@ fapony test                              # self-check
 - `review.bigDiff` / `review.maxRounds` / `review.gate` — routing, round cap, reviewer command
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
 - `prompts` / `markers` / `paths` / `safety` — override prompt files, output markers, directory layout, and the dangerous-command deny-list
+- `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 
