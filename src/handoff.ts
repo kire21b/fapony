@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { openDb, getRun, getEvents, handoffMarker, type Run } from "./db.js";
+import { sumSpawnCost, formatCost, type RunCost } from "./cost.js";
 
 export interface GitFacts {
   files: number;
@@ -91,7 +92,7 @@ export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
   return result;
 }
 
-export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: string): string {
+export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: string, cost?: RunCost): string {
   const lines: string[] = [];
   lines.push("## HANDOFF SUMMARY");
 
@@ -119,6 +120,14 @@ export function renderHandoff(facts: GitFacts, parsed: ParsedHandoff, marker?: s
     if (parsed.not_done?.length) {
       lines.push(`not_done: ${parsed.not_done.join("; ")}`);
     }
+  }
+
+  // Additive: only when spawn events carry byte fields. USD is an estimate
+  // from static pricing over byte proxy — never a real charge.
+  if (cost && cost.spawns > 0) {
+    lines.push("");
+    lines.push("--- cost (bytes proxy, USD est. only) ---");
+    lines.push(`cost: ${formatCost(cost)}`);
   }
 
   return lines.join("\n");
@@ -154,5 +163,5 @@ export function cmdHandoff(args: string[]): void {
     break;
   }
 
-  console.log(renderHandoff(facts, parsed));
+  console.log(renderHandoff(facts, parsed, handoffMarker(), sumSpawnCost(events)));
 }

@@ -1,4 +1,5 @@
 import { openDb, type Run, type Event } from "./db.js";
+import { sumSpawnCost } from "./cost.js";
 
 function minutesBetween(a: string, b: string): number {
   const t0 = new Date(a.replace(" ", "T") + "Z").getTime();
@@ -70,6 +71,17 @@ export function cmdStats(_args: string[]): void {
     .all() as Event[];
   const eventsByRun: Record<number, Event[]> = {};
   for (const e of events) (eventsByRun[e.run_id] ??= []).push(e);
+
+  // Cost total across all runs (bytes always, USD only when pricing set).
+  // Deliberately no breakdown by role/worktree/pass — add when a real
+  // question needs it (PLAN-cost-routing §ไม่ทำ).
+  const total = sumSpawnCost(events);
+  if (total.spawns > 0) {
+    const usd = total.usd_estimate !== null ? ` (~$${total.usd_estimate.toFixed(4)} est.)` : "";
+    console.log(
+      `cost: ${total.bytes_in} bytes in / ${total.bytes_out} bytes out over ${total.spawns} spawns${usd}`
+    );
+  }
 
   const execAll: number[] = [];
   const reviewAll: number[] = [];

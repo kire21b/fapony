@@ -23,6 +23,7 @@ import { parseGateVerdict, parsePlanUpdate } from "./parse.js";
 import { assertSafe } from "./safety.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 import { renderHandoff } from "./handoff.js";
+import { beginSpawn, endSpawn } from "./cost.js";
 import { planMv, type PlanMvResult } from "./planmv.js";
 
 /**
@@ -280,6 +281,8 @@ async function spawnGate(
   assertSafe(cmd, safetyDeny(config));
 
   const timeoutMs = roleTimeoutMin(config, "gate") * 60 * 1000;
+  const db = openDb();
+  const spawnEventId = beginSpawn(db, run.id, config, "gate", stdin);
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -310,9 +313,11 @@ async function spawnGate(
 
     await proc.exited;
 
+    endSpawn(db, spawnEventId, config, "gate", stdout);
     return parseGateVerdict(stdout, config);
   } catch (e) {
     console.error(`gate spawn failed: ${(e as Error).message}`);
+    endSpawn(db, spawnEventId, config, "gate", "");
     return null;
   }
 }
@@ -342,6 +347,8 @@ Review the current state and output your decision.`;
   assertSafe(cmd, safetyDeny(config));
 
   const timeoutMs = roleTimeoutMin(config, "planner") * 60 * 1000;
+  const db = openDb();
+  const spawnEventId = beginSpawn(db, run.id, config, "planner", stdin);
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -372,9 +379,11 @@ Review the current state and output your decision.`;
 
     await proc.exited;
 
+    endSpawn(db, spawnEventId, config, "planner", stdout);
     return parsePlanUpdate(stdout, config);
   } catch (e) {
     console.error(`planner spawn failed: ${(e as Error).message}`);
+    endSpawn(db, spawnEventId, config, "planner", "");
     return null;
   }
 }
@@ -382,7 +391,7 @@ Review the current state and output your decision.`;
 async function spawnBigFixer(
   config: Config,
   worktree: string,
-  runResult: { facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
+  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string }; parsed: { missing: boolean; checks?: string } }
 ): Promise<string | null> {
   const roleConfig = config.roles!.bigFixer!;
 
@@ -402,6 +411,8 @@ Fix any issues found. Output HANDOFF when done.`;
   assertSafe(cmd, safetyDeny(config));
 
   const timeoutMs = roleTimeoutMin(config, "bigFixer") * 60 * 1000;
+  const db = openDb();
+  const spawnEventId = beginSpawn(db, runResult.runId, config, "bigFixer", stdin);
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -432,9 +443,11 @@ Fix any issues found. Output HANDOFF when done.`;
 
     await proc.exited;
 
+    endSpawn(db, spawnEventId, config, "bigFixer", stdout);
     return stdout || null;
   } catch (e) {
     console.error(`bigFixer spawn failed: ${(e as Error).message}`);
+    endSpawn(db, spawnEventId, config, "bigFixer", "");
     return null;
   }
 }
@@ -579,6 +592,7 @@ export async function spawnScrutinizeFix(
   assertSafe(cmd, safetyDeny(config));
 
   const timeoutMs = roleTimeoutMin(config, "scrutinizeFix") * 60 * 1000;
+  const spawnEventId = beginSpawn(db, runResult.runId, config, "scrutinizeFix", stdin);
 
   try {
     const proc = Bun.spawn(cmd, {
@@ -609,9 +623,11 @@ export async function spawnScrutinizeFix(
 
     await proc.exited;
 
+    endSpawn(db, spawnEventId, config, "scrutinizeFix", stdout);
     return stdout || null;
   } catch (e) {
     console.error(`scrutinizeFix spawn failed: ${(e as Error).message}`);
+    endSpawn(db, spawnEventId, config, "scrutinizeFix", "");
     return null;
   }
 }

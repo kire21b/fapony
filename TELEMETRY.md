@@ -6,6 +6,9 @@ Off by default. Nothing leaves your machine unless you turn it on.
 
 - **runs**: `id`, `worktree`, `status`, `round`, `created_at`, `updated_at`
 - **events**: `run_id`, `kind` (spawn/commit/route/gate/stalled/...), `ts`
+- **cost**: `run_id`, `spawns`, `bytes_in`, `bytes_out`, `usd_estimate`
+  (allowlisted numbers derived from spawn events — bytes are a proxy for
+  tokens, USD is an estimate from static `pricing` config, never a real charge)
 
 ## What never gets sent
 

@@ -73,6 +73,14 @@ import {
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
+import {
+  testCostAttributionAndBytes,
+  testCostUsdEstimate,
+  testCostPricingNullKeepsBytes,
+  testCostBeginEndRoundTrip,
+  testCostHandoffAndFormat,
+  testCostTelemetryAllowlist,
+} from "./cost.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
@@ -128,5 +136,11 @@ export async function cmdTest(): Promise<void> {
   testStatusTableShowsNothingWhenEmpty();
   testStatusTableShowsPlanAndMemId();
   testStatusTableTruncatesLongMemId();
+  testCostAttributionAndBytes();
+  testCostUsdEstimate();
+  testCostPricingNullKeepsBytes();
+  testCostBeginEndRoundTrip();
+  testCostHandoffAndFormat();
+  testCostTelemetryAllowlist();
   console.log("\nall tests passed ✓");
 }

@@ -9,6 +9,7 @@ import {
   incrementRound,
   addEvent,
   getPendingFeedback,
+  getEvents,
   specMaxLines,
   sourceSpecRE,
   handoffMarker,
@@ -24,6 +25,7 @@ import { closeMemory, claimMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";
 import { checkPlanHygiene } from "./planlint.js";
 import { templateArgs } from "./util.js";
+import { beginSpawn, endSpawn, sumSpawnCost } from "./cost.js";
 
 export interface RunOnceOpts {
   worktreeKey: string;
@@ -173,7 +175,6 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
   const db = openDb();
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
-  addEvent(db, runId, "spawn", { base_sha: baseSha, plan: planPath });
 
   console.error(`run ${runId} started (base ${baseSha.slice(0, shortShaLen(config))})`);
 
@@ -242,6 +243,12 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
   const timeoutMs = config.executor.timeoutMin * 60 * 1000;
 
+  // Cost attribution: one spawn row (role/model/bytes_in now, bytes_out/usd on completion).
+  const spawnEventId = beginSpawn(db, runId, config, "executor", prompt, {
+    base_sha: baseSha,
+    plan: planPath,
+  });
+
   let stdout = "";
   let exitCode = 0;
 
@@ -288,6 +295,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
   // --- TIMEOUT / EXIT CHECK ---
   if (exitCode !== 0) {
+    endSpawn(db, spawnEventId, config, "executor", stdout);
     setStatus(db, runId, "stalled");
     addEvent(db, runId, "stalled", { exit_code: exitCode });
     console.error(`\nfapony: run ${runId} stalled (exit ${exitCode})`);
@@ -304,6 +312,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   }
 
   // --- 6. GIT FACTS + PARSE HANDOFF ---
+  endSpawn(db, spawnEventId, config, "executor", stdout);
   const facts = gitFacts(worktree, baseSha);
   const parsed = parseHandoff(stdout, handoffMarker(config));
 
@@ -357,7 +366,13 @@ export async function cmdRun(args: string[]): Promise<void> {
 
   // Print handoff + next step (CLI-only output, loop handles this differently)
   const config = loadConfig();
-  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config));
+  let cost = undefined;
+  if (result.runId) {
+    const costDb = openDb();
+    cost = sumSpawnCost(getEvents(costDb, result.runId));
+    costDb.close();
+  }
+  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config), cost);
   console.log("\n" + handoff);
 
   console.log("\n--- next step (run manually) ---");

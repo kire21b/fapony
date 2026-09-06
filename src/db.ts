@@ -50,6 +50,10 @@ export interface Config {
     add: string[];
     kickoff?: string[];
   } | null;
+  // Optional static pricing per role (USD per 1k tokens, input/output split).
+  // Omit or null = byte measurement stays on, USD estimate stays off.
+  // Example: { "executor": { "inputPer1k": 0.15, "outputPer1k": 0.6 } }
+  pricing?: Record<string, { inputPer1k: number; outputPer1k: number }> | null;
   // opt-in only — omit or leave null to keep everything local. See TELEMETRY.md
   // for the exact payload shape (KPI numbers + event kind/timestamp, no
   // plan/commit/gate-note content, ever).
@@ -162,6 +166,7 @@ const DEFAULT_CONFIG: Config = {
   },
   memory: null,
   telemetry: null,
+  pricing: null,
   prompts: null,
   spec: null,
   markers: null,
@@ -348,6 +353,27 @@ export function shortShaLen(config?: Config): number {
   return config?.display?.shortSha ?? DEFAULT_SHORT_SHA;
 }
 
+/** Model attribution for a role: roles.<name>.model or "" when unset. */
+export function roleModel(config: Config, role: string): string {
+  return config.roles?.[role]?.model ?? "";
+}
+
+export interface RolePricing {
+  inputPer1k: number;
+  outputPer1k: number;
+}
+
+/**
+ * Static pricing for a role, or null when unconfigured.
+ * pricing:null (or missing role) disables USD only — byte measurement stays on.
+ */
+export function pricingFor(config: Config, role: string): RolePricing | null {
+  const p = config.pricing?.[role];
+  if (!p) return null;
+  if (typeof p.inputPer1k !== "number" || typeof p.outputPer1k !== "number") return null;
+  return { inputPer1k: p.inputPer1k, outputPer1k: p.outputPer1k };
+}
+
 /** Role spawn timeout (minutes): roles.<name>.timeoutMin > defaults.timeoutMin > builtin. */
 export function roleTimeoutMin(config: Config, role: string): number {
   return (
@@ -415,6 +441,36 @@ export function addEvent(
   );
   const result = stmt.run(runId, kind, JSON.stringify(data));
   return Number(result.lastInsertRowid);
+}
+
+/**
+ * Merge `patch` into an existing event's JSON data (keeps keys already set).
+ * Used to complete a spawn row with bytes_out/usd after the agent finishes —
+ * one row per spawn, timing (ts) stays at spawn start. No-op when the row
+ * is missing or its data isn't a JSON object.
+ */
+export function updateEventData(
+  db: Database,
+  eventId: number,
+  patch: Record<string, unknown>
+): void {
+  const row = db
+    .prepare("SELECT data FROM events WHERE id = ?")
+    .get(eventId) as { data: string | null } | null;
+  if (!row) return;
+  let base: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(row.data ?? "null") as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      base = parsed as Record<string, unknown>;
+    }
+  } catch {
+    return;
+  }
+  db.prepare("UPDATE events SET data = ? WHERE id = ?").run(
+    JSON.stringify({ ...base, ...patch }),
+    eventId
+  );
 }
 
 export function getRun(db: Database, runId: number): Run | null {
