@@ -7,7 +7,7 @@
 // When autoLoop: true + roles.gate exists:
 //   Loop spawns gate agent automatically instead of waiting for human.
 
-import { loadConfig, getRun, addEvent, type Config } from "../db/index.js";
+import { loadConfig, openDb, getRun, addEvent, type Config } from "../db/index.js";
 import { runOnce } from "../run.js";
 import { gateOnce } from "../gate.js";
 import { closeMemory, kickoffMemory } from "../memory.js";
@@ -142,20 +142,20 @@ export async function cmdLoop(args: string[]): Promise<void> {
         break;
       }
 
-      addEvent(db, runId, "plan", planUpdate);
+      addEvent(db, runId!, "plan", planUpdate);
 
       if (planUpdate.kind === "file_done") {
         console.log(`\nFILE_DONE: ${planUpdate.text}`);
         if (memId) {
           closeMemory(config, worktree, memId, planUpdate.text);
-          addEvent(db, runId, "memory_claim_closed", { mem_id: memId });
+          addEvent(db, runId!, "memory_claim_closed", { mem_id: memId });
         }
 
         if (afterGate.plan) {
           const archived = autoArchivePlan(worktree, afterGate.plan, config);
           if (archived.ok) {
             console.log(`archived: .fapony/plan/done/${afterGate.plan.split("/").pop()}`);
-            addEvent(db, runId, "plan_archived", { plan: afterGate.plan });
+            addEvent(db, runId!, "plan_archived", { plan: afterGate.plan });
           } else {
             console.error(`auto plan-mv skipped: ${archived.error}`);
             console.error(`Check ${worktree} — archive/commit manually if needed (fapony plan-mv <path> if it's still in .fapony/plan/)`);
