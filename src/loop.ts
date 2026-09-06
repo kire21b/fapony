@@ -228,7 +228,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
       if (autoLoop && hasGate) {
         const gateResult = await spawnGate(config, worktree, { id: runId, mem_id: memId, worktree: worktreeKey! });
         if (gateResult) {
-          gateOnce(runId, gateResult.verdict, gateResult.note);
+          gateOnce(runId!, gateResult.verdict, gateResult.note);
         }
       }
       continue;

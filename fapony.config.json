@@ -1,7 +1,9 @@
 {
   "worktrees": {
     "vela": "/Users/delamind/Project/innominix/wt-vela",
-    "fapony": "wt-fapony"
+    "fapony": "wt-fapony",
+    "falsify-engine": "/Users/delamind/Project/falsify/engine",
+    "falsify-cloud": "/Users/delamind/Project/innominix/wt-falsify/apps/falsify"
   },
   "roles": {
     "executor":  { "cmd": ["opencode", "run", "--model", "{model}"], "model": "mimo", "timeoutMin": 45 },

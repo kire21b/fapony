@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join, dirname, relative, resolve } from "node:path";
 import {
   shippedRE as shippedREFromConfig,
@@ -84,8 +84,9 @@ export function planMv(
   const doneFrag = `/${doneName}/`;
 
   try {
-    const output = execSync(
-      ["grep", "-rln", "--", fileName, ...scanDirs],
+    const output = execFileSync(
+      "grep",
+      ["-rln", "--", fileName, ...scanDirs],
       { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
     if (output) {
@@ -107,7 +108,7 @@ export function planMv(
     }
 
     const dest = join(doneDir, destName);
-    execSync(`git mv "${filePath}" "${dest}"`, {
+    execFileSync("git", ["mv", filePath, dest], {
       cwd: repoRoot,
       stdio: ["pipe", "pipe", "pipe"],
     });
