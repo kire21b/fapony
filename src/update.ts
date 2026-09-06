@@ -6,6 +6,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { isAffirmative } from "./util.js";
 
 const ROOT = import.meta.dir;
 
@@ -14,6 +15,7 @@ function git(args: string): string {
     encoding: "utf-8",
     cwd: ROOT,
     stdio: ["pipe", "pipe", "pipe"],
+    timeout: 15_000,
   }).trim();
 }
 
@@ -34,6 +36,28 @@ function readVersion(): string {
   } catch {
     return "unknown";
   }
+}
+
+/** Split `git status --porcelain` output into non-empty lines. Empty = clean. */
+export function parseDirtyLines(porcelain: string): string[] {
+  return porcelain.split("\n").filter((l) => l.trim() !== "");
+}
+
+/** The indented dirty-file block cmdUpdate prints before asking to proceed. */
+export function formatDirtyBlock(porcelain: string): string {
+  return parseDirtyLines(porcelain)
+    .map((l) => `   ${l}`)
+    .join("\n");
+}
+
+/** Only an affirmative answer proceeds past the dirty-tree warning. */
+export function shouldProceedAfterDirty(answer: string): boolean {
+  return isAffirmative(answer);
+}
+
+/** Same SHA before/after pull = already up to date. */
+export function isUpToDate(oldSha: string, newSha: string): boolean {
+  return oldSha === newSha;
 }
 
 function prompt(question: string, defaultVal?: string): Promise<string> {
@@ -65,19 +89,15 @@ export async function cmdUpdate(): Promise<void> {
 
   // --- check uncommitted changes ---
   const dirty = git("status --porcelain");
-  if (dirty) {
+  if (parseDirtyLines(dirty).length > 0) {
     console.log("⚠  You have uncommitted changes in the fapony repo:\n");
-    console.log(
-      dirty
-        .split("\n")
-        .map((l) => `   ${l}`)
-        .join("\n"),
-    );
+    console.log(formatDirtyBlock(dirty));
     console.log();
-    const proceed = (
-      await prompt("   Stash changes and pull anyway? (y/n)", "n")
-    ).toLowerCase();
-    if (proceed !== "y" && proceed !== "yes") {
+    const proceed = await prompt(
+      "   Stash changes and pull anyway? (y/n)",
+      "n",
+    );
+    if (!shouldProceedAfterDirty(proceed)) {
       console.log("\n  Update cancelled.");
       return;
     }
@@ -128,7 +148,7 @@ export async function cmdUpdate(): Promise<void> {
   }
 
   // --- show what changed ---
-  if (oldSha === newSha) {
+  if (isUpToDate(oldSha, newSha)) {
     console.log(`\n  ✓  Already up to date (${oldVersion} @ ${oldSha}).`);
     return;
   }

@@ -23,7 +23,13 @@ import {
   testCostTelemetryAllowlist,
   testCostUsdEstimate,
 } from "./cost.test.js";
-import { testDbLifecycle, testGetLastPlanUpdate } from "./db.test.js";
+import {
+  testDbLifecycle,
+  testGetLastPlanUpdate,
+  testLegacyDbStampedWithoutDataLoss,
+  testMigrateDbRejectsNewerSchema,
+  testSchemaVersionStamped,
+} from "./db.test.js";
 import {
   testGateOnceAlreadyPassed,
   testGateOnceFail,
@@ -78,24 +84,39 @@ import {
   testSpawnScrutinizeFixRejectsDangerousCmd,
 } from "./scrutinize.test.js";
 import {
+  testBuildSetupConfigNoMemory,
+  testBuildSetupConfigWithMemory,
+  testParseTimeoutMinutes,
+  testShouldOverwriteConfig,
   testSplitCmdEmptyQuotedString,
   testSplitCmdEmptyString,
   testSplitCmdMultipleQuotedArgs,
   testSplitCmdNoQuotes,
   testSplitCmdQuotedArg,
   testSplitCmdSimpleArgs,
+  testValidateWorktreePath,
 } from "./setup.test.js";
 import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
+import {
+  testFormatDirtyBlock,
+  testIsUpToDate,
+  testParseDirtyLines,
+  testShouldProceedAfterDirty,
+} from "./update.test.js";
+import { testIsAffirmative } from "./util.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
   testParseHandoff();
   testDbLifecycle();
+  testSchemaVersionStamped();
+  testLegacyDbStampedWithoutDataLoss();
+  testMigrateDbRejectsNewerSchema();
   testRenderHandoff();
   testParseGateVerdict();
   testParsePlanUpdate();
@@ -157,5 +178,15 @@ export async function cmdTest(): Promise<void> {
   testSplitCmdEmptyString();
   testSplitCmdNoQuotes();
   testSplitCmdEmptyQuotedString();
+  testBuildSetupConfigNoMemory();
+  testBuildSetupConfigWithMemory();
+  testValidateWorktreePath();
+  testShouldOverwriteConfig();
+  testParseTimeoutMinutes();
+  testIsAffirmative();
+  testParseDirtyLines();
+  testFormatDirtyBlock();
+  testShouldProceedAfterDirty();
+  testIsUpToDate();
   console.log("\nall tests passed ✓");
 }
