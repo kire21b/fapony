@@ -6,7 +6,7 @@ import {
   nextPromptMarker,
   fileDoneMarker,
   type Config,
-} from "./db.js";
+} from "./db/index.js";
 
 export interface GateVerdict {
   verdict: "pass" | "fail";

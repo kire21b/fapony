@@ -8,7 +8,7 @@ import {
   inboundWarnAt,
   loadConfig,
   type Config,
-} from "./db.js";
+} from "./db/index.js";
 
 export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;

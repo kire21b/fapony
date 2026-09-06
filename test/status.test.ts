@@ -2,7 +2,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import assert from "node:assert";
-import { openDb, newRun } from "../src/db.js";
+import { openDb, newRun } from "../src/db/index.js";
 import { renderStatusTable } from "../src/status.js";
 
 function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {

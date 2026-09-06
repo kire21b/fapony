@@ -1,4 +1,4 @@
-import { openDb, getRun, setStatus, addEvent, loadConfig } from "./db.js";
+import { openDb, getRun, setStatus, addEvent, loadConfig } from "./db/index.js";
 import { closeMemory } from "./memory.js";
 
 export async function cmdStop(args: string[]): Promise<void> {

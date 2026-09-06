@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import assert from "node:assert";
-import type { Config } from "../src/db.js";
+import type { Config } from "../src/db/index.js";
 import {
   shouldScrutinizeFix,
   buildScrutinizePrompt,

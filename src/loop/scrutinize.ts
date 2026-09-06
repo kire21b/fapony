@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { promptFileFor, type Config } from "../db.js";
+import { promptFileFor, type Config } from "../db/index.js";
 
 /**
  * Routing predicate for the scrutinize-fix lane — the small-diff mirror of

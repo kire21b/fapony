@@ -15,7 +15,7 @@ import {
   roleModel,
   type Config,
   type Event,
-} from "./db.js";
+} from "./db/index.js";
 
 /** Proxy: bytes per token. Fixed for slice 1 — no per-role override (see PLAN-cost-routing §ไม่ทำ). */
 export const BYTES_PER_TOKEN = 4;

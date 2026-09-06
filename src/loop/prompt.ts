@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { promptFileFor, type Config } from "../db.js";
+import { promptFileFor, type Config } from "../db/index.js";
 import { fillPrompt } from "../util.js";
 
 /**

@@ -1,4 +1,4 @@
-import { openDb, loadConfig, type Run, type Event } from "./db.js";
+import { openDb, loadConfig, type Run, type Event } from "./db/index.js";
 import { sumSpawnCost } from "./cost.js";
 
 // Exact payload shape sent when `fapony telemetry send` runs — see TELEMETRY.md.

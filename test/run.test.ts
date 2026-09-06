@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { buildExecutorPrompt, executorCmd } from "../src/run.js";
-import { loadConfig, type Config } from "../src/db.js";
+import { loadConfig, type Config } from "../src/db/index.js";
 
 export function testBuildExecutorPrompt(): void {
   const template = "PLAN={{PLAN}}\nMEM={{MEM_ID}}\nSPEC={{SPEC}}\nFB={{FEEDBACK}}";

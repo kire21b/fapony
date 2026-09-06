@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { openDb, getActiveRuns, getEvents } from "./db.js";
+import { openDb, getActiveRuns, getEvents } from "./db/index.js";
 
 /** Table of active runs — plan + mem_id shown so you don't have to open the
  * plan file or dig through .fapony/.memory/ to know what a run maps to. */

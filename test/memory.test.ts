@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import assert from "node:assert";
 import { resolveMemoryConfig, DEFAULT_MEMORY } from "../src/memory.js";
-import type { Config } from "../src/db.js";
+import type { Config } from "../src/db/index.js";
 
 const BASE_CONFIG: Config = {
   worktrees: { test: "/tmp/test" },

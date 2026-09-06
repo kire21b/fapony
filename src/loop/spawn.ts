@@ -1,6 +1,6 @@
 // src/loop/spawn.ts — generic agent spawn + role-specific wrappers for gate/planner/bigFixer/scrutinizeFix.
 
-import { openDb, getRun, roleTimeoutMin, safetyDeny, handoffMarker, type Config } from "../db.js";
+import { openDb, getRun, roleTimeoutMin, safetyDeny, handoffMarker, type Config } from "../db/index.js";
 import { renderRolePrompt } from "./prompt.js";
 import { buildScrutinizePrompt, resolveChangedFiles } from "./scrutinize.js";
 import { templateArgs } from "../util.js";

@@ -19,7 +19,7 @@ import {
   promptFileFor,
   type Config,
   type RunStatus,
-} from "./db.js";
+} from "./db/index.js";
 import { gitFacts, parseHandoff, renderHandoff, type GitFacts, type ParsedHandoff } from "./handoff.js";
 import { closeMemory, claimMemory } from "./memory.js";
 import { assertSafe } from "./safety.js";

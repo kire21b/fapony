@@ -4,7 +4,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { memoryEntry, safetyDeny, DEFAULT_MEMORY_ENTRY, type Config } from "./db.js";
+import { memoryEntry, safetyDeny, DEFAULT_MEMORY_ENTRY, type Config } from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 

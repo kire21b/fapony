@@ -7,7 +7,7 @@
 // When autoLoop: true + roles.gate exists:
 //   Loop spawns gate agent automatically instead of waiting for human.
 
-import { loadConfig, getRun, addEvent, type Config } from "../db.js";
+import { loadConfig, getRun, addEvent, type Config } from "../db/index.js";
 import { runOnce } from "../run.js";
 import { gateOnce } from "../gate.js";
 import { closeMemory, kickoffMemory } from "../memory.js";

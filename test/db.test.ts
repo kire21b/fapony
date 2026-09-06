@@ -9,7 +9,7 @@ import {
   addEvent,
   getRun,
   getLastPlanUpdate,
-} from "../src/db.js";
+} from "../src/db/index.js";
 
 function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
   const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));

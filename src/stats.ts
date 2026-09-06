@@ -1,4 +1,4 @@
-import { openDb, type Run, type Event } from "./db.js";
+import { openDb, type Run, type Event } from "./db/index.js";
 import { sumSpawnCost } from "./cost.js";
 
 function minutesBetween(a: string, b: string): number {

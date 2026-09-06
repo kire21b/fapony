@@ -1,4 +1,4 @@
-// barrel — re-export ทุกอย่างจาก db/* ให้ import เดิมจาก "./db.js" ใช้ได้
+// barrel — re-export ทุกอย่างจาก db/* ให้ import เดิมจาก "./db/index.js" ใช้ได้
 export * from "./types.js";
 export * from "./defaults.js";
 export * from "./load.js";

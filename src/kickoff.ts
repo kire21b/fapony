@@ -3,7 +3,7 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, planDir, planExtensions, shippedRE, handoffMarker } from "./db.js";
+import { loadConfig, planDir, planExtensions, shippedRE, handoffMarker } from "./db/index.js";
 import { runOnce } from "./run.js";
 import { renderHandoff } from "./handoff.js";
 

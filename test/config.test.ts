@@ -24,7 +24,7 @@ import {
   promptFileFor,
   DEFAULT_SPEC_MAX_LINES,
   type Config,
-} from "../src/db.js";
+} from "../src/db/index.js";
 import { assertSafe } from "../src/safety.js";
 import { templateArgs, fillPrompt } from "../src/util.js";
 import { parseHandoff } from "../src/handoff.js";

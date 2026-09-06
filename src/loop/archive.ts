@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { shippedRE, archiveMsg, type Config } from "../db.js";
+import { shippedRE, archiveMsg, type Config } from "../db/index.js";
 import { planMv, type PlanMvResult } from "../planmv.js";
 
 /**

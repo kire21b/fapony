@@ -9,7 +9,7 @@ import {
   formatCost,
   BYTES_PER_TOKEN,
 } from "../src/cost.js";
-import { pricingFor, roleModel, loadConfig, openDb, newRun, getEvents, type Config } from "../src/db.js";
+import { pricingFor, roleModel, loadConfig, openDb, newRun, getEvents, type Config } from "../src/db/index.js";
 import { renderHandoff } from "../src/handoff.js";
 
 function baseConfig(): Config {

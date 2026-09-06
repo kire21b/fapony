@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { copyDir } from "./init-mem.js";
-import { planDir, specDir, memoryEntry, type Config } from "./db.js";
+import { planDir, specDir, memoryEntry, type Config } from "./db/index.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # Plans live in .fapony/plan/, specs in .fapony/spec/, memory in .fapony/.memory/.

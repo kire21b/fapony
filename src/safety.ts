@@ -4,7 +4,7 @@
 // Patterns come from config.safety.deny (regex sources); built-in default
 // covers the 4 known-destructive git invocations.
 
-import { DEFAULT_SAFETY_DENY } from "./db.js";
+import { DEFAULT_SAFETY_DENY } from "./db/index.js";
 
 export function assertSafe(argv: string[], denySources?: string[]): void {
   const sources = denySources ?? DEFAULT_SAFETY_DENY;

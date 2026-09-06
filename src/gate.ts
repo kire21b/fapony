@@ -5,7 +5,7 @@ import {
   incrementRound,
   addEvent,
   loadConfig,
-} from "./db.js";
+} from "./db/index.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
 
 export interface GateResult {

@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { openDb, getRun, getEvents, handoffMarker, type Run } from "./db.js";
+import { openDb, getRun, getEvents, handoffMarker, type Run } from "./db/index.js";
 import { sumSpawnCost, formatCost, type RunCost } from "./cost.js";
 
 export interface GitFacts {
