@@ -12,6 +12,7 @@
 import { execSync } from "node:child_process";
 import {
   addEvent,
+  getActiveRuns,
   handoffMarker,
   loadConfig,
   newRun,
@@ -65,6 +66,21 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     };
   }
 
+  const db = openDb();
+
+  // --- 1b. CONCURRENCY GUARD: reject if another run is already active on this worktree ---
+  const clash = getActiveRuns(db).find((r) => r.worktree === worktreeKey);
+  if (clash) {
+    return {
+      runId: 0,
+      status: "stopped",
+      facts: { files: 0, lines: 0, commits: [], branch: "" },
+      parsed: { missing: true },
+      isBig: false,
+      error: `worktree "${worktreeKey}" already has an active run (id ${clash.id}, status ${clash.status}) — two executors on the same tree will race. Run \`fapony stop ${clash.id}\` first if it's stale.`,
+    };
+  }
+
   // --- 2. BASE SHA + INSERT RUN ---
   const baseSha = execSync("git rev-parse HEAD", {
     cwd: worktree,
@@ -72,7 +88,6 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     stdio: ["pipe", "pipe", "pipe"],
   }).trim();
 
-  const db = openDb();
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
 
   console.error(
