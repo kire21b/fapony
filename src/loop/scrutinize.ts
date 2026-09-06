@@ -36,6 +36,7 @@ export function resolveChangedFiles(
         cwd: worktree,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
+        timeout: 15_000,
       }).trim() || "(none)"
     );
   } catch {

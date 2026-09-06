@@ -31,6 +31,7 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
     const match = stat.match(/(\d+) files? changed/);
     files = match ? parseInt(match[1], 10) : 0;
@@ -44,6 +45,7 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
     commits = log
       .trim()
@@ -57,6 +59,7 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     }).trim();
   } catch {}
 

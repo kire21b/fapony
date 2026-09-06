@@ -31,6 +31,7 @@ export function autoArchivePlan(
       hash = execSync("git rev-parse --short HEAD", {
         cwd: worktree,
         encoding: "utf-8",
+        timeout: 15_000,
       }).trim();
       writeFileSync(
         filePath,
@@ -58,6 +59,7 @@ export function autoArchivePlan(
     execSync(`git commit -m "${msg.replace(/"/g, "'")}"`, {
       cwd: worktree,
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
   } catch (e) {
     return {

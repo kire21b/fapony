@@ -86,6 +86,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     cwd: worktree,
     encoding: "utf-8",
     stdio: ["pipe", "pipe", "pipe"],
+    timeout: 15_000,
   }).trim();
 
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
