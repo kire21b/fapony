@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { openDb, getActiveRuns, getEvents } from "./db/index.js";
+import { getActiveRuns, getEvents, openDb } from "./db/index.js";
 
 /** Table of active runs — plan + mem_id shown so you don't have to open the
  * plan file or dig through .fapony/.memory/ to know what a run maps to. */
@@ -17,7 +17,7 @@ export function renderStatusTable(db: Database): string {
     const events = getEvents(db, run.id);
     const hasCommit = events.some((e) => e.kind === "commit");
     const hasMemoryEvent = events.some(
-      (e) => e.kind === "memory_claim" || e.kind === "memory_claim_failed"
+      (e) => e.kind === "memory_claim" || e.kind === "memory_claim_failed",
     );
     const warn =
       hasCommit && !hasMemoryEvent ? " ⚠ commit but no memory event" : "";
@@ -26,7 +26,7 @@ export function renderStatusTable(db: Database): string {
     const memId = (run.mem_id ?? "-").padEnd(10).slice(0, 10);
 
     lines.push(
-      `  ${String(run.id).padStart(3)} | ${run.status.padEnd(15)} | ${String(run.round).padStart(5)} | ${run.worktree.padEnd(8)} | ${plan} | ${memId} | ${run.updated_at}${warn}`
+      `  ${String(run.id).padStart(3)} | ${run.status.padEnd(15)} | ${String(run.round).padStart(5)} | ${run.worktree.padEnd(8)} | ${plan} | ${memId} | ${run.updated_at}${warn}`,
     );
   }
 

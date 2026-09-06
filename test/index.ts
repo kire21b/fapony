@@ -1,86 +1,87 @@
 // test/index.ts — test runner. Import all test modules and run sequentially.
-import { testAssertSafe } from "./safety.test.js";
-import { testParseHandoff, testRenderHandoff } from "./handoff.test.js";
-import { testDbLifecycle, testGetLastPlanUpdate } from "./db.test.js";
+
 import {
-  testParseGateVerdict,
-  testParsePlanUpdate,
-  testFixtureGuard,
-} from "./parse.test.js";
-import {
-  testGateOncePass,
-  testGateOnceFail,
-  testGateOnceAlreadyPassed,
-  testGateOnceMaxRounds,
-} from "./gate.test.js";
-import {
-  testPlanMvNoHeader,
-  testPlanMvWithHeader,
-  testPlanMvNormalizeLinks,
-  testPlanMvDryRun,
-  testPlanMvAlreadyDatedNotDoublePrefixed,
-} from "./planmv.test.js";
-import {
-  testInitCreatesDirectories,
-  testInitIdempotent,
-  testInitNoArgs,
-} from "./init.test.js";
-import {
-  testKickoffSinglePending,
-  testKickoffShippedFiltered,
-  testKickoffMultiplePending,
-  testKickoffNoPending,
-} from "./kickoff.test.js";
-import {
-  testMemoryDefaultWiringWithFile,
-  testMemoryDefaultWiringNoFile,
-  testMemoryExplicitConfigWins,
-} from "./memory.test.js";
-import {
-  testShouldScrutinizeFix,
-  testBuildScrutinizePrompt,
-  testResolveChangedFiles,
-  testSpawnScrutinizeFix,
-  testSpawnScrutinizeFixRejectsDangerousCmd,
-} from "./scrutinize.test.js";
-import {
-  testAutoArchivePlanSynthesizesHeader,
   testAutoArchivePlanKeepsExistingHeader,
-  testAutoArchivePlanNormalizesLinks,
   testAutoArchivePlanMissingFile,
+  testAutoArchivePlanNormalizesLinks,
+  testAutoArchivePlanSynthesizesHeader,
 } from "./archive.test.js";
 import {
   testConfigDefaults,
   testConfigFileOverrides,
   testCustomMarkersParse,
   testCustomSafetyDeny,
-  testTemplateArgsReplaceAll,
   testRenderRolePrompt,
   testSourceAndShippedRE,
+  testTemplateArgsReplaceAll,
 } from "./config.test.js";
+import {
+  testCostAttributionAndBytes,
+  testCostBeginEndRoundTrip,
+  testCostHandoffAndFormat,
+  testCostPricingNullKeepsBytes,
+  testCostTelemetryAllowlist,
+  testCostUsdEstimate,
+} from "./cost.test.js";
+import { testDbLifecycle, testGetLastPlanUpdate } from "./db.test.js";
+import {
+  testGateOnceAlreadyPassed,
+  testGateOnceFail,
+  testGateOnceMaxRounds,
+  testGateOncePass,
+} from "./gate.test.js";
+import { testParseHandoff, testRenderHandoff } from "./handoff.test.js";
+import {
+  testInitCreatesDirectories,
+  testInitIdempotent,
+  testInitNoArgs,
+} from "./init.test.js";
+import {
+  testKickoffMultiplePending,
+  testKickoffNoPending,
+  testKickoffShippedFiltered,
+  testKickoffSinglePending,
+} from "./kickoff.test.js";
+import {
+  testMemoryDefaultWiringNoFile,
+  testMemoryDefaultWiringWithFile,
+  testMemoryExplicitConfigWins,
+} from "./memory.test.js";
+import {
+  testFixtureGuard,
+  testParseGateVerdict,
+  testParsePlanUpdate,
+} from "./parse.test.js";
+import {
+  testPlanHygieneNoSpecNoLeakWarning,
+  testPlanHygieneOk,
+  testPlanHygieneSpecLeak,
+  testPlanHygieneTooLong,
+} from "./planlint.test.js";
+import {
+  testPlanMvAlreadyDatedNotDoublePrefixed,
+  testPlanMvDryRun,
+  testPlanMvNoHeader,
+  testPlanMvNormalizeLinks,
+  testPlanMvWithHeader,
+} from "./planmv.test.js";
 import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
 } from "./run.test.js";
+import { testAssertSafe } from "./safety.test.js";
 import {
-  testPlanHygieneOk,
-  testPlanHygieneTooLong,
-  testPlanHygieneSpecLeak,
-  testPlanHygieneNoSpecNoLeakWarning,
-} from "./planlint.test.js";
+  testBuildScrutinizePrompt,
+  testResolveChangedFiles,
+  testShouldScrutinizeFix,
+  testSpawnScrutinizeFix,
+  testSpawnScrutinizeFixRejectsDangerousCmd,
+} from "./scrutinize.test.js";
 import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
-import {
-  testCostAttributionAndBytes,
-  testCostUsdEstimate,
-  testCostPricingNullKeepsBytes,
-  testCostBeginEndRoundTrip,
-  testCostHandoffAndFormat,
-  testCostTelemetryAllowlist,
-} from "./cost.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");

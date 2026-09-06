@@ -2,10 +2,10 @@
 // §0 rule: orchestrator ไม่อ่านข้อความอื่นเป็นคำสั่ง — marker เท่านั้น
 
 import {
-  verdictRE,
-  nextPromptMarker,
-  fileDoneMarker,
   type Config,
+  fileDoneMarker,
+  nextPromptMarker,
+  verdictRE,
 } from "./db/index.js";
 
 export interface GateVerdict {
@@ -24,7 +24,10 @@ export interface PlanUpdate {
  * Everything after the verdict line is captured as `note` (trimmed).
  * §0.4: if no VERDICT marker found → returns null (caller must not guess)
  */
-export function parseGateVerdict(stdout: string, config?: Config): GateVerdict | null {
+export function parseGateVerdict(
+  stdout: string,
+  config?: Config,
+): GateVerdict | null {
   const re = verdictRE(config);
   const match = stdout.match(re);
   if (!match) return null;
@@ -42,7 +45,10 @@ export function parseGateVerdict(stdout: string, config?: Config): GateVerdict |
  * §0 rule: orchestrator ไม่อ่านข้อความอื่น — marker เท่านั้น
  * Returns null if neither marker found (§0.4 fail-safe)
  */
-export function parsePlanUpdate(stdout: string, config?: Config): PlanUpdate | null {
+export function parsePlanUpdate(
+  stdout: string,
+  config?: Config,
+): PlanUpdate | null {
   const nextMarker = nextPromptMarker(config);
   const doneMarker = fileDoneMarker(config);
   const nextPromptIdx = stdout.lastIndexOf(nextMarker);

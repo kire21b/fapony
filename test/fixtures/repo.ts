@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export interface TestRepo {
   dir: string;
@@ -17,7 +17,10 @@ export function createTestRepo(): TestRepo {
   const dir = mkdtempSync(join(tmpdir(), "fapony-repo-"));
 
   execSync("git init", { cwd: dir, stdio: "ignore" });
-  execSync("git config user.email 'test@test.com'", { cwd: dir, stdio: "ignore" });
+  execSync("git config user.email 'test@test.com'", {
+    cwd: dir,
+    stdio: "ignore",
+  });
   execSync("git config user.name 'Test'", { cwd: dir, stdio: "ignore" });
 
   writeFileSync(join(dir, "README.md"), "# test repo\n");

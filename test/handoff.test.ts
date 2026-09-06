@@ -42,9 +42,14 @@ not_done: none
 }
 
 export function testRenderHandoff(): void {
-  const facts = { files: 3, lines: 120, commits: ["a1b2", "c3d4"], branch: "main" };
+  const facts = {
+    files: 3,
+    lines: 120,
+    commits: ["a1b2", "c3d4"],
+    branch: "main",
+  };
   const parsed = parseHandoff(
-    "## HANDOFF\nclaimed: x\ncommits: a1b2 c3d4\nchecks: ok\nuncertain: maybe\nnot_done: none"
+    "## HANDOFF\nclaimed: x\ncommits: a1b2 c3d4\nchecks: ok\nuncertain: maybe\nnot_done: none",
   );
   const output = renderHandoff(facts, parsed);
   assert(output.includes("files changed: 3"));

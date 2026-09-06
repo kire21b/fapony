@@ -1,7 +1,13 @@
-import { join } from "node:path";
-import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync } from "node:fs";
-import { execSync } from "node:child_process";
 import assert from "node:assert";
+import { execSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
 import { autoArchivePlan } from "../src/loop/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
 
@@ -36,10 +42,19 @@ export function testAutoArchivePlanSynthesizesHeader(): void {
 
     const moved = archivedFile(repo.dir);
     assert(existsSync(moved), "plan should be moved to .fapony/plan/done/");
-    assert(/^>\s*✅\s*\*\*.*shipped.*\*\*/.test(readFileSync(moved, "utf-8")), "should synthesize shipped header");
+    assert(
+      /^>\s*✅\s*\*\*.*shipped.*\*\*/.test(readFileSync(moved, "utf-8")),
+      "should synthesize shipped header",
+    );
 
-    const log = execSync("git log --oneline", { cwd: repo.dir, encoding: "utf-8" });
-    assert(log.includes("chore(plan): archive PLAN-test.md"), "should commit the archive itself");
+    const log = execSync("git log --oneline", {
+      cwd: repo.dir,
+      encoding: "utf-8",
+    });
+    assert(
+      log.includes("chore(plan): archive PLAN-test.md"),
+      "should commit the archive itself",
+    );
   } finally {
     repo.cleanup();
   }
@@ -59,9 +74,12 @@ export function testAutoArchivePlanKeepsExistingHeader(): void {
     assert.equal(
       (moved.match(/shipped/g) || []).length,
       1,
-      "should not double-insert a header when one already exists"
+      "should not double-insert a header when one already exists",
     );
-    assert(moved.includes("(deadbee)"), "should keep the original hash, not overwrite it");
+    assert(
+      moved.includes("(deadbee)"),
+      "should keep the original hash, not overwrite it",
+    );
   } finally {
     repo.cleanup();
   }
@@ -76,10 +94,16 @@ export function testAutoArchivePlanNormalizesLinks(): void {
 
     const result = autoArchivePlan(repo.dir, ".fapony/plan/PLAN-test.md");
     assert.equal(result.ok, true, `should archive: ${result.error}`);
-    assert(result.normalizedLinks! >= 1, "should pass through planMv's link normalization, not swallow it");
+    assert(
+      result.normalizedLinks! >= 1,
+      "should pass through planMv's link normalization, not swallow it",
+    );
 
     const moved = readFileSync(archivedFile(repo.dir), "utf-8");
-    assert(moved.includes("](../spec/foo.md)"), "link should be rewritten for its new depth under .fapony/plan/done/");
+    assert(
+      moved.includes("](../spec/foo.md)"),
+      "link should be rewritten for its new depth under .fapony/plan/done/",
+    );
   } finally {
     repo.cleanup();
   }
@@ -92,7 +116,10 @@ export function testAutoArchivePlanMissingFile(): void {
   try {
     const result = autoArchivePlan(repo.dir, ".fapony/plan/does-not-exist.md");
     assert.equal(result.ok, false, "missing plan file should fail, not throw");
-    assert(result.error!.includes("shipped header"), `error should explain the failure: ${result.error}`);
+    assert(
+      result.error?.includes("shipped header"),
+      `error should explain the failure: ${result.error}`,
+    );
   } finally {
     repo.cleanup();
   }

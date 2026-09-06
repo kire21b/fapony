@@ -1,9 +1,9 @@
 // selectors.ts — derive open/claimed/stale views from the append-only log
 
 import type {
-  LogRow,
-  CloseRow,
   ClaimRow,
+  CloseRow,
+  LogRow,
   ReleaseRow,
   WorkRow,
 } from "./store.js";
@@ -132,7 +132,8 @@ export const rotateKeep = (all: LogRow[]): LogRow[] => {
   const keepClaims = [...claims.values()].filter((c) => openIds.has(c.ref));
 
   const syncedAt: Record<string, number> = {};
-  for (const r of all) if (r.kind === "synced") syncedAt[r.spec] = Date.parse(r.ts);
+  for (const r of all)
+    if (r.kind === "synced") syncedAt[r.spec] = Date.parse(r.ts);
   const keepDecisionNote = open.filter(
     (r) =>
       (r.kind === "decision" || r.kind === "note") &&

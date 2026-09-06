@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import assert from "node:assert";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SHIPPED_RE } from "../src/planmv.js";
 
 // We can't easily test cmdKickoff (it calls runOnce which needs git + executor),
@@ -29,7 +29,10 @@ export function testKickoffSinglePending(): void {
   try {
     const planDir = join(dir, ".fapony", "plan");
     mkdirSync(planDir, { recursive: true });
-    writeFileSync(join(planDir, "PLAN-alpha.md"), "# Plan Alpha\n\nDo stuff.\n");
+    writeFileSync(
+      join(planDir, "PLAN-alpha.md"),
+      "# Plan Alpha\n\nDo stuff.\n",
+    );
 
     const pending = getPendingPlans(planDir);
     assert.deepEqual(pending, ["PLAN-alpha.md"]);
@@ -47,7 +50,7 @@ export function testKickoffShippedFiltered(): void {
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
       join(planDir, "PLAN-done.md"),
-      "> ✅ **shipped** (abc123)\n\n# Done Plan\n"
+      "> ✅ **shipped** (abc123)\n\n# Done Plan\n",
     );
     writeFileSync(join(planDir, "PLAN-active.md"), "# Active Plan\n\nWIP.\n");
 
@@ -84,7 +87,7 @@ export function testKickoffNoPending(): void {
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
       join(planDir, "PLAN-done.md"),
-      "> ✅ **shipped** (abc123)\n\n# Done.\n"
+      "> ✅ **shipped** (abc123)\n\n# Done.\n",
     );
 
     const pending = getPendingPlans(planDir);

@@ -11,17 +11,16 @@
 
 import { execSync } from "node:child_process";
 import {
-  openDb,
+  addEvent,
+  handoffMarker,
   loadConfig,
   newRun,
+  openDb,
   setStatus,
-  addEvent,
   shortShaLen,
-  handoffMarker,
-  type RunStatus,
 } from "../db/index.js";
 import { gitFacts, parseHandoff } from "../handoff.js";
-import { closeMemory, claimMemory } from "../memory.js";
+import { claimMemory, closeMemory } from "../memory.js";
 import { gitGuard } from "./guard.js";
 import { resolvePlan } from "./plan.js";
 import { spawnExecutor } from "./spawn.js";
@@ -32,7 +31,13 @@ import type { RunOnceOpts, RunOnceResult } from "./types.js";
  * CLI wrapper (cmdRun) is responsible for exit codes.
  */
 export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
-  const { worktreeKey, planPath, planContent: planContentOverride, memId, allowDirty } = opts;
+  const {
+    worktreeKey,
+    planPath,
+    planContent: planContentOverride,
+    memId,
+    allowDirty,
+  } = opts;
   const config = loadConfig();
   const worktree = config.worktrees[worktreeKey];
 
@@ -70,7 +75,9 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const db = openDb();
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
 
-  console.error(`run ${runId} started (base ${baseSha.slice(0, shortShaLen(config))})`);
+  console.error(
+    `run ${runId} started (base ${baseSha.slice(0, shortShaLen(config))})`,
+  );
 
   // --- 3. MEMORY CLAIM (optional) ---
   if (memId) {
@@ -80,7 +87,9 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
         addEvent(db, runId, "memory_claim", { mem_id: memId });
         console.error(`memory claimed: ${memId}`);
       } else {
-        console.error(`memory skipped (disabled or no .fapony/.memory/mem.ts): ${memId}`);
+        console.error(
+          `memory skipped (disabled or no .fapony/.memory/mem.ts): ${memId}`,
+        );
       }
     } catch (e) {
       console.error(`memory claim failed (non-fatal): ${(e as Error).message}`);
@@ -92,7 +101,12 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   }
 
   // --- 4. RESOLVE PLAN + SPEC ---
-  const { planContent, specContent } = resolvePlan(worktree, planPath, planContentOverride, config);
+  const { planContent, specContent } = resolvePlan(
+    worktree,
+    planPath,
+    planContentOverride,
+    config,
+  );
 
   // --- 5. SPAWN EXECUTOR ---
   const { stdout, exitCode } = await spawnExecutor({
@@ -137,7 +151,11 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     facts.files > config.review.bigDiff.files ||
     facts.lines > config.review.bigDiff.lines;
 
-  addEvent(db, runId, "route", { big: isBig, files: facts.files, lines: facts.lines });
+  addEvent(db, runId, "route", {
+    big: isBig,
+    files: facts.files,
+    lines: facts.lines,
+  });
   setStatus(db, runId, "awaiting_review");
 
   return { runId, status: "awaiting_review", facts, parsed, isBig };

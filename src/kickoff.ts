@@ -3,9 +3,15 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, planDir, planExtensions, shippedRE, handoffMarker } from "./db/index.js";
-import { runOnce } from "./run/index.js";
+import {
+  handoffMarker,
+  loadConfig,
+  planDir,
+  planExtensions,
+  shippedRE,
+} from "./db/index.js";
 import { renderHandoff } from "./handoff.js";
+import { runOnce } from "./run/index.js";
 
 export async function cmdKickoff(args: string[]): Promise<void> {
   const worktreeKey = args[0];
@@ -27,11 +33,12 @@ export async function cmdKickoff(args: string[]): Promise<void> {
   const exts = planExtensions(config);
   const shipped = shippedRE(config);
   const planDirAbs = join(worktree, planDirRel);
-  let pending: string[] = [];
+  const pending: string[] = [];
   try {
     const entries = readdirSync(planDirAbs, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isFile() || !exts.some((e) => entry.name.endsWith(e))) continue;
+      if (!entry.isFile() || !exts.some((e) => entry.name.endsWith(e)))
+        continue;
       if (entry.name === "done") continue; // skip <planDir>/done/ subdir
       const content = readFileSync(join(planDirAbs, entry.name), "utf-8");
       if (!shipped.test(content)) {
@@ -39,7 +46,9 @@ export async function cmdKickoff(args: string[]): Promise<void> {
       }
     }
   } catch {
-    console.error(`${planDirRel}/ not found in ${worktree} — run fapony init first?`);
+    console.error(
+      `${planDirRel}/ not found in ${worktree} — run fapony init first?`,
+    );
     process.exit(1);
   }
 
@@ -53,7 +62,9 @@ export async function cmdKickoff(args: string[]): Promise<void> {
     for (const name of pending) {
       console.error(`  ${planDirRel}/${name}`);
     }
-    console.error(`\nPick one and run: fapony run <key> --plan ${planDirRel}/<name>`);
+    console.error(
+      `\nPick one and run: fapony run <key> --plan ${planDirRel}/<name>`,
+    );
     process.exit(1);
   }
 
@@ -74,13 +85,17 @@ export async function cmdKickoff(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const handoff = renderHandoff(result.facts, result.parsed, handoffMarker(config));
-  console.log("\n" + handoff);
+  const handoff = renderHandoff(
+    result.facts,
+    result.parsed,
+    handoffMarker(config),
+  );
+  console.log(`\n${handoff}`);
 
   console.log("\n--- next step (run manually) ---");
   const gate = config.review.gate.join(" ");
   console.log(
-    `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`
+    `Route: ${result.isBig ? "big" : "small"} diff (${result.facts.files} files, ${result.facts.lines} lines)`,
   );
   console.log(`Run review: ${gate}`);
   console.log(`After review: fapony status`);

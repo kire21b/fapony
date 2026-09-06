@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { specMaxLines, type Config } from "../db/index.js";
+import { type Config, specMaxLines } from "../db/index.js";
 import { checkPlanHygiene } from "../planlint.js";
 import { parseSourceSpec, readSpec } from "./spec.js";
 
@@ -23,7 +23,7 @@ export function resolvePlan(
   worktree: string,
   planPath: string | null,
   planContentOverride: string | null,
-  config: Config
+  config: Config,
 ): PlanResult {
   let planContent = planContentOverride;
   if (!planContent && planPath) {

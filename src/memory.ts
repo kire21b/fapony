@@ -1,10 +1,15 @@
 // src/memory.ts — shell adapter helpers for config.memory.*
 // ponytail: dedupe close-command logic that was copy-pasted in run.ts + stop.ts
 
+import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
-import { memoryEntry, safetyDeny, DEFAULT_MEMORY_ENTRY, type Config } from "./db/index.js";
+import {
+  type Config,
+  DEFAULT_MEMORY_ENTRY,
+  memoryEntry,
+  safetyDeny,
+} from "./db/index.js";
 import { assertSafe } from "./safety.js";
 import { templateArgs } from "./util.js";
 
@@ -24,7 +29,7 @@ export const DEFAULT_MEMORY: Config["memory"] = {
  */
 export function resolveMemoryConfig(
   config: Config,
-  worktree: string
+  worktree: string,
 ): Config["memory"] {
   if (config.memory) return config.memory;
   if (existsSync(join(worktree, memoryEntry(config)))) return DEFAULT_MEMORY;
@@ -35,7 +40,7 @@ export function closeMemory(
   config: Config,
   worktree: string,
   memId: string,
-  msg: string
+  msg: string,
 ): void {
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem) return;
@@ -51,7 +56,7 @@ export function closeMemory(
 export function claimMemory(
   config: Config,
   worktree: string,
-  memId: string
+  memId: string,
 ): boolean {
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem) return false;
@@ -65,10 +70,7 @@ export function claimMemory(
 }
 
 /** Runs memory.kickoff (if configured or default-wired) and returns its stdout, or null if unset/failed. */
-export function kickoffMemory(
-  config: Config,
-  worktree: string
-): string | null {
+export function kickoffMemory(config: Config, worktree: string): string | null {
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem?.kickoff) return null;
   try {

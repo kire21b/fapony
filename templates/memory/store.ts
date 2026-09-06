@@ -1,6 +1,6 @@
 // store.ts — types + config + read/write primitives for the append-only memory log
 
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 // --- types ---
@@ -88,11 +88,18 @@ function put(r: Omit<CloseRow, "ts" | "agent">): void;
 function put(r: Omit<ClaimRow, "ts" | "agent">): void;
 function put(r: Omit<ReleaseRow, "ts" | "agent">): void;
 function put(r: Omit<SyncedRow, "ts" | "agent">): void;
-function put(r: Omit<WorkRow, "ts" | "agent"> | Omit<CloseRow, "ts" | "agent"> | Omit<ClaimRow, "ts" | "agent"> | Omit<ReleaseRow, "ts" | "agent"> | Omit<SyncedRow, "ts" | "agent">) {
+function put(
+  r:
+    | Omit<WorkRow, "ts" | "agent">
+    | Omit<CloseRow, "ts" | "agent">
+    | Omit<ClaimRow, "ts" | "agent">
+    | Omit<ReleaseRow, "ts" | "agent">
+    | Omit<SyncedRow, "ts" | "agent">,
+) {
   mkdirSync(dir, { recursive: true });
   appendFileSync(
     LOG,
-    JSON.stringify({ ts: new Date().toISOString(), agent, ...r }) + "\n",
+    `${JSON.stringify({ ts: new Date().toISOString(), agent, ...r })}\n`,
   );
 }
 
@@ -113,15 +120,15 @@ function nextId(all: LogRow[]): string {
 // เขียนแถวดิบ (ts/agent เดิม ไม่ generate ใหม่) — ใช้ตอน rotate ย้าย row เก่าไปไฟล์ใหม่
 // ปกติเขียน log ต้องผ่าน put() เท่านั้น อันนี้ทางเดียวที่ยกเว้น
 const appendRaw = (path: string, r: LogRow): void =>
-  appendFileSync(path, JSON.stringify(r) + "\n");
+  appendFileSync(path, `${JSON.stringify(r)}\n`);
 
-export { root, app, dir, LOG, agent, KINDS, rows, put, nextId, appendRaw };
 export type {
-  WorkKind,
-  WorkRow,
-  CloseRow,
   ClaimRow,
+  CloseRow,
+  LogRow,
   ReleaseRow,
   SyncedRow,
-  LogRow,
+  WorkKind,
+  WorkRow,
 };
+export { agent, app, appendRaw, dir, KINDS, LOG, nextId, put, root, rows };

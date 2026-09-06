@@ -1,8 +1,8 @@
+import assert from "node:assert";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
-import assert from "node:assert";
-import { openDb, newRun, setStatus, getRun, addEvent } from "../src/db/index.js";
+import { getRun, newRun, openDb, setStatus } from "../src/db/index.js";
 import { gateOnce } from "../src/gate.js";
 
 function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
@@ -34,13 +34,16 @@ export function testGateOncePass(): void {
     assert.equal(result.error, undefined);
 
     const run = getRun(db, runId);
-    assert.equal(run!.status, "passed");
+    assert.equal(run?.status, "passed");
 
     const events = db
       .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
       .all(runId) as { data: string }[];
     assert.equal(events.length, 1);
-    assert.deepEqual(JSON.parse(events[0].data), { verdict: "pass", note: "looks good" });
+    assert.deepEqual(JSON.parse(events[0].data), {
+      verdict: "pass",
+      note: "looks good",
+    });
   });
 
   console.log("  ✓ gateOnce pass");
@@ -56,8 +59,8 @@ export function testGateOnceFail(): void {
     assert.equal(result.round, 1);
 
     const run = getRun(db, runId);
-    assert.equal(run!.status, "fixing");
-    assert.equal(run!.round, 1);
+    assert.equal(run?.status, "fixing");
+    assert.equal(run?.round, 1);
   });
 
   console.log("  ✓ gateOnce fail");
@@ -70,7 +73,7 @@ export function testGateOnceAlreadyPassed(): void {
 
     const result = gateOnce(runId, "pass", "");
     assert.equal(result.status, "passed");
-    assert(result.error!.includes("already"), "should say already passed");
+    assert(result.error?.includes("already"), "should say already passed");
   });
 
   console.log("  ✓ gateOnce already passed");
@@ -95,10 +98,10 @@ export function testGateOnceMaxRounds(): void {
     setStatus(db, runId, "awaiting_review");
     const result = gateOnce(runId, "fail", "round 3");
     assert.equal(result.status, "stopped");
-    assert(result.error!.includes("maxRounds"), "should mention maxRounds");
+    assert(result.error?.includes("maxRounds"), "should mention maxRounds");
 
     // stopped must be persisted (run must not sit in 'fixing' forever)
-    assert.equal(getRun(db, runId)!.status, "stopped");
+    assert.equal(getRun(db, runId)?.status, "stopped");
     const stops = db
       .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'stop'")
       .all(runId) as { data: string }[];

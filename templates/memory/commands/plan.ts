@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 import { openRows } from "../selectors.js";
-import { app, root, rows, put, nextId } from "../store.js";
+import { app, nextId, put, root, rows } from "../store.js";
 
 const SHIPPED = /^>\s*✅/;
 
@@ -245,7 +245,7 @@ export const cmdPlanSweep = (a: string[]) => {
     const n = countPlainTextMentions(f, target);
     if (n) {
       plainTextTotal += n;
-      plainTextFiles.push(f.replace(dir + "/", ""));
+      plainTextFiles.push(f.replace(`${dir}/`, ""));
     }
   }
   if (plainTextTotal > 0) {
@@ -316,7 +316,7 @@ export const cmdPlanCheck = (a: string[]) => {
       const resolved = resolve(dirname(f), pathPart);
       if (!resolved.startsWith(dir)) continue; // only check links within plan/
       if (!existsSync(resolved)) {
-        const rel = f.replace(dir + "/", "");
+        const rel = f.replace(`${dir}/`, "");
         const line = src.slice(0, m.index).split("\n").length;
         issues.push(
           `${rel}:${line} — broken link → ${target} (ไม่มีไฟล์นี้ใน plan/)\n   fix: แก้ path หรือสร้างไฟล์ที่ ref`,

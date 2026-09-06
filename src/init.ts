@@ -5,8 +5,8 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { type Config, memoryEntry, planDir, specDir } from "./db/index.js";
 import { copyDir } from "./init-mem.js";
-import { planDir, specDir, memoryEntry, type Config } from "./db/index.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 # Plans live in .fapony/plan/, specs in .fapony/spec/, memory in .fapony/.memory/.
@@ -27,7 +27,7 @@ export function initProject(targetPath: string, config?: Config): void {
   const faponyDir = join(targetPath, ".fapony");
   if (existsSync(faponyDir)) {
     throw new Error(
-      `${faponyDir} already exists — delete it first if you want a fresh scaffold.`
+      `${faponyDir} already exists — delete it first if you want a fresh scaffold.`,
     );
   }
   mkdirSync(faponyDir, { recursive: true });
@@ -49,10 +49,13 @@ export function initProject(targetPath: string, config?: Config): void {
 
   // --- .memory/ (from template) ---
   const memEntry = memoryEntry(config); // e.g. .fapony/.memory/mem.ts
-  const memoryDir = join(targetPath, memEntry.split("/").slice(0, -1).join("/"));
+  const memoryDir = join(
+    targetPath,
+    memEntry.split("/").slice(0, -1).join("/"),
+  );
   if (existsSync(join(targetPath, memEntry))) {
     throw new Error(
-      `${join(targetPath, memEntry)} already exists — delete it first if you want a fresh copy.`
+      `${join(targetPath, memEntry)} already exists — delete it first if you want a fresh copy.`,
     );
   }
   const templateDir = join(import.meta.dir, "..", "templates", "memory");
@@ -62,7 +65,9 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(`  .fapony/         — project dir (plans, specs, memory)`);
   console.log(`  ${planDir(config)}/    — plan files`);
   console.log(`  ${specDir(config)}/    — spec files`);
-  console.log(`  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`);
+  console.log(
+    `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,
+  );
   console.log(`\nNext: add "${targetPath}" to fapony.config.json worktrees`);
 }
 

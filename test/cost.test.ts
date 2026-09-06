@@ -1,15 +1,23 @@
 import assert from "node:assert";
 import {
-  byteLength,
-  estimateUsd,
-  buildSpawnCost,
-  beginSpawn,
-  endSpawn,
-  sumSpawnCost,
-  formatCost,
   BYTES_PER_TOKEN,
+  beginSpawn,
+  buildSpawnCost,
+  byteLength,
+  endSpawn,
+  estimateUsd,
+  formatCost,
+  sumSpawnCost,
 } from "../src/cost.js";
-import { pricingFor, roleModel, loadConfig, openDb, newRun, getEvents, type Config } from "../src/db/index.js";
+import {
+  type Config,
+  getEvents,
+  loadConfig,
+  newRun,
+  openDb,
+  pricingFor,
+  roleModel,
+} from "../src/db/index.js";
 import { renderHandoff } from "../src/handoff.js";
 
 function baseConfig(): Config {
@@ -35,16 +43,28 @@ export function testCostUsdEstimate(): void {
     ...base,
     pricing: { executor: { inputPer1k: 4, outputPer1k: 8 } },
   };
-  assert.deepEqual(pricingFor(config, "executor"), { inputPer1k: 4, outputPer1k: 8 });
+  assert.deepEqual(pricingFor(config, "executor"), {
+    inputPer1k: 4,
+    outputPer1k: 8,
+  });
   assert.equal(pricingFor(base, "executor"), null);
 
   const bytesIn = BYTES_PER_TOKEN * 1000; // = 1000 tokens
   const bytesOut = BYTES_PER_TOKEN * 1000;
   // 1000 in-tokens @ $4/1k + 1000 out-tokens @ $8/1k = $12
-  assert.equal(estimateUsd(bytesIn, bytesOut, pricingFor(config, "executor")), 12);
+  assert.equal(
+    estimateUsd(bytesIn, bytesOut, pricingFor(config, "executor")),
+    12,
+  );
   assert.equal(estimateUsd(bytesIn, bytesOut, null), null);
 
-  const c = buildSpawnCost("executor", "m", "a".repeat(bytesIn), "b".repeat(bytesOut), config);
+  const c = buildSpawnCost(
+    "executor",
+    "m",
+    "a".repeat(bytesIn),
+    "b".repeat(bytesOut),
+    config,
+  );
   assert.equal(c.usd_estimate, 12);
 
   console.log("  ✓ cost USD estimate from static pricing");
@@ -61,7 +81,13 @@ export function testCostPricingNullKeepsBytes(): void {
     roles: { gate: { cmd: ["claude", "-p"], model: "sonnet" } },
   };
   assert.equal(roleModel(withRole, "gate"), "sonnet");
-  const c = buildSpawnCost("gate", roleModel(withRole, "gate"), "in", "out", withRole);
+  const c = buildSpawnCost(
+    "gate",
+    roleModel(withRole, "gate"),
+    "in",
+    "out",
+    withRole,
+  );
   assert.equal(c.bytes_in, 2);
   assert.equal(c.bytes_out, 3);
   assert.equal(c.usd_estimate, null);
@@ -80,16 +106,21 @@ export function testCostBeginEndRoundTrip(): void {
       roles: { executor: { cmd: ["x"], model: "mimo" } },
       pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
     };
-    const id = beginSpawn(db, runId, config, "executor", "hello", { base_sha: "abc" });
+    const id = beginSpawn(db, runId, config, "executor", "hello", {
+      base_sha: "abc",
+    });
     endSpawn(db, id, config, "executor", "world!");
 
     const total = sumSpawnCost(getEvents(db, runId));
-  assert.equal(total.spawns, 1);
-  assert.equal(total.bytes_in, 5);
-  assert.equal(total.bytes_out, 6);
-  assert.ok(total.usd_estimate !== null && total.usd_estimate > 0);
-  assert.equal(getEvents(db, runId).filter((e) => e.kind === "spawn").length, 1);
-  db.close();
+    assert.equal(total.spawns, 1);
+    assert.equal(total.bytes_in, 5);
+    assert.equal(total.bytes_out, 6);
+    assert.ok(total.usd_estimate !== null && total.usd_estimate > 0);
+    assert.equal(
+      getEvents(db, runId).filter((e) => e.kind === "spawn").length,
+      1,
+    );
+    db.close();
   } finally {
     if (prev === undefined) delete process.env.FAPONY_STATE_DIR;
     else process.env.FAPONY_STATE_DIR = prev;
@@ -117,7 +148,12 @@ export function testCostHandoffAndFormat(): void {
   assert(!bytesOnly.includes("$"), "no USD without pricing");
 
   // Priced → estimate labeled, never a bare charge.
-  const priced = formatCost({ spawns: 1, bytes_in: 4000, bytes_out: 0, usd_estimate: 0.15 });
+  const priced = formatCost({
+    spawns: 1,
+    bytes_in: 4000,
+    bytes_out: 0,
+    usd_estimate: 0.15,
+  });
   assert(priced.includes("est."));
 
   // byteLength is utf-8 bytes, not chars.
@@ -129,11 +165,27 @@ export function testCostHandoffAndFormat(): void {
 export function testCostTelemetryAllowlist(): void {
   // Telemetry cost entries carry numbers only — this guards the shape:
   // run_id/spawns/bytes/usd, no prompt/output/plan/note/commit fields.
-  const entry = { run_id: 1, spawns: 1, bytes_in: 10, bytes_out: 5, usd_estimate: null as number | null };
+  const entry = {
+    run_id: 1,
+    spawns: 1,
+    bytes_in: 10,
+    bytes_out: 5,
+    usd_estimate: null as number | null,
+  };
   const keys = Object.keys(entry).sort();
-  assert.deepEqual(keys, ["bytes_in", "bytes_out", "run_id", "spawns", "usd_estimate"]);
+  assert.deepEqual(keys, [
+    "bytes_in",
+    "bytes_out",
+    "run_id",
+    "spawns",
+    "usd_estimate",
+  ]);
   const blob = JSON.stringify(entry);
-  assert(!blob.includes("plan") && !blob.includes("note") && !blob.includes("commit"));
+  assert(
+    !blob.includes("plan") &&
+      !blob.includes("note") &&
+      !blob.includes("commit"),
+  );
 
   console.log("  ✓ telemetry cost allowlist (no content fields)");
 }

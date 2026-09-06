@@ -2,7 +2,7 @@
 // plan files. Warns only, never blocks a run (same fail-safe stance as
 // handoff_missing) — a plan author still ships, they just can't miss it.
 
-import { planMaxLines, sourceSpecRE, type Config } from "./db/index.js";
+import { type Config, planMaxLines, sourceSpecRE } from "./db/index.js";
 
 export interface PlanHygieneWarning {
   kind: "too_long" | "spec_leak";
@@ -26,7 +26,10 @@ function section7Lines(planText: string): string[] {
   return body;
 }
 
-export function checkPlanHygiene(planText: string, config?: Config): PlanHygieneWarning[] {
+export function checkPlanHygiene(
+  planText: string,
+  config?: Config,
+): PlanHygieneWarning[] {
   const warnings: PlanHygieneWarning[] = [];
   const lineCount = planText.split("\n").length;
   const maxLines = planMaxLines(config);

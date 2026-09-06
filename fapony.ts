@@ -1,20 +1,21 @@
 #!/usr/bin/env bun
+
 // fapony — multi-agent dev loop orchestrator
 // CLI dispatch: all logic lives in src/
 
-import { cmdRun } from "./src/run/index.js";
-import { cmdStatus } from "./src/status.js";
-import { cmdHandoff } from "./src/handoff.js";
-import { cmdStop } from "./src/stop.js";
-import { cmdTest } from "./src/test.js";
 import { cmdGate } from "./src/gate.js";
+import { cmdHandoff } from "./src/handoff.js";
+import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
+import { cmdKickoff } from "./src/kickoff.js";
 import { cmdLoop } from "./src/loop/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
-import { cmdInit } from "./src/init.js";
-import { cmdKickoff } from "./src/kickoff.js";
+import { cmdRun } from "./src/run/index.js";
 import { cmdStats } from "./src/stats.js";
+import { cmdStatus } from "./src/status.js";
+import { cmdStop } from "./src/stop.js";
 import { cmdTelemetry } from "./src/telemetry.js";
+import { cmdTest } from "./src/test.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -46,6 +47,8 @@ if (cmd === "run") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
-  console.error("usage: fapony <run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|test> [args]");
+  console.error(
+    "usage: fapony <run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|test> [args]",
+  );
   process.exit(1);
 }

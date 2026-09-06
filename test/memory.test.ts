@@ -1,9 +1,9 @@
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import assert from "node:assert";
-import { resolveMemoryConfig, DEFAULT_MEMORY } from "../src/memory.js";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
+import { DEFAULT_MEMORY, resolveMemoryConfig } from "../src/memory.js";
 
 const BASE_CONFIG: Config = {
   worktrees: { test: "/tmp/test" },

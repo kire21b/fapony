@@ -1,12 +1,11 @@
 // render.ts — formatting and display helpers for the memory log
 
-import type { LogRow, CloseRow, WorkRow, ClaimRow } from "./store.js";
-
-import { openRows, claimsOf } from "./selectors.js";
+import { claimsOf, openRows } from "./selectors.js";
+import type { ClaimRow, CloseRow, LogRow, WorkRow } from "./store.js";
 
 export const fmtRow = (r: WorkRow, claims?: Map<string, ClaimRow>) => {
   let s = `- [${r.id}]`;
-  if (claims?.has(r.id)) s += ` (${claims.get(r.id)!.agent})`;
+  if (claims?.has(r.id)) s += ` (${claims.get(r.id)?.agent})`;
   s += ` ${r.kind} ${r.text}`;
   if (r.spec) s += ` → ${r.spec}`;
   return s;
@@ -22,20 +21,20 @@ export const printOpenRows = (all: LogRow[], opts?: { showHold?: boolean }) => {
   );
   if (inProg.length) {
     console.log(
-      `\n## in-progress\n` + inProg.map((r) => fmtRow(r, claims)).join("\n"),
+      `\n## in-progress\n${inProg.map((r) => fmtRow(r, claims)).join("\n")}`,
     );
   }
 
   // next (unclaimed only)
   const nexts = open.filter((r) => r.kind === "next" && !claims.has(r.id));
   if (nexts.length) {
-    console.log(`\n## next\n` + nexts.map((r) => fmtRow(r)).join("\n"));
+    console.log(`\n## next\n${nexts.map((r) => fmtRow(r)).join("\n")}`);
   }
 
   // bug (unclaimed only)
   const bugs = open.filter((r) => r.kind === "bug" && !claims.has(r.id));
   if (bugs.length) {
-    console.log(`\n## bug\n` + bugs.map((r) => fmtRow(r)).join("\n"));
+    console.log(`\n## bug\n${bugs.map((r) => fmtRow(r)).join("\n")}`);
   }
 
   // hold — sorted by spec for per-plan visibility
@@ -44,7 +43,7 @@ export const printOpenRows = (all: LogRow[], opts?: { showHold?: boolean }) => {
       .filter((r) => r.kind === "hold")
       .sort((a, b) => (a.spec ?? "").localeCompare(b.spec ?? ""));
     if (holds.length) {
-      console.log(`\n## hold\n` + holds.map((r) => fmtRow(r)).join("\n"));
+      console.log(`\n## hold\n${holds.map((r) => fmtRow(r)).join("\n")}`);
     }
   }
 };

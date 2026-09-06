@@ -1,7 +1,7 @@
 // src/run/prompt.ts — executor prompt builder + command resolver
 
-import { templateArgs } from "../util.js";
 import type { Config } from "../db/index.js";
+import { templateArgs } from "../util.js";
 
 /**
  * Build the executor prompt from a template. Values are inserted via function
@@ -12,7 +12,7 @@ export function buildExecutorPrompt(
   planContent: string,
   memId: string | null,
   specContent: string | null,
-  feedback: string | null
+  feedback: string | null,
 ): string {
   return template
     .replace("{{PLAN}}", () => planContent)

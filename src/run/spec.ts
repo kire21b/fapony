@@ -1,13 +1,16 @@
 // src/run/spec.ts — Source spec link parsing + file reader
 
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { sourceSpecRE, type Config } from "../db/index.js";
+import { type Config, sourceSpecRE } from "../db/index.js";
 
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/;
 
 /** Parse Source spec link from plan header. Returns null if absent or text-only. */
-export function parseSourceSpec(planText: string, config?: Config): string | null {
+export function parseSourceSpec(
+  planText: string,
+  config?: Config,
+): string | null {
   const match = planText.match(sourceSpecRE(config));
   if (!match) return null;
   const raw = match[1].trim();
@@ -18,7 +21,11 @@ export function parseSourceSpec(planText: string, config?: Config): string | nul
 }
 
 /** Read spec file, truncate to maxLines, return content or null. */
-export function readSpec(worktree: string, specPath: string, maxLines: number): string | null {
+export function readSpec(
+  worktree: string,
+  specPath: string,
+  maxLines: number,
+): string | null {
   const resolved = join(worktree, specPath);
   if (!existsSync(resolved)) return null;
   try {

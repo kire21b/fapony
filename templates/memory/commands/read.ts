@@ -1,9 +1,8 @@
 // commands/read.ts — read-only commands: now (default), done, stale, find, kickoff
 
+import { doneLines, fmtClose, fmtRow, printOpenRows } from "../render.js";
+import { claimsOf, openRows, staleReport } from "../selectors.js";
 import type { CloseRow, WorkRow } from "../store.js";
-
-import { fmtRow, fmtClose, printOpenRows, doneLines } from "../render.js";
-import { openRows, claimsOf, staleReport } from "../selectors.js";
 import { app, rows } from "../store.js";
 import { shippedNotMoved } from "./plan.js";
 import { THRESHOLD } from "./rotate.js";
@@ -90,7 +89,7 @@ export const cmdKickoff = (a: string[]) => {
     // ไม่มี args = now + section "ล่าสุด" = closes 10 รายการล่าสุด
     console.log(`# ${app} — ${all.length} entries`);
     printOpenRows(all, { showHold: true });
-    console.log(`\n## ล่าสุด\n` + doneLines(all, 10).join("\n"));
+    console.log(`\n## ล่าสุด\n${doneLines(all, 10).join("\n")}`);
     const stale = staleReport(all);
     if (stale.length)
       console.log(
@@ -117,7 +116,7 @@ export const cmdKickoff = (a: string[]) => {
 
     console.log(`# ${arg} — ${specRows.length} open rows`);
     if (specRows.length) {
-      console.log(`\n## open\n` + specRows.map((r) => fmtRow(r)).join("\n"));
+      console.log(`\n## open\n${specRows.map((r) => fmtRow(r)).join("\n")}`);
     }
     if (specDecisions.length) {
       console.log(
@@ -129,7 +128,7 @@ export const cmdKickoff = (a: string[]) => {
     }
     if (specCloses.length) {
       console.log(
-        `\n## closes\n` + specCloses.map((c) => fmtClose(c, byId)).join("\n"),
+        `\n## closes\n${specCloses.map((c) => fmtClose(c, byId)).join("\n")}`,
       );
     }
     if (!specRows.length && !specDecisions.length && !specCloses.length) {
@@ -146,7 +145,7 @@ export const cmdKickoff = (a: string[]) => {
     }
     const claims = claimsOf(all);
     const claimInfo = claims.has(arg)
-      ? `\nClaimed by: ${claims.get(arg)!.agent} (${claims.get(arg)!.ts.slice(0, 10)})`
+      ? `\nClaimed by: ${claims.get(arg)?.agent} (${claims.get(arg)?.ts.slice(0, 10)})`
       : "";
 
     const spec = target.spec;
@@ -154,10 +153,14 @@ export const cmdKickoff = (a: string[]) => {
       ? openRows(all).filter((r) => r.spec === spec && r.id !== arg)
       : [];
     const specDecisions = spec
-      ? all.filter((r): r is WorkRow => r.kind === "decision" && r.spec === spec).slice(-5)
+      ? all
+          .filter((r): r is WorkRow => r.kind === "decision" && r.spec === spec)
+          .slice(-5)
       : [];
     const specNotes = spec
-      ? all.filter((r): r is WorkRow => r.kind === "note" && r.spec === spec).slice(-5)
+      ? all
+          .filter((r): r is WorkRow => r.kind === "note" && r.spec === spec)
+          .slice(-5)
       : [];
     const specCloses = spec
       ? all

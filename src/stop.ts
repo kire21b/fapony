@@ -1,11 +1,11 @@
-import { openDb, getRun, setStatus, addEvent, loadConfig } from "./db/index.js";
+import { addEvent, getRun, loadConfig, openDb, setStatus } from "./db/index.js";
 import { closeMemory } from "./memory.js";
 
 export async function cmdStop(args: string[]): Promise<void> {
   const runId = parseInt(args[0], 10);
   const reason = args.slice(1).join(" ") || "stopped by user";
 
-  if (!runId || isNaN(runId)) {
+  if (!runId || Number.isNaN(runId)) {
     console.error("usage: fapony stop <run-id> [reason]");
     process.exit(1);
   }
@@ -28,7 +28,12 @@ export async function cmdStop(args: string[]): Promise<void> {
   // Release memory if claimed
   if (run.mem_id) {
     const config = loadConfig();
-    closeMemory(config, config.worktrees[run.worktree] ?? ".", run.mem_id, reason);
+    closeMemory(
+      config,
+      config.worktrees[run.worktree] ?? ".",
+      run.mem_id,
+      reason,
+    );
   }
 
   console.log(`run ${runId} stopped: ${reason}`);

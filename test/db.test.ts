@@ -1,14 +1,14 @@
+import assert from "node:assert";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
-import assert from "node:assert";
 import {
-  openDb,
-  newRun,
-  setStatus,
   addEvent,
-  getRun,
   getLastPlanUpdate,
+  getRun,
+  newRun,
+  openDb,
+  setStatus,
 } from "../src/db/index.js";
 
 function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
@@ -36,14 +36,14 @@ export function testDbLifecycle(): void {
 
     let run = getRun(db, runId);
     assert(run !== null, "run should exist");
-    assert.equal(run!.status, "running");
-    assert.equal(run!.round, 0);
-    assert.equal(run!.worktree, "test-wt");
-    assert.equal(run!.base_sha, "abc123");
+    assert.equal(run?.status, "running");
+    assert.equal(run?.round, 0);
+    assert.equal(run?.worktree, "test-wt");
+    assert.equal(run?.base_sha, "abc123");
 
     setStatus(db, runId, "awaiting_review");
     run = getRun(db, runId);
-    assert.equal(run!.status, "awaiting_review");
+    assert.equal(run?.status, "awaiting_review");
 
     addEvent(db, runId, "commit", { hash: "def456" });
     const events = db
@@ -55,7 +55,7 @@ export function testDbLifecycle(): void {
 
     setStatus(db, runId, "passed");
     run = getRun(db, runId);
-    assert.equal(run!.status, "passed");
+    assert.equal(run?.status, "passed");
   });
 
   console.log("  ✓ db lifecycle");
@@ -68,17 +68,20 @@ export function testGetLastPlanUpdate(): void {
     let result = getLastPlanUpdate(db, "test-wt", "mem-1");
     assert.equal(result, null, "no plan event should return null");
 
-    addEvent(db, runId, "plan", { kind: "next_prompt", text: "Implement auth flow" });
+    addEvent(db, runId, "plan", {
+      kind: "next_prompt",
+      text: "Implement auth flow",
+    });
     result = getLastPlanUpdate(db, "test-wt", "mem-1");
     assert(result !== null, "should find plan event");
-    assert.equal(result!.kind, "next_prompt");
-    assert.equal(result!.text, "Implement auth flow");
+    assert.equal(result?.kind, "next_prompt");
+    assert.equal(result?.text, "Implement auth flow");
 
     addEvent(db, runId, "plan", { kind: "file_done", text: "All done." });
     result = getLastPlanUpdate(db, "test-wt", "mem-1");
     assert(result !== null, "should find latest plan event");
-    assert.equal(result!.kind, "file_done");
-    assert.equal(result!.text, "All done.");
+    assert.equal(result?.kind, "file_done");
+    assert.equal(result?.text, "All done.");
 
     result = getLastPlanUpdate(db, "test-wt", "mem-999");
     assert.equal(result, null, "different mem_id should return null");

@@ -1,9 +1,8 @@
 // commands/write.ts — mutating commands: add, close, claim, release, synced, hook
 
+import { claimsOf, openRows } from "../selectors.js";
 import type { WorkKind } from "../store.js";
-
-import { openRows, claimsOf } from "../selectors.js";
-import { root, KINDS, rows, put, nextId } from "../store.js";
+import { KINDS, nextId, put, root, rows } from "../store.js";
 
 export const cmdAdd = async (a: string[]) => {
   // mem add <next|bug|decision|note|hold> "<text>" [path/to/SPEC.md]
@@ -74,9 +73,7 @@ export const cmdClose = async (a: string[]) => {
   // mem close <id> "<ทำอะไร / commit>" — tombstone ทำให้ claim void เอง
   // mem close <id> --stdin ← read text from stdin
   if (!a[0]) {
-    console.error(
-      'ต้องระบุ id — ใช้: bun .memory/mem.ts close <id> "<ข้อความ>"',
-    );
+    console.error('ต้องระบุ id — ใช้: bun .memory/mem.ts close <id> "<ข้อความ>"');
     process.exit(1);
   }
   if (!rows().some((r) => "id" in r && r.id === a[0])) {
@@ -130,9 +127,7 @@ export const cmdRelease = async (a: string[]) => {
   // mem release <id> "<เหตุผล>?"
   // mem release <id> --stdin ← read text from stdin
   if (!a[0]) {
-    console.error(
-      "ต้องระบุ id — ใช้: bun .memory/mem.ts release <id> [เหตุผล]",
-    );
+    console.error("ต้องระบุ id — ใช้: bun .memory/mem.ts release <id> [เหตุผล]");
     process.exit(1);
   }
   const all = rows();

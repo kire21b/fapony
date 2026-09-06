@@ -6,11 +6,28 @@
     "falsify-cloud": "/Users/delamind/Project/innominix/wt-falsify/apps/falsify"
   },
   "roles": {
-    "executor":  { "cmd": ["opencode", "run", "--model", "{model}"], "model": "mimo", "timeoutMin": 45 },
-    "gate":      { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "sonnet" },
-    "planner":   { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" },
-    "bigFixer":  { "cmd": ["claude", "-p", "{model}", "{PROMPT}"],   "model": "opus" },
-    "scrutinizeFix": { "cmd": ["claude", "-p", "{model}", "{PROMPT}"], "model": "haiku", "timeoutMin": 15 }
+    "executor": {
+      "cmd": ["opencode", "run", "--model", "{model}"],
+      "model": "mimo",
+      "timeoutMin": 45
+    },
+    "gate": {
+      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "model": "sonnet"
+    },
+    "planner": {
+      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "model": "opus"
+    },
+    "bigFixer": {
+      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "model": "opus"
+    },
+    "scrutinizeFix": {
+      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "model": "haiku",
+      "timeoutMin": 15
+    }
   },
   "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
   "review": {
@@ -47,7 +64,12 @@
     "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"]
   },
   "safety": {
-    "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"]
+    "deny": [
+      "reset\\s+--hard",
+      "clean\\s+-[a-z]*f",
+      "checkout\\s+--\\s",
+      "git\\s+stash"
+    ]
   },
   "plan": { "extensions": [".md"] },
   "planmv": {

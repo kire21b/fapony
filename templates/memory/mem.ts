@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 // append-only memory log. ห้ามแก้บรรทัดเก่า — ปิดงาน = close (tombstone), git = ประวัติ
 // log แยกต่อ app: apps/<app>/.memory/log.jsonl  → worktree ต่างกันไม่เคยแตะไฟล์เดียวกัน
 //
@@ -10,23 +11,23 @@
 //   commands/read.ts   (now / done / stale / find / kickoff)
 //   commands/selftest.ts (test)
 
+import { cmdPlanCheck, cmdPlanSweep } from "./commands/plan.js";
 import {
-  cmdNow,
   cmdDone,
-  cmdStale,
   cmdFind,
   cmdKickoff,
+  cmdNow,
+  cmdStale,
 } from "./commands/read.js";
-import { cmdTest } from "./commands/selftest.js";
-import { cmdPlanSweep, cmdPlanCheck } from "./commands/plan.js";
 import { cmdRotate } from "./commands/rotate.js";
+import { cmdTest } from "./commands/selftest.js";
 import {
   cmdAdd,
-  cmdClose,
   cmdClaim,
+  cmdClose,
+  cmdHook,
   cmdRelease,
   cmdSynced,
-  cmdHook,
 } from "./commands/write.js";
 
 const [cmd, ...a] = process.argv.slice(2);

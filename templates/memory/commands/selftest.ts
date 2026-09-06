@@ -1,24 +1,22 @@
 // commands/selftest.ts — fixture tests for selectors + plan-sweep link rewrite functions
 
 import {
+  existsSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
-  mkdirSync,
-  existsSync,
-  readdirSync,
 } from "node:fs";
-import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
-
+import { dirname, join, resolve } from "node:path";
+import { claimsOf, openRows, rotateKeep } from "../selectors.js";
 import type { LogRow } from "../store.js";
-
-import { openRows, claimsOf, rotateKeep } from "../selectors.js";
 import {
+  countPlainTextMentions,
   rewriteMarkdownLinks,
   rewriteMovedFileLinks,
-  countPlainTextMentions,
 } from "./plan.js";
 
 const assert = (cond: boolean, msg: string) => {
@@ -64,7 +62,7 @@ const runSelectorTests = () => {
 
   // (1) a1 claim → active
   assert(
-    claims.has("a1") && claims.get("a1")!.agent === "agent-1",
+    claims.has("a1") && claims.get("a1")?.agent === "agent-1",
     "claim active ผิด",
   );
   // (2) a3 release → inactive
@@ -73,7 +71,7 @@ const runSelectorTests = () => {
   assert(!claims.has("a4"), "close void claim");
   // (4) a5 double claim → agent-3 ชนะ
   assert(
-    claims.has("a5") && claims.get("a5")!.agent === "agent-3",
+    claims.has("a5") && claims.get("a5")?.agent === "agent-3",
     "double claim หลังชนะ",
   );
   // a2 closed → ไม่ควรอยู่ใน open
@@ -107,7 +105,12 @@ const runRotateTests = () => {
       agent: "",
       spec: "PLAN-a.md",
     },
-    { kind: "synced", spec: "PLAN-a.md", ts: "2026-01-02T00:00:00Z", agent: "" },
+    {
+      kind: "synced",
+      spec: "PLAN-a.md",
+      ts: "2026-01-02T00:00:00Z",
+      agent: "",
+    },
     // r3: spec synced *หลัง* decision นี้ → resolved แล้ว archive ได้
 
     {
@@ -141,7 +144,10 @@ const runRotateTests = () => {
     !kept.some((r) => r.kind === "claim" && "ref" in r && r.ref === "r2"),
     "rotateKeep: ห้ามเก็บ claim ของ ref ที่ปิดแล้ว",
   );
-  assert(!kept.some((r) => r.kind === "close"), "rotateKeep: ห้ามเก็บ close tombstone");
+  assert(
+    !kept.some((r) => r.kind === "close"),
+    "rotateKeep: ห้ามเก็บ close tombstone",
+  );
   assert(
     !kept.some((r) => "id" in r && r.id === "r3"),
     "rotateKeep: decision ที่ spec synced หลังแล้ว → resolved, ไม่เก็บ",
@@ -174,13 +180,13 @@ const runPlanSweepTests = () => {
     const inbound = [
       "# PLAN-people-style — refs",
       "",
-      "[txt](PLAN-page-style.md)",           // markdown link → should be rebased
+      "[txt](PLAN-page-style.md)", // markdown link → should be rebased
       "look at PLAN-page-style.md for details", // plain text → detect only
-      "`PLAN-page-style.md` in backtick",     // backtick → detect only
+      "`PLAN-page-style.md` in backtick", // backtick → detect only
       "```",
-      "PLAN-page-style.md",                   // code fence → detect only
+      "PLAN-page-style.md", // code fence → detect only
       "```",
-      "see PLAN-page-style §1.5 for tone",    // bare (no .md) with section ref → detect only
+      "see PLAN-page-style §1.5 for tone", // bare (no .md) with section ref → detect only
     ].join("\n");
     const inboundFile = join(planDir, "PLAN-people-style.md");
     writeFileSync(inboundFile, inbound);
@@ -189,7 +195,10 @@ const runPlanSweepTests = () => {
     const oldAbs = join(planDir, "PLAN-page-style.md");
     const newAbs = join(doneDir, "PLAN-page-style.md");
     const mdCount = rewriteMarkdownLinks(inboundFile, oldAbs, newAbs);
-    assert(mdCount === 1, `rewriteMarkdownLinks should fix 1 markdown link, got ${mdCount}`);
+    assert(
+      mdCount === 1,
+      `rewriteMarkdownLinks should fix 1 markdown link, got ${mdCount}`,
+    );
 
     // A2: countPlainTextMentions — should detect all plain text variants (not markdown links)
     const ptCount = countPlainTextMentions(inboundFile, "PLAN-page-style.md");
@@ -220,14 +229,20 @@ const runPlanSweepTests = () => {
     // Create sibling file in planDir (stayed behind when main file moved to doneDir)
     makeFixture(planDir, "PLAN-nav.md", "# PLAN-nav\n");
     const movedFile = join(doneDir, "PLAN-page-style.md");
-    writeFileSync(movedFile, [
-      "# PLAN-page-style",
-      "[sibling](PLAN-nav.md)",         // sibling in old dir → rebase to ../
-      "[external](https://example.com)", // external → skip
-    ].join("\n"));
+    writeFileSync(
+      movedFile,
+      [
+        "# PLAN-page-style",
+        "[sibling](PLAN-nav.md)", // sibling in old dir → rebase to ../
+        "[external](https://example.com)", // external → skip
+      ].join("\n"),
+    );
 
     const movedCount = rewriteMovedFileLinks(movedFile, planDir, doneDir);
-    assert(movedCount === 1, `rewriteMovedFileLinks should fix 1 link, got ${movedCount}`);
+    assert(
+      movedCount === 1,
+      `rewriteMovedFileLinks should fix 1 link, got ${movedCount}`,
+    );
 
     const afterB = readFileSync(movedFile, "utf8");
     assert(
@@ -244,14 +259,20 @@ const runPlanSweepTests = () => {
     // link should be same-dir relative (just the filename), not ../filename
     makeFixture(doneDir, "PLAN-page-style.md", "# PLAN-page-style\n");
     const movedFile2 = join(doneDir, "PLAN-people-style.md");
-    writeFileSync(movedFile2, [
-      "# PLAN-people-style",
-      "[page](PLAN-page-style.md)",    // target also in done/ → same-dir relative
-      "[nav](PLAN-nav.md)",            // target stayed in plan/ → ../
-    ].join("\n"));
+    writeFileSync(
+      movedFile2,
+      [
+        "# PLAN-people-style",
+        "[page](PLAN-page-style.md)", // target also in done/ → same-dir relative
+        "[nav](PLAN-nav.md)", // target stayed in plan/ → ../
+      ].join("\n"),
+    );
 
     const movedCount2 = rewriteMovedFileLinks(movedFile2, planDir, doneDir);
-    assert(movedCount2 === 2, `rewriteMovedFileLinks B2 should fix 2 links, got ${movedCount2}`);
+    assert(
+      movedCount2 === 2,
+      `rewriteMovedFileLinks B2 should fix 2 links, got ${movedCount2}`,
+    );
 
     const afterB2 = readFileSync(movedFile2, "utf8");
     assert(
@@ -267,7 +288,10 @@ const runPlanSweepTests = () => {
     const edgeFile = join(tmpDir, "edge.md");
     writeFileSync(edgeFile, "see PLAN-page-style for details\n");
     const edgeCount = countPlainTextMentions(edgeFile, "PLAN-page-style.md");
-    assert(edgeCount === 1, `bare PLAN-page-style (no .md) should count = 1, got ${edgeCount}`);
+    assert(
+      edgeCount === 1,
+      `bare PLAN-page-style (no .md) should count = 1, got ${edgeCount}`,
+    );
 
     // edge: no match
     const noMatchFile = join(tmpDir, "nomatch.md");
@@ -339,7 +363,9 @@ const runPlanCheckTests = () => {
     // Check shippedNotMoved via direct file inspection
     const SHIPPED = /^>\s*✅/;
     const firstLine = (f: string) =>
-      readFileSync(f, "utf8").split("\n").find((l) => l.trim()) ?? "";
+      readFileSync(f, "utf8")
+        .split("\n")
+        .find((l) => l.trim()) ?? "";
     const mdFilesLocal = (dir: string): string[] =>
       existsSync(dir)
         ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
@@ -354,10 +380,11 @@ const runPlanCheckTests = () => {
     const activeFiles = mdFilesLocal(planDir).filter(
       (f) => !f.includes("/done/"),
     );
-    const shipped = activeFiles.filter((f) =>
-      SHIPPED.test(firstLine(f)),
+    const shipped = activeFiles.filter((f) => SHIPPED.test(firstLine(f)));
+    assert(
+      shipped.length === 1,
+      `E1: should find 1 shipped-not-moved, got ${shipped.length}`,
     );
-    assert(shipped.length === 1, `E1: should find 1 shipped-not-moved, got ${shipped.length}`);
     assert(
       shipped[0]?.includes("PLAN-shipped.md") === true,
       "E1: should detect PLAN-shipped.md",
@@ -386,7 +413,10 @@ const runPlanCheckTests = () => {
         }
       }
     }
-    assert(broken.length === 1, `E2: should find 1 broken link, got ${broken.length}`);
+    assert(
+      broken.length === 1,
+      `E2: should find 1 broken link, got ${broken.length}`,
+    );
     assert(
       broken[0]?.includes("PLAN-notexist.md") === true,
       "E2: broken link should reference PLAN-notexist.md",

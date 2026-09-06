@@ -2,19 +2,15 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
+import { beginSpawn, endSpawn } from "../cost.js";
 import {
-  openDb,
-  loadConfig,
   getPendingFeedback,
-  specMaxLines,
-  handoffMarker,
-  safetyDeny,
+  loadConfig,
+  openDb,
   promptFileFor,
-  type Config,
+  safetyDeny,
 } from "../db/index.js";
 import { assertSafe } from "../safety.js";
-import { beginSpawn, endSpawn } from "../cost.js";
 import { buildExecutorPrompt, executorCmd } from "./prompt.js";
 
 export interface SpawnInput {
@@ -37,7 +33,15 @@ export interface SpawnResult {
  * drain stdout+stderr with timeout, return stdout + exitCode.
  */
 export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
-  const { worktree, worktreeKey, planContent, specContent, memId, baseSha, runId } = input;
+  const {
+    worktree,
+    worktreeKey,
+    planContent,
+    specContent,
+    memId,
+    baseSha,
+    runId,
+  } = input;
   const config = loadConfig();
 
   const promptPath =
@@ -46,10 +50,19 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
   const promptTemplate = readFileSync(promptPath, "utf-8");
 
   const db = openDb();
-  const feedback = memId ? getPendingFeedback(db, worktreeKey, memId, runId) : null;
-  if (feedback) console.error(`carrying forward review feedback from previous round`);
+  const feedback = memId
+    ? getPendingFeedback(db, worktreeKey, memId, runId)
+    : null;
+  if (feedback)
+    console.error(`carrying forward review feedback from previous round`);
 
-  const prompt = buildExecutorPrompt(promptTemplate, planContent, memId, specContent, feedback);
+  const prompt = buildExecutorPrompt(
+    promptTemplate,
+    planContent,
+    memId,
+    specContent,
+    feedback,
+  );
 
   const executorCmdArr = executorCmd(config, memId);
   assertSafe(executorCmdArr, safetyDeny(config));

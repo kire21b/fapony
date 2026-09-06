@@ -4,7 +4,7 @@
 // ponytail: minimal core (add/close/now) เท่านั้น — claim/release/synced/staleReport
 // ของ vela เกิดจาก pain จริง (multi-agent ชนงาน, decision ตกหล่น) ยังไม่เจอที่นี่ อย่า copy มาเผื่อ
 
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 
 const dir = import.meta.dir;
 const LOG = `${dir}/log.jsonl`;
@@ -37,7 +37,10 @@ function rows(): Row[] {
 
 function put(r: Omit<Row, "ts" | "agent">) {
   mkdirSync(dir, { recursive: true });
-  appendFileSync(LOG, JSON.stringify({ ts: new Date().toISOString(), agent, ...r }) + "\n");
+  appendFileSync(
+    LOG,
+    `${JSON.stringify({ ts: new Date().toISOString(), agent, ...r })}\n`,
+  );
 }
 
 function openRows(all: Row[]): Row[] {
@@ -80,7 +83,9 @@ if (cmd === "add") {
     console.log("(no open items)");
   } else {
     for (const r of open) {
-      console.log(`- [${r.id}] ${r.kind} ${r.text}${r.spec ? ` → ${r.spec}` : ""}`);
+      console.log(
+        `- [${r.id}] ${r.kind} ${r.text}${r.spec ? ` → ${r.spec}` : ""}`,
+      );
     }
   }
 }

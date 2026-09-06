@@ -1,27 +1,27 @@
 import { join } from "node:path";
-import type { Config, RolePricing } from "./types.js";
 import {
-  DEFAULT_SPEC_MAX_LINES,
-  DEFAULT_PLAN_MAX_LINES,
-  DEFAULT_SOURCE_MARKER,
-  DEFAULT_HANDOFF_MARKER,
-  DEFAULT_VERDICT_RE,
-  DEFAULT_NEXT_PROMPT_MARKER,
-  DEFAULT_FILE_DONE_MARKER,
-  DEFAULT_SHIPPED_RE,
-  DEFAULT_SAFETY_DENY,
-  DEFAULT_PLAN_DIR,
-  DEFAULT_SPEC_DIR,
-  DEFAULT_MEMORY_ENTRY,
-  DEFAULT_DONE_DIR,
-  DEFAULT_LINK_SCAN_DIRS,
-  DEFAULT_PLAN_EXTENSIONS,
   DEFAULT_ARCHIVE_MSG,
-  DEFAULT_INBOUND_WARN_AT,
   DEFAULT_DIRTY_PREVIEW,
-  DEFAULT_SHORT_SHA,
+  DEFAULT_DONE_DIR,
+  DEFAULT_FILE_DONE_MARKER,
+  DEFAULT_HANDOFF_MARKER,
+  DEFAULT_INBOUND_WARN_AT,
+  DEFAULT_LINK_SCAN_DIRS,
+  DEFAULT_MEMORY_ENTRY,
+  DEFAULT_NEXT_PROMPT_MARKER,
+  DEFAULT_PLAN_DIR,
+  DEFAULT_PLAN_EXTENSIONS,
+  DEFAULT_PLAN_MAX_LINES,
   DEFAULT_ROLE_TIMEOUTS,
+  DEFAULT_SAFETY_DENY,
+  DEFAULT_SHIPPED_RE,
+  DEFAULT_SHORT_SHA,
+  DEFAULT_SOURCE_MARKER,
+  DEFAULT_SPEC_DIR,
+  DEFAULT_SPEC_MAX_LINES,
+  DEFAULT_VERDICT_RE,
 } from "./defaults.js";
+import type { Config, RolePricing } from "./types.js";
 
 export function specMaxLines(config: Config): number {
   return config.spec?.maxLines ?? DEFAULT_SPEC_MAX_LINES;
@@ -112,7 +112,8 @@ export function roleModel(config: Config, role: string): string {
 export function pricingFor(config: Config, role: string): RolePricing | null {
   const p = config.pricing?.[role];
   if (!p) return null;
-  if (typeof p.inputPer1k !== "number" || typeof p.outputPer1k !== "number") return null;
+  if (typeof p.inputPer1k !== "number" || typeof p.outputPer1k !== "number")
+    return null;
   return { inputPer1k: p.inputPer1k, outputPer1k: p.outputPer1k };
 }
 
@@ -133,7 +134,7 @@ export function roleTimeoutMin(config: Config, role: string): number {
  */
 export function promptFileFor(
   config: Config,
-  role: "executor" | "gate" | "planner" | "bigFixer" | "scrutinizeFix"
+  role: "executor" | "gate" | "planner" | "bigFixer" | "scrutinizeFix",
 ): string | null {
   const p = config.prompts?.[role];
   if (!p) return null;

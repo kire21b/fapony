@@ -4,9 +4,8 @@
 
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-
-import { dir, LOG, rows, appendRaw } from "../store.js";
 import { rotateKeep } from "../selectors.js";
+import { appendRaw, dir, LOG, rows } from "../store.js";
 
 // ponytail: threshold = จำนวนแถวทั้งหมด ไม่ใช่แค่ open — ที่กลัวคือไฟล์บวม/grep ช้าตอนหลายคนใช้พร้อมกัน
 // (view อ่านไม่รู้เรื่องเป็นปัญหาคนละอันที่ CAP ใน write.ts จัดการอยู่แล้ว)
@@ -55,6 +54,6 @@ export const cmdRotate = (a: string[]) => {
   for (const r of keep) appendRaw(LOG, r);
 
   console.log(
-    `rotated: ${all.length} rows → archive ${archived.replace(dir + "/", "")} (git history อยู่ครบ), เหลือ ${keep.length} แถว (open + active claim) ใน log.jsonl`,
+    `rotated: ${all.length} rows → archive ${archived.replace(`${dir}/`, "")} (git history อยู่ครบ), เหลือ ${keep.length} แถว (open + active claim) ใน log.jsonl`,
   );
 };

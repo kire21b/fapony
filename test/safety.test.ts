@@ -17,7 +17,7 @@ export function testAssertSafe(): void {
     } catch (e) {
       assert(
         (e as Error).message.includes("dangerous"),
-        `unexpected error for ${cmd.join(" ")}: ${(e as Error).message}`
+        `unexpected error for ${cmd.join(" ")}: ${(e as Error).message}`,
       );
     }
   }

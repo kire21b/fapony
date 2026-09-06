@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import assert from "node:assert";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { initProject } from "../src/init.js";
 
 function withTmpDir(fn: (dir: string) => void): void {
@@ -21,7 +21,10 @@ export function testInitCreatesDirectories(): void {
     assert(existsSync(join(target, ".fapony", "README")), ".fapony/README");
     assert(existsSync(join(target, ".fapony", "plan")), ".fapony/plan/");
     assert(existsSync(join(target, ".fapony", "spec")), ".fapony/spec/");
-    assert(existsSync(join(target, ".fapony", ".memory", "mem.ts")), ".fapony/.memory/mem.ts");
+    assert(
+      existsSync(join(target, ".fapony", ".memory", "mem.ts")),
+      ".fapony/.memory/mem.ts",
+    );
   });
 
   console.log("  ✓ init creates directories");

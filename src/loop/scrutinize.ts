@@ -1,9 +1,9 @@
 // src/loop/scrutinize.ts — routing predicate + git diff + prompt builder for scrutinize-fix lane.
 
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
-import { promptFileFor, type Config } from "../db/index.js";
+import { type Config, promptFileFor } from "../db/index.js";
 
 /**
  * Routing predicate for the scrutinize-fix lane — the small-diff mirror of
@@ -12,16 +12,23 @@ import { promptFileFor, type Config } from "../db/index.js";
  */
 export function shouldScrutinizeFix(
   result: { isBig: boolean; status: string },
-  config: Config
+  config: Config,
 ): boolean {
-  return !result.isBig && !!config.roles?.scrutinizeFix && result.status === "awaiting_review";
+  return (
+    !result.isBig &&
+    !!config.roles?.scrutinizeFix &&
+    result.status === "awaiting_review"
+  );
 }
 
 /**
  * Resolves the changed-file list for the prompt via base_sha..HEAD.
  * Falls back to sentinel strings when the base is unknown or the diff is empty.
  */
-export function resolveChangedFiles(worktree: string, baseSha: string | null | undefined): string {
+export function resolveChangedFiles(
+  worktree: string,
+  baseSha: string | null | undefined,
+): string {
   if (!baseSha) return "(unknown — base sha unavailable)";
   try {
     return (
@@ -43,9 +50,12 @@ export function resolveChangedFiles(worktree: string, baseSha: string | null | u
  */
 export function buildScrutinizePrompt(
   worktree: string,
-  runResult: { runId: number; facts: { files: number; lines: number; commits: string[]; branch: string } },
+  runResult: {
+    runId: number;
+    facts: { files: number; lines: number; commits: string[]; branch: string };
+  },
   changedFiles: string,
-  config?: Config
+  config?: Config,
 ): string {
   const promptPath =
     (config ? promptFileFor(config, "scrutinizeFix") : null) ??
