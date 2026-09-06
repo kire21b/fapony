@@ -95,7 +95,19 @@ export async function cmdUpdate(): Promise<void> {
   if (pullOutput === null) {
     console.error("\n❌ git pull failed (non-fast-forward?).");
     console.error("   Resolve manually, then run: fapony update");
-    if (dirty) git("stash pop --quiet 2>/dev/null || true");
+    if (dirty) {
+      const popResult = gitQuiet("stash pop");
+      if (popResult === null) {
+        console.error(
+          "\n⚠  Your changes are still stashed (auto-restore failed, conflict likely).",
+        );
+        console.error(
+          "   Run `git stash pop` manually to get them back — do NOT `git stash drop`.",
+        );
+      } else {
+        console.error("   ✓  Your stashed changes were restored.");
+      }
+    }
     process.exit(1);
   }
 
