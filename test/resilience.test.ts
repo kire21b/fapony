@@ -83,6 +83,18 @@ export function testClassifyEmpty(): void {
   if (info.cls !== "empty") throw new Error(`expected empty, got ${info.cls}`);
 }
 
+// Regression: exit 0 + empty stdout + auth error on stderr → must classify as "auth", not "empty"
+// This is the scenario the resilience retry path hit before the lastStderr fix.
+export function testClassifyEmptyExitZeroStderrAuth(): void {
+  const info = classifyFailure({
+    exitCode: 0,
+    timedOut: false,
+    stdout: "",
+    stderr: "Error: unauthorized, invalid api key",
+  });
+  if (info.cls !== "auth") throw new Error(`expected auth from stderr-only, got ${info.cls}`);
+}
+
 export function testClassifyTailTruncated(): void {
   const longStdout = "x".repeat(500);
   const info = classifyFailure({
@@ -125,14 +137,15 @@ export function testBackoffCappedAtMax(): void {
 }
 
 export function testBackoffJitterRange(): void {
-  // With rand=0, delay should be 0
+  // Equal jitter: delay in [raw/2, raw] — never 0, even with rand=0
+  // (a zero delay on a rate limit would hammer the API immediately).
   const d = backoffDelayMs(1, 5000, 60000, () => 0);
-  if (d !== 0) throw new Error(`expected 0 with rand=0, got ${d}`);
+  if (d !== 2500) throw new Error(`expected 2500 with rand=0, got ${d}`);
 
-  // Multiple samples should be in [0, raw)
+  // Multiple samples should be in [raw/2, raw]
   for (let i = 0; i < 20; i++) {
     const delay = backoffDelayMs(1, 5000, 60000);
-    if (delay < 0 || delay >= 5000) throw new Error(`delay out of range: ${delay}`);
+    if (delay < 2500 || delay > 5000) throw new Error(`delay out of range: ${delay}`);
   }
 }
 
@@ -245,6 +258,44 @@ export async function testWithRetryTimeoutNotRetried(): Promise<void> {
   );
   if (result.ok) throw new Error("should fail");
   if (attempts !== 1) throw new Error(`timeout should not retry, got ${attempts} attempts`);
+}
+
+export async function testWithRetryTerminalAttemptNumber(): Promise<void> {
+  // Terminal (non-retried) failures must log the real attempt number, not n-1.
+  const logged: number[] = [];
+  const result = await withRetry(
+    async () => {
+      return { ok: false as const, fail: { cls: "auth" as const, exitCode: 1, timedOut: false, tail: "bad key" } };
+    },
+    {
+      policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
+      isAborted: async () => false,
+      onRetry: (_fail, nextAttempt) => { logged.push(nextAttempt - 1); },
+    },
+  );
+  if (result.ok) throw new Error("should fail");
+  if (logged.length !== 1 || logged[0] !== 1) {
+    throw new Error(`terminal failure should log attempt 1, got ${JSON.stringify(logged)}`);
+  }
+}
+
+export function testClassifyLimitNeedsContext(): void {
+  // A bare "429" (line number) or "credit" substring (accredited) must not
+  // classify a deterministic crash as a rate limit.
+  const lineNo = classifyFailure({
+    exitCode: 1,
+    timedOut: false,
+    stdout: "at foo.ts:429:12",
+    stderr: "",
+  });
+  if (lineNo.cls !== "crash") throw new Error(`expected crash, got ${lineNo.cls}`);
+  const accredited = classifyFailure({
+    exitCode: 1,
+    timedOut: false,
+    stdout: "",
+    stderr: "test accredited the wrong account",
+  });
+  if (accredited.cls !== "crash") throw new Error(`expected crash, got ${accredited.cls}`);
 }
 
 export async function testWithRetryAbortedBeforeAttempt(): Promise<void> {

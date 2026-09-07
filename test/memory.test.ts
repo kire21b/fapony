@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
-import { DEFAULT_MEMORY, claimMemory, resolveMemoryConfig } from "../src/memory.js";
+import { claimMemory, closeMemory, DEFAULT_MEMORY, resolveMemoryConfig } from "../src/memory.js";
 
 const BASE_CONFIG: Config = {
   worktrees: { test: "/tmp/test" },
@@ -90,4 +90,29 @@ export function testClaimMemoryFailGracefully(): void {
   assert.equal(noMemResult, false, "should return false when memory is null");
 
   console.log("  ✓ claimMemory fails gracefully");
+}
+
+// Regression: execSync must have timeout so hanging scripts don't block the process.
+// "sleep 999" should complete in ~15s (timeout), not 999s (the sleep duration).
+export function testClaimMemoryTimeout(): void {
+  const hangingConfig: Config = {
+    ...BASE_CONFIG,
+    memory: {
+      claim: ["sleep", "999"],
+      close: ["true"],
+      add: ["true"],
+    },
+  };
+
+  const start = Date.now();
+  const result = claimMemory(hangingConfig, "/tmp", "test-id");
+  const elapsed = Date.now() - start;
+
+  assert.equal(result, false, "should return false for hanging command");
+  // Should complete in ~15s (timeout), not 999s (the sleep)
+  if (elapsed > 20_000) {
+    throw new Error(`timeout test took too long: ${elapsed}ms — execSync may be hanging`);
+  }
+
+  console.log("  ✓ claimMemory timeout prevents hang");
 }

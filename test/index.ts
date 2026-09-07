@@ -56,6 +56,7 @@ import {
 } from "./kickoff.test.js";
 import {
   testClaimMemoryFailGracefully,
+  testClaimMemoryTimeout,
   testMemoryDefaultWiringNoFile,
   testMemoryDefaultWiringWithFile,
   testMemoryExplicitConfigWins,
@@ -66,6 +67,8 @@ import {
   testParsePlanUpdate,
 } from "./parse.test.js";
 import {
+  testPlanHygieneEnglishNoneNoLeak,
+  testPlanHygieneHeadingVariant,
   testPlanHygieneNoSpecNoLeakWarning,
   testPlanHygieneOk,
   testPlanHygieneSpecLeak,
@@ -73,7 +76,9 @@ import {
 } from "./planlint.test.js";
 import {
   testPlanMvAlreadyDatedNotDoublePrefixed,
+  testPlanMvDestCollision,
   testPlanMvDryRun,
+  testPlanMvMissingFile,
   testPlanMvNoHeader,
   testPlanMvNormalizeLinks,
   testPlanMvWithHeader,
@@ -86,8 +91,10 @@ import {
   testClassifyCrash,
   testClassifyCustomPatterns,
   testClassifyEmpty,
+  testClassifyEmptyExitZeroStderrAuth,
   testClassifyLimit,
   testClassifyLimit429,
+  testClassifyLimitNeedsContext,
   testClassifyTailTruncated,
   testClassifyTimeout,
   testFlakyAgentRetriesAndSucceeds,
@@ -101,6 +108,7 @@ import {
   testWithRetryExhausts,
   testWithRetrySucceedsAfterTwoFails,
   testWithRetrySucceedsFirstTry,
+  testWithRetryTerminalAttemptNumber,
   testWithRetryTimeoutNotRetried,
 } from "./resilience.test.js";
 import {
@@ -134,7 +142,9 @@ import {
   testSplitCmdNoQuotes,
   testSplitCmdQuotedArg,
   testSplitCmdSimpleArgs,
+  testSplitCmdSingleQuotedArg,
   testValidateWorktreePath,
+  testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
   testStatusTableShowsNothingWhenEmpty,
@@ -170,7 +180,7 @@ export async function cmdTest(): Promise<void> {
   testMigrateDbRejectsNewerSchema();
   testRenderHandoff();
   testRenderHandoffGitError();
-  testParseGateVerdict();
+  await testParseGateVerdict();
   testParsePlanUpdate();
   testFixtureGuard();
   testGetLastPlanUpdate();
@@ -182,6 +192,8 @@ export async function cmdTest(): Promise<void> {
   testPlanMvWithHeader();
   testPlanMvNormalizeLinks();
   testPlanMvDryRun();
+  testPlanMvMissingFile();
+  testPlanMvDestCollision();
   testPlanMvAlreadyDatedNotDoublePrefixed();
   testClassifyAuth();
   testClassifyTimeout();
@@ -189,8 +201,10 @@ export async function cmdTest(): Promise<void> {
   testClassifyLimit429();
   testClassifyCrash();
   testClassifyEmpty();
+  testClassifyEmptyExitZeroStderrAuth();
   testClassifyTailTruncated();
   testClassifyCustomPatterns();
+  testClassifyLimitNeedsContext();
   testBackoffExponential();
   testBackoffCappedAtMax();
   testBackoffJitterRange();
@@ -202,6 +216,7 @@ export async function cmdTest(): Promise<void> {
   await testWithRetryAuthNotRetried();
   await testWithRetryTimeoutNotRetried();
   await testWithRetryAbortedBeforeAttempt();
+  await testWithRetryTerminalAttemptNumber();
   await testWithRetryCanRetryGateBlocks();
   await testFlakyAgentRetriesAndSucceeds();
   await testSigintHandlerMarksStopped();
@@ -217,6 +232,7 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
   testClaimMemoryFailGracefully();
+  testClaimMemoryTimeout();
   testShouldScrutinizeFix();
   testBuildScrutinizePrompt();
   testResolveChangedFiles();
@@ -241,6 +257,8 @@ export async function cmdTest(): Promise<void> {
   testPlanHygieneTooLong();
   testPlanHygieneSpecLeak();
   testPlanHygieneNoSpecNoLeakWarning();
+  testPlanHygieneEnglishNoneNoLeak();
+  testPlanHygieneHeadingVariant();
   testStatusTableShowsNothingWhenEmpty();
   testStatusTableShowsPlanAndMemId();
   testStatusTableTruncatesLongMemId();
@@ -256,9 +274,11 @@ export async function cmdTest(): Promise<void> {
   testSplitCmdEmptyString();
   testSplitCmdNoQuotes();
   testSplitCmdEmptyQuotedString();
+  testSplitCmdSingleQuotedArg();
   testBuildSetupConfigNoMemory();
   testBuildSetupConfigWithMemory();
   testValidateWorktreePath();
+  testValidateWorktreePathRejectsFile();
   testShouldOverwriteConfig();
   testParseTimeoutMinutes();
   await testCmdSetupGitMissing();
