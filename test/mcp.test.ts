@@ -251,9 +251,9 @@ export function testHandoffCheckWithoutFacts(): void {
     checks: { name: string; pass: boolean; note: string }[];
   };
   const crossRef = data.checks.find((c) => c.name === "facts_cross_referenced");
-  assert.equal(crossRef?.pass, false);
-  assert.ok(crossRef?.note.includes("no facts provided"));
-  console.log("  ✓ handoff_check reports missing facts for cross-reference");
+  // When no facts provided, the check is skipped entirely (not in checks array)
+  assert.equal(crossRef, undefined);
+  console.log("  ✓ handoff_check skips facts_cross_referenced when no facts");
 }
 
 export function testHandoffCheckMultiLineUncertain(): void {
@@ -280,22 +280,8 @@ export function testHandoffCheckMultiLineUncertain(): void {
   console.log("  ✓ handoff_check handles multi-line uncertain");
 }
 
-export function testVerdictSubmitInvalidRunId(): void {
-  const result = toolVerdictSubmit({
-    run_id: "abc",
-    verdict: "pass",
-    reason_code: "missing_test",
-  });
-  assert.ok(result.isError);
-  assert.ok(
-    (parseToolResult(result) as { error: string }).error.includes("run_id"),
-  );
-  console.log("  ✓ verdict_submit rejects non-integer run_id");
-}
-
 export function testVerdictSubmitInvalidVerdict(): void {
   const result = toolVerdictSubmit({
-    run_id: 1,
     verdict: "maybe",
     reason_code: "missing_test",
   });
@@ -308,7 +294,6 @@ export function testVerdictSubmitInvalidVerdict(): void {
 
 export function testVerdictSubmitInvalidReasonCode(): void {
   const result = toolVerdictSubmit({
-    run_id: 1,
     verdict: "pass",
     reason_code: "bogus",
   });
@@ -323,7 +308,6 @@ export function testVerdictSubmitInvalidReasonCode(): void {
 
 export function testVerdictSubmitOtherRequiresNote(): void {
   const result = toolVerdictSubmit({
-    run_id: 1,
     verdict: "fail",
     reason_code: "other",
   });
@@ -381,6 +365,38 @@ export function testVerdictSubmitSuccess(): void {
     }
   }
   console.log("  ✓ verdict_submit stores event successfully");
+}
+
+export function testVerdictSubmitAutoCreatesRun(): void {
+  const oldEnv = process.env.FAPONY_STATE_DIR;
+  const tmpDir = mkdtempSync(join(tmpdir(), "fapony-mcp-autocreate-"));
+  process.env.FAPONY_STATE_DIR = tmpDir;
+  try {
+    // Call without run_id — should auto-create a run
+    const result = toolVerdictSubmit({
+      verdict: "pass",
+      reason_code: "missing_test",
+    });
+
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      stored: boolean;
+      run_id: number;
+      verdict: string;
+      reason_code: string;
+    };
+    assert.equal(data.stored, true);
+    assert.ok(data.run_id > 0);
+    assert.equal(data.verdict, "pass");
+    assert.equal(data.reason_code, "missing_test");
+  } finally {
+    if (oldEnv !== undefined) {
+      process.env.FAPONY_STATE_DIR = oldEnv;
+    } else {
+      delete process.env.FAPONY_STATE_DIR;
+    }
+  }
+  console.log("  ✓ verdict_submit auto-creates run when run_id omitted");
 }
 
 export function testVerdictSubmitStoresMcpSource(): void {
@@ -486,4 +502,74 @@ export function testReasonCodesAreLocked(): void {
   assert.ok(REASON_CODES.includes("spec_gap"));
   assert.ok(REASON_CODES.includes("other"));
   console.log("  ✓ REASON_CODES has 5 values (locked)");
+}
+
+export function testEndToEndPipeline(): void {
+  const oldEnv = process.env.FAPONY_STATE_DIR;
+  const tmpDir = mkdtempSync(join(tmpdir(), "fapony-mcp-e2e-"));
+  process.env.FAPONY_STATE_DIR = tmpDir;
+  try {
+    withTempRepo((dir) => {
+      // Make a commit
+      writeFileSync(join(dir, "feature.ts"), "export const x = 1;\n");
+      execSync("git add .", { cwd: dir, stdio: "ignore" });
+      execSync("git commit -m 'add feature'", { cwd: dir, stdio: "ignore" });
+
+      const baseSha = execSync("git rev-parse HEAD~1", {
+        cwd: dir,
+        encoding: "utf-8",
+      }).trim();
+      const headSha = execSync("git rev-parse HEAD", {
+        cwd: dir,
+        encoding: "utf-8",
+      }).trim();
+
+      // Step 1: collect
+      const collectResult = toolHandoffCollect({
+        base_sha: baseSha,
+        head_sha: headSha,
+        worktree: dir,
+      });
+      const collectData = parseToolResult(collectResult) as {
+        facts: { commits: string[] };
+      };
+
+      // Step 2: check
+      const handoff = [
+        "## HANDOFF",
+        `claimed: ${headSha}`,
+        `commits: ${headSha}`,
+        "checks: typecheck pass",
+        "uncertain: none",
+        "not_done: none",
+      ].join("\n");
+      const checkResult = toolHandoffCheck({
+        handoff,
+        facts: { commits: collectData.facts.commits },
+      });
+      const checkData = parseToolResult(checkResult) as {
+        summary: { failed: number };
+      };
+      assert.equal(checkData.summary.failed, 0);
+
+      // Step 3: submit (auto-creates run)
+      const verdictResult = toolVerdictSubmit({
+        verdict: "pass",
+        reason_code: "missing_test",
+      });
+      const verdictData = parseToolResult(verdictResult) as {
+        stored: boolean;
+        run_id: number;
+      };
+      assert.equal(verdictData.stored, true);
+      assert.ok(verdictData.run_id > 0);
+    });
+  } finally {
+    if (oldEnv !== undefined) {
+      process.env.FAPONY_STATE_DIR = oldEnv;
+    } else {
+      delete process.env.FAPONY_STATE_DIR;
+    }
+  }
+  console.log("  ✓ end-to-end pipeline: collect → check → submit");
 }

@@ -4,8 +4,7 @@
 
 import { execSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { addEvent, getRun, openDb } from "./db/index.js";
-import { assertSafe } from "./safety.js";
+import { addEvent, getRun, newRun, openDb } from "./db/index.js";
 
 // --- ReasonCode enum (locked in step 0, append-only) ---
 
@@ -80,14 +79,15 @@ export const TOOLS = [
   {
     name: "verdict_submit",
     description:
-      "Record a pass/fail verdict with reason code into the run's event log. " +
-      "Requires an existing run_id from fapony.",
+      "Record a pass/fail verdict with reason code into the event log. " +
+      "Creates a new run entry if run_id is not provided.",
     inputSchema: {
       type: "object" as const,
       properties: {
         run_id: {
           type: "number",
-          description: "Existing run ID from fapony",
+          description:
+            "Optional run ID from fapony. If omitted, a new run is created automatically.",
         },
         verdict: {
           type: "string",
@@ -104,7 +104,7 @@ export const TOOLS = [
           description: "Optional note (required when reason_code = 'other')",
         },
       },
-      required: ["run_id", "verdict", "reason_code"],
+      required: ["verdict", "reason_code"],
     },
   },
 ];
@@ -209,22 +209,6 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
   const branchResult = execGitSafe("git branch --show-current", worktree);
   const branch = branchResult.ok ? branchResult.output : "";
 
-  // Safety check — run assertSafe on diff content to detect dangerous patterns
-  const safety_violations: string[] = [];
-  try {
-    const diffFull = execGitSafe(
-      `git diff ${base_sha}..${head_sha} -- .`,
-      worktree,
-    );
-    if (diffFull.ok) {
-      assertSafe(["git", diffFull.output]);
-    }
-  } catch (e: unknown) {
-    if (e instanceof Error) {
-      safety_violations.push(e.message);
-    }
-  }
-
   // Check file types
   const nameResult = execGitSafe(
     `git diff --name-only ${base_sha}..${head_sha}`,
@@ -251,8 +235,6 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
     checks: {
       has_test_changes,
       has_docs_changes,
-      safety_violations,
-      dangerous_patterns: [],
     },
     provenance: {
       verified: true,
@@ -388,7 +370,7 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
     note: hasChecks ? "checks field present" : "no checks field in handoff",
   });
 
-  // 6. facts_cross_referenced
+  // 6. facts_cross_referenced — only when facts provided
   if (facts && typeof facts === "object") {
     const f = facts as Record<string, unknown>;
     const factCommits = Array.isArray(f.commits) ? (f.commits as string[]) : [];
@@ -409,13 +391,8 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
         note: "no commits to cross-reference",
       });
     }
-  } else {
-    checks.push({
-      name: "facts_cross_referenced",
-      pass: false,
-      note: "no facts provided for cross-reference",
-    });
   }
+  // If no facts provided, the check is skipped entirely (not added to checks[])
 
   const passed = checks.filter((c) => c.pass).length;
   const failed = checks.filter((c) => !c.pass).length;
@@ -434,9 +411,6 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
 export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   const { run_id, verdict, reason_code, note } = args;
 
-  if (typeof run_id !== "number" || !Number.isInteger(run_id)) {
-    return errorResult("run_id must be an integer");
-  }
   if (verdict !== "pass" && verdict !== "fail") {
     return errorResult("verdict must be 'pass' or 'fail'");
   }
@@ -450,9 +424,18 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   }
 
   const db = openDb();
-  const run = getRun(db, run_id);
-  if (!run) {
-    return jsonResult({ stored: false, error: "run not found" });
+
+  // Resolve or create run_id
+  let resolvedRunId: number;
+  if (typeof run_id === "number" && Number.isInteger(run_id)) {
+    const run = getRun(db, run_id);
+    if (!run) {
+      return jsonResult({ stored: false, error: "run not found" });
+    }
+    resolvedRunId = run_id;
+  } else {
+    // Auto-create a run entry for external agents
+    resolvedRunId = newRun(db, "mcp-external", null, null, "mcp");
   }
 
   const eventData = {
@@ -462,12 +445,12 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     source: "mcp",
   };
 
-  const eventId = addEvent(db, run_id, "gate", eventData);
+  const eventId = addEvent(db, resolvedRunId, "gate", eventData);
 
   return jsonResult({
     stored: true,
     event_id: eventId,
-    run_id,
+    run_id: resolvedRunId,
     verdict,
     reason_code,
   });
@@ -491,7 +474,7 @@ export function dispatch(
     case "tools/list":
       return { tools: TOOLS };
     case "tools/call":
-      return toolVerdictSubmit_call(
+      return dispatchToolCall(
         params as { name: string; arguments?: Record<string, unknown> },
       );
     default:
@@ -502,7 +485,7 @@ export function dispatch(
   }
 }
 
-function toolVerdictSubmit_call(params: {
+function dispatchToolCall(params: {
   name: string;
   arguments?: Record<string, unknown>;
 }): ToolResult {

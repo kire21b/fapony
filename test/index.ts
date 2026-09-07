@@ -55,6 +55,7 @@ import {
   testKickoffSinglePending,
 } from "./kickoff.test.js";
 import {
+  testEndToEndPipeline,
   testErrorResult,
   testExtractMultiFieldEmptyLineEndsField,
   testExtractMultiFieldMultiLine,
@@ -79,8 +80,8 @@ import {
   testMcpUnknownMethod,
   testParseToolResult,
   testReasonCodesAreLocked,
+  testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
-  testVerdictSubmitInvalidRunId,
   testVerdictSubmitInvalidVerdict,
   testVerdictSubmitOtherRequiresNote,
   testVerdictSubmitRunNotFound,
@@ -363,13 +364,14 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();
-  testVerdictSubmitInvalidRunId();
   testVerdictSubmitInvalidVerdict();
   testVerdictSubmitInvalidReasonCode();
   testVerdictSubmitOtherRequiresNote();
   testVerdictSubmitRunNotFound();
   testVerdictSubmitSuccess();
   testVerdictSubmitStoresMcpSource();
+  testVerdictSubmitAutoCreatesRun();
+  testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
   testExtractMultiFieldMultiLine();

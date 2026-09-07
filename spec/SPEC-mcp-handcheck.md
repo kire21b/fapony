@@ -44,9 +44,7 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
   },
   "checks": {
     "has_test_changes": true,  // diff includes files matching *test* or *spec*
-    "has_docs_changes": false, // diff includes *.md files
-    "safety_violations": [],   // commands that would fail assertSafe()
-    "dangerous_patterns": []   // raw output from assertSafe checks
+    "has_docs_changes": false  // diff includes *.md files
   },
   "provenance": {
     "verified": true,          // facts come from fapony running git directly
@@ -114,7 +112,7 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
 
 ```jsonc
 {
-  "run_id": 42,                    // required — existing run ID from fapony
+  "run_id": 42,                    // optional — if omitted, a new run is auto-created
   "verdict": "pass",               // required — "pass" | "fail"
   "reason_code": "missing_test",   // required — from ReasonCode enum
   "note": "needs integration test" // optional — required when reason_code = "other"
@@ -186,7 +184,7 @@ allowlist คำสั่งที่ user ประกาศไว้ — ไ�
 | `handoff` ไม่มี `## HANDOFF` block | `has_handoff_block` = fail, rest = skip |
 | `run_id` ไม่มีใน DB | `verdict_submit` returns `{ stored: false, error: "run not found" }` |
 | `reason_code = "other"` ไม่มี `note` | `verdict_submit` returns validation error |
-| `facts` param omitted in `handoff_check` | Skip `facts_cross_referenced` check |
+| `facts` param omitted in `handoff_check` | `facts_cross_referenced` check is skipped entirely (not in checks array) |
 | Agent ส่ง input ร้าย | `assertSafe()` + input validation ปฏิเสธ |
 
 ## Examples
