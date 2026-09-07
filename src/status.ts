@@ -1,5 +1,7 @@
 import type { Database } from "bun:sqlite";
-import { getActiveRuns, getEvents, openDb } from "./db/index.js";
+import type { Config } from "./db/index.js";
+import { getActiveRuns, getEvents, loadConfig, openDb } from "./db/index.js";
+import { pendingPlans, worktreeFromCwd } from "./plans.js";
 
 /** Table of active runs — plan + mem_id shown so you don't have to open the
  * plan file or dig through .fapony/.memory/ to know what a run maps to. */
@@ -33,7 +35,36 @@ export function renderStatusTable(db: Database): string {
   return lines.join("\n");
 }
 
+/** Numbered pending plans for the worktree you're standing in (numbering is
+ * just for reading the list — run by filename prefix, not by number: a bare
+ * digit on the CLI means run ID, not plan index). Empty string when the
+ * worktree has nothing pending. */
+export function renderPendingPlans(
+  config: Config,
+  worktreeKey: string,
+): string {
+  const worktree = config.worktrees[worktreeKey];
+  if (!worktree) return "";
+  const pending = pendingPlans(config, worktree);
+  if (pending.length === 0) return "";
+
+  const lines = [
+    "",
+    `pending plans (${worktreeKey}):`,
+    ...pending.map((name, i) => `  #${i + 1} ${name}`),
+    `  → run: fapony run <plan-prefix>  ·  e.g. fapony run ${pending[0]}`,
+  ];
+  return lines.join("\n");
+}
+
 export function cmdStatus(_args: string[]): void {
   const db = openDb();
   console.log(renderStatusTable(db));
+
+  const config = loadConfig();
+  const key = worktreeFromCwd(config);
+  if (key) {
+    const pending = renderPendingPlans(config, key);
+    if (pending) console.log(pending);
+  }
 }
