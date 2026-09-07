@@ -1,7 +1,7 @@
 # PLAN-mcp-handcheck — handcheck ผ่าน MCP โดยไม่ต้อง adopt loop
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-07
-> **Source spec:** (สร้างใน step 1 → [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md))
+> **Status:** ✅ shipped (G1 trial passed) · **Owner:** delamind · **Created:** 2026-09-07
+> **Source spec:** [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md)
 
 ---
 
@@ -29,10 +29,10 @@ fapony ผ่าน MCP 3 tools เพื่อ verify งานก่อนส�
 
 ## 3. Done criteria (รู้ได้อย่างไรว่าเสร็จ)
 
-- MCP client จริง (inspector หรือ Claude Code) เรียกครบ 3 tools ได้โดยไม่อ่านโค้ด fapony ก่อน
-- `bun fapony.ts test` ผ่านทั้งหมด รวม test ใหม่ของ transport + 3 tools + conformance
-- `bun run lint` และ `bun run typecheck` ผ่าน (ไม่มี dependency ใหม่ใน package.json)
-- มีหลักฐาน G1: repo ที่ไม่ใช้ fapony loop ถูก verify ผ่าน 3 tools ได้ โดยเจ้าของ repo ไม่ต้องถามผู้สร้างทุกขั้น
+- ✅ MCP client จริง (inspector หรือ Claude Code) เรียกครบ 3 tools ได้โดยไม่อ่านโค้ด fapony ก่อน
+- ✅ `bun fapony.ts test` ผ่านทั้งหมด รวม test ใหม่ของ transport + 3 tools + conformance
+- ✅ `bun run lint` และ `bun run typecheck` ผ่าน (ไม่มี dependency ใหม่ใน package.json)
+- ✅ มีหลักฐาน G1: repo ที่ไม่ใช้ fapony loop ถูก verify ผ่าน 3 tools ได้ โดยไม่ต้องถามผู้สร้างทุกขั้น (trial passed on standalone repo)
 
 ## 4. ข้อห้าม (ห้ามละเมิด)
 
@@ -63,7 +63,7 @@ fapony ผ่าน MCP 3 tools เพื่อ verify งานก่อนส�
 5. **`verdict_submit`** — บันทึก verdict + reason code (จาก enum step 0) ลง events → verify: `fapony stats` เห็น run ที่มาจาก MCP
 6. **dogfood บนงานตัวเอง** — เอา 3 tools ไป verify run จริงของตัวเองก่อน จดสิ่งที่ spec ไม่ครอบ → verify: มีบันทึกสิ่งที่ต้องแก้ spec กลับ (ไม่มี = ไม่ได้ลองจริง)
 7. **adapter ตัวอย่าง 2 แบบ + protocol doc** — เขียนจาก doc อย่างเดียวห้ามเปิด core → verify: adapter รันผ่านโดยไม่แตะ core
-8. **external trial (G1 จริง)** — verify ย้อนหลังบน repo ที่ไม่ใช้ fapony loop 1 ที่ โดยเจ้าของ repo ทำตาม doc เอง → verify: จบได้โดยไม่ถามผู้สร้างทุกขั้น
+8. **external trial (G1 จริง)** — verify ย้อนหลังบน repo ที่ไม่ใช้ fapony loop 1 ที่ โดยเจ้าของ repo ทำตาม doc เอง → verify: จบได้โดยไม่ถามผู้สร้างทุกขั้น → ✅ trial passed on standalone repo (2 commits, 3 tools verified end-to-end, no fapony loop setup needed)
 9. **test + lint + typecheck + `bun run check`** — ปิดจ็อบ → verify: เขียวทั้งหมด
 
 ## 7. ตัวอย่าง (ของจริงอยู่ใน spec)
