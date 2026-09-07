@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
-import { DEFAULT_MEMORY, resolveMemoryConfig } from "../src/memory.js";
+import { DEFAULT_MEMORY, claimMemory, resolveMemoryConfig } from "../src/memory.js";
 
 const BASE_CONFIG: Config = {
   worktrees: { test: "/tmp/test" },
@@ -69,4 +69,25 @@ export function testMemoryExplicitConfigWins(): void {
   }
 
   console.log("  ✓ memory explicit config wins over default");
+}
+
+export function testClaimMemoryFailGracefully(): void {
+  // Config with a claim command that always fails ("false" exits 1)
+  const failingConfig: Config = {
+    ...BASE_CONFIG,
+    memory: {
+      claim: ["false"],
+      close: ["true"],
+      add: ["true"],
+    },
+  };
+
+  const result = claimMemory(failingConfig, "/tmp", "test-id");
+  assert.equal(result, false, "should return false when shell command fails");
+
+  // No memory config → returns false
+  const noMemResult = claimMemory(BASE_CONFIG, "/tmp", "test-id");
+  assert.equal(noMemResult, false, "should return false when memory is null");
+
+  console.log("  ✓ claimMemory fails gracefully");
 }

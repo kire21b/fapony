@@ -37,7 +37,12 @@ import {
   testGateOnceMaxRounds,
   testGateOncePass,
 } from "./gate.test.js";
-import { testParseHandoff, testRenderHandoff } from "./handoff.test.js";
+import {
+  testParseHandoff,
+  testParseHandoffMultiLine,
+  testRenderHandoff,
+  testRenderHandoffGitError,
+} from "./handoff.test.js";
 import {
   testInitCreatesDirectories,
   testInitIdempotent,
@@ -50,6 +55,7 @@ import {
   testKickoffSinglePending,
 } from "./kickoff.test.js";
 import {
+  testClaimMemoryFailGracefully,
   testMemoryDefaultWiringNoFile,
   testMemoryDefaultWiringWithFile,
   testMemoryExplicitConfigWins,
@@ -155,11 +161,13 @@ export async function cmdTest(): Promise<void> {
   testAssertSafe();
   testAssertNoPromptInArgv();
   testParseHandoff();
+  testParseHandoffMultiLine();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
   testMigrateDbRejectsNewerSchema();
   testRenderHandoff();
+  testRenderHandoffGitError();
   testParseGateVerdict();
   testParsePlanUpdate();
   testFixtureGuard();
@@ -206,6 +214,7 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
+  testClaimMemoryFailGracefully();
   testShouldScrutinizeFix();
   testBuildScrutinizePrompt();
   testResolveChangedFiles();
