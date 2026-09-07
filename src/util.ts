@@ -24,3 +24,9 @@ export function fillPrompt(
   }
   return out;
 }
+
+/** True for "y"/"yes" (case-insensitive, trimmed) — the only affirmative answers. */
+export function isAffirmative(answer: string): boolean {
+  const normalized = answer.trim().toLowerCase();
+  return normalized === "y" || normalized === "yes";
+}

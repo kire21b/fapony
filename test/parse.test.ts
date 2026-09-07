@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseGateVerdict, parsePlanUpdate } from "../src/parse.js";
 
-export function testParseGateVerdict(): void {
+export async function testParseGateVerdict(): Promise<void> {
   const passWithNote = `Some review output here
 VERDICT: pass
 Looks good, no issues found.`;
@@ -30,6 +30,19 @@ Looks good, no issues found.`;
   assert(v !== null, "should parse pass without note");
   assert.equal(v?.verdict, "pass");
   assert.equal(v?.note, "");
+
+  // A custom verdict regex without a (pass|fail) capture group must fail
+  // safe (null), not propagate verdict: undefined downstream.
+  const { loadConfig } = await import("../src/db/index.js");
+  const noGroup = {
+    ...loadConfig("/nonexistent-path/fapony.config.json"),
+    markers: { verdict: "^VERDICT:" },
+  };
+  assert.equal(
+    parseGateVerdict("VERDICT: pass", noGroup),
+    null,
+    "verdict regex without capture group should return null",
+  );
 
   console.log("  ✓ parseGateVerdict");
 }

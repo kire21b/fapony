@@ -42,6 +42,16 @@ export function loadConfig(configPath?: string): Config {
   try {
     const raw = readFileSync(resolved, "utf-8");
     const file = JSON.parse(raw) as Partial<Config>;
+
+    // B2: warn when both top-level executor.cmd and roles.executor.cmd exist
+    // — roles wins silently, but the duplicate is a drift risk.
+    if (file.executor?.cmd && file.roles?.executor?.cmd) {
+      console.error(
+        "⚠ config has both executor.cmd and roles.executor.cmd — roles.executor.cmd wins. " +
+          "Remove top-level executor to avoid drift.",
+      );
+    }
+
     return {
       ...DEFAULT_CONFIG,
       ...file,

@@ -38,6 +38,17 @@ export const DEFAULT_ROLE_TIMEOUTS: Record<string, number> = {
   scrutinizeFix: 15,
 };
 
+export const DEFAULT_RESILIENCE = {
+  retry: { maxAttempts: 3, limitBaseMs: 60000, crashBaseMs: 5000, maxMs: 600000 },
+  patterns: {
+    // NOTE: bare "429" / "credit" intentionally require nearby rate context —
+    // a stack-trace line number or "accredited" must not classify a
+    // deterministic crash as a rate limit (that buys a 60s backoff for nothing).
+    limit: ["rate\\s*limit", "429.{0,30}(too many|rate|limit|quota)|too many.{0,30}429", "usage limit", "credit.{0,30}(exceed|limit|quota|exhaust|insufficient)|insufficient.{0,30}credit", "quota", "overloaded"],
+    auth: ["unauthorized", "invalid api key", "authentication"],
+  },
+};
+
 export const DEFAULT_CONFIG: Config = {
   worktrees: {},
   executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
@@ -59,4 +70,6 @@ export const DEFAULT_CONFIG: Config = {
   planmv: null,
   display: null,
   defaults: null,
+  // resilience omitted (undefined) = ON by default.
+  // Set to null in user config to explicitly disable.
 };

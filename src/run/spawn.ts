@@ -25,12 +25,16 @@ export interface SpawnInput {
 
 export interface SpawnResult {
   stdout: string;
+  stderr: string;
   exitCode: number;
+  timedOut: boolean;
+  /** stderr from the last attempt — used by classifyFailure when resilience retries. */
+  lastStderr: string;
 }
 
 /**
  * Spawn the executor agent: resolve prompt, assert safety, run Bun.spawn,
- * drain stdout+stderr with timeout, return stdout + exitCode.
+ * drain stdout+stderr with timeout, return stdout + exitCode + timedOut.
  */
 export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
   const {
@@ -74,7 +78,10 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
   });
 
   let stdout = "";
+  let stderr = "";
+  let lastStderr = "";
   let exitCode = 0;
+  let timedOut = false;
 
   try {
     const proc = Bun.spawn(executorCmdArr, {
@@ -93,9 +100,12 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
 
     const stderrDrain = new Response(proc.stderr).text();
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const timeout = setTimeout(() => {
+      timedOut = true;
       proc.kill();
     }, timeoutMs);
+    timer = timeout;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -105,16 +115,20 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
       process.stdout.write(chunk);
     }
 
-    clearTimeout(timeout);
+    if (timer) clearTimeout(timer);
     stdout = buffer;
     const errText = await stderrDrain;
+    stderr = errText;
+    lastStderr = errText;
     if (errText) process.stderr.write(errText);
     exitCode = await proc.exited;
   } catch (e) {
     console.error(`executor failed: ${(e as Error).message}`);
+    lastStderr = (e as Error).message;
     exitCode = 1;
   }
 
   endSpawn(db, spawnEventId, config, "executor", stdout);
-  return { stdout, exitCode };
+  db.close();
+  return { stdout, stderr, exitCode, timedOut, lastStderr };
 }

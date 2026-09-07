@@ -5,22 +5,31 @@
 //   2. BASE SHA + INSERT RUN
 //   3. MEMORY CLAIM (optional)
 //   4. RESOLVE PLAN CONTENT + HYGIENE + SPEC INJECTION
-//   5. SPAWN EXECUTOR
+//   5. SPAWN EXECUTOR (with retry when resilience enabled)
 //   6. GIT FACTS + PARSE HANDOFF
 //   7. ROUTE
 
 import { execSync } from "node:child_process";
 import {
   addEvent,
+  getActiveRuns,
   handoffMarker,
   loadConfig,
   newRun,
   openDb,
+  resilienceEnabled,
+  resiliencePatterns,
+  retryPolicy,
   setStatus,
   shortShaLen,
 } from "../db/index.js";
 import { gitFacts, parseHandoff } from "../handoff.js";
 import { claimMemory, closeMemory } from "../memory.js";
+import {
+  classifyFailure,
+  withRetry,
+} from "../resilience.js";
+import { setSigintPhase, setSigintRunId } from "../sigint.js";
 import { gitGuard } from "./guard.js";
 import { resolvePlan } from "./plan.js";
 import { spawnExecutor } from "./spawn.js";
@@ -37,6 +46,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     planContent: planContentOverride,
     memId,
     allowDirty,
+    isAborted,
   } = opts;
   const config = loadConfig();
   const worktree = config.worktrees[worktreeKey];
@@ -65,15 +75,31 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     };
   }
 
+  const db = openDb();
+
+  // --- 1b. CONCURRENCY GUARD: reject if another run is already active on this worktree ---
+  const clash = getActiveRuns(db).find((r) => r.worktree === worktreeKey);
+  if (clash) {
+    return {
+      runId: 0,
+      status: "stopped",
+      facts: { files: 0, lines: 0, commits: [], branch: "" },
+      parsed: { missing: true },
+      isBig: false,
+      error: `worktree "${worktreeKey}" already has an active run (id ${clash.id}, status ${clash.status}) — two executors on the same tree will race. Run \`fapony stop ${clash.id}\` first if it's stale.`,
+    };
+  }
+
   // --- 2. BASE SHA + INSERT RUN ---
   const baseSha = execSync("git rev-parse HEAD", {
     cwd: worktree,
     encoding: "utf-8",
     stdio: ["pipe", "pipe", "pipe"],
+    timeout: 15_000,
   }).trim();
 
-  const db = openDb();
   const runId = newRun(db, worktreeKey, planPath, memId, baseSha);
+  setSigintRunId(runId);
 
   console.error(
     `run ${runId} started (base ${baseSha.slice(0, shortShaLen(config))})`,
@@ -108,19 +134,162 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     config,
   );
 
-  // --- 5. SPAWN EXECUTOR ---
-  const { stdout, exitCode } = await spawnExecutor({
-    worktree,
-    worktreeKey,
-    planContent,
-    specContent,
-    memId,
-    baseSha,
-    runId,
-  });
+  // --- 5. SPAWN EXECUTOR (with retry when resilience enabled) ---
+  const useResilience = resilienceEnabled(config);
+
+  let stdout = "";
+  let stderr = "";
+  let lastStderr = "";
+  let exitCode = 0;
+  let timedOut = false;
+
+  if (useResilience) {
+    // With retry
+    const policy = retryPolicy(config);
+    const patterns = resiliencePatterns(config);
+
+    const retryResult = await withRetry(
+      async (_n) => {
+        const result = await spawnExecutor({
+          worktree,
+          worktreeKey,
+          planContent,
+          specContent,
+          memId,
+          baseSha,
+          runId,
+        });
+        lastStderr = result.lastStderr;
+        if (result.exitCode === 0 && result.stdout.trim()) {
+          return { ok: true as const, value: result.stdout };
+        }
+        // Failure — classify
+        const fail = classifyFailure({
+          exitCode: result.exitCode,
+          timedOut: result.timedOut,
+          stdout: result.stdout,
+          stderr: result.lastStderr,
+          limitPatterns: patterns.limit,
+          authPatterns: patterns.auth,
+        });
+        return { ok: false as const, fail };
+      },
+      {
+        policy: {
+          maxAttempts: policy.maxAttempts,
+          limitBaseMs: policy.limitBaseMs,
+          crashBaseMs: policy.crashBaseMs,
+          maxMs: policy.maxMs,
+          retryable: ["limit", "crash", "empty"],
+        },
+        isAborted: isAborted ?? (async () => false),
+        canRetry: async () => {
+          // Clean-tree gate: only retry if HEAD hasn't moved and tree is clean
+          try {
+            const head = execSync("git rev-parse HEAD", {
+              cwd: worktree,
+              encoding: "utf-8",
+              stdio: ["pipe", "pipe", "pipe"],
+              timeout: 15_000,
+            }).trim();
+            const porcelain = execSync("git status --porcelain", {
+              cwd: worktree,
+              encoding: "utf-8",
+              stdio: ["pipe", "pipe", "pipe"],
+              timeout: 15_000,
+            }).trim();
+            return head === baseSha && porcelain === "";
+          } catch {
+            return false;
+          }
+        },
+        onRetry: (fail, nextAttempt, delayMs) => {
+          addEvent(db, runId, "spawn_fail", {
+            role: "executor",
+            cls: fail.cls,
+            exit_code: fail.exitCode,
+            attempt: nextAttempt - 1,
+            tail: fail.tail,
+          });
+          if (delayMs > 0) {
+            setSigintPhase("backoff");
+            console.error(
+              `executor attempt ${nextAttempt - 1} failed (${fail.cls}) — retrying in ${(delayMs / 1000).toFixed(0)}s...`,
+            );
+          }
+        },
+        onBeforeAttempt: () => setSigintPhase("spawn"),
+      },
+    );
+
+    if (retryResult.ok) {
+      stdout = retryResult.value;
+      exitCode = 0;
+    } else if (
+      !retryResult.exhausted &&
+      (await (isAborted ?? (async () => false))())
+    ) {
+      // Aborted during backoff (SIGINT / stopped run) — not a flaky
+      // executor, so record stopped, not stalled (stall-rate stats must
+      // not inherit user aborts).
+      setStatus(db, runId, "stopped");
+      addEvent(db, runId, "stopped", { reason: "aborted during retry backoff" });
+      console.error(`\nfapony: run ${runId} stopped (aborted)`);
+
+      if (memId) closeMemory(config, worktree, memId, `run ${runId} stopped`);
+
+      return {
+        runId,
+        status: "stopped",
+        facts: { files: 0, lines: 0, commits: [], branch: "" },
+        parsed: { missing: true },
+        isBig: false,
+      };
+    } else {
+      exitCode = retryResult.fail.exitCode;
+      timedOut = retryResult.fail.timedOut;
+      stdout = "";
+    }
+  } else {
+    // Old behavior: no retry
+    const result = await spawnExecutor({
+      worktree,
+      worktreeKey,
+      planContent,
+      specContent,
+      memId,
+      baseSha,
+      runId,
+    });
+    stdout = result.stdout;
+    stderr = result.stderr;
+    lastStderr = result.lastStderr;
+    exitCode = result.exitCode;
+    timedOut = result.timedOut;
+  }
 
   // --- TIMEOUT / EXIT CHECK ---
-  if (exitCode !== 0) {
+  if (exitCode !== 0 || !stdout.trim()) {
+    // Log spawn_fail for the final failure if not using resilience (already logged in retry path)
+    if (!useResilience) {
+      const patterns = resiliencePatterns(config);
+      const fail = classifyFailure({
+        exitCode,
+        timedOut,
+        stdout,
+        stderr: lastStderr,
+        limitPatterns: patterns.limit,
+        authPatterns: patterns.auth,
+      });
+      addEvent(db, runId, "spawn_fail", {
+        role: "executor",
+        cls: fail.cls,
+        exit_code: exitCode,
+        attempt: 1,
+        tail: fail.tail,
+      });
+    }
+
     setStatus(db, runId, "stalled");
     addEvent(db, runId, "stalled", { exit_code: exitCode });
     console.error(`\nfapony: run ${runId} stalled (exit ${exitCode})`);

@@ -43,3 +43,29 @@ export function testPlanHygieneNoSpecNoLeakWarning(): void {
   );
   console.log("  ✓ checkPlanHygiene (no spec, no leak warning)");
 }
+
+export function testPlanHygieneEnglishNoneNoLeak(): void {
+  const bulk = Array.from({ length: 10 }, (_, i) => `example ${i}`).join("\n");
+  for (const sentinel of ["none", "n/a", "no spec", "—"]) {
+    const plan = `> **Source spec:** ${sentinel}\n\n## 7. Examples\n${bulk}\n\n## 8. References\n- link\n`;
+    const warnings = checkPlanHygiene(plan);
+    assert(
+      !warnings.some((w) => w.kind === "spec_leak"),
+      `"${sentinel}" means no spec linked — must not warn spec_leak`,
+    );
+  }
+  console.log("  ✓ checkPlanHygiene (english no-spec sentinels)");
+}
+
+export function testPlanHygieneHeadingVariant(): void {
+  const bulk = Array.from({ length: 10 }, (_, i) => `example ${i}`).join("\n");
+  for (const heading of ["## 7: Examples", "## 7 — Examples", "## 7 Examples"]) {
+    const plan = `> **Source spec:** [spec/x.md](../spec/x.md)\n\n${heading}\n${bulk}\n\n## 8. References\n- link\n`;
+    const warnings = checkPlanHygiene(plan);
+    assert(
+      warnings.some((w) => w.kind === "spec_leak"),
+      `"${heading}" with a linked spec should still warn spec_leak`,
+    );
+  }
+  console.log("  ✓ checkPlanHygiene (section 7 heading variants)");
+}

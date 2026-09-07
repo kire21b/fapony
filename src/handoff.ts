@@ -7,6 +7,7 @@ export interface GitFacts {
   lines: number;
   commits: string[];
   branch: string;
+  gitError?: string;
 }
 
 export interface ParsedHandoff {
@@ -25,42 +26,61 @@ export function gitFacts(worktree: string, baseSha: string): GitFacts {
   let lines = 0;
   let commits: string[] = [];
   let branch = "";
+  let gitError: string | undefined;
 
   try {
     const stat = execSync(`git diff --stat ${baseSha}..HEAD -- .`, {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
     const match = stat.match(/(\d+) files? changed/);
     files = match ? parseInt(match[1], 10) : 0;
     const ins = stat.match(/(\d+) insertions?\(\+\)/);
     const del = stat.match(/(\d+) deletions?\(-\)/);
     lines = (ins ? parseInt(ins[1], 10) : 0) + (del ? parseInt(del[1], 10) : 0);
-  } catch {}
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === "object" && ("stderr" in e || "message" in e)
+        ? String(
+            (e as { stderr?: string; message?: string }).stderr ??
+              (e as { message?: string }).message ??
+              "unknown",
+          )
+        : "unknown";
+    gitError = `git diff failed: ${msg.trim()}`;
+  }
 
   try {
     const log = execSync(`git log --oneline ${baseSha}..HEAD`, {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
     commits = log
       .trim()
       .split("\n")
       .filter(Boolean)
       .map((l) => l.split(" ")[0]);
-  } catch {}
+  } catch {
+    if (!gitError) {
+      // git log failure is non-fatal (e.g. detached HEAD), but diff failure above
+      // is more concerning — only set gitError if not already set.
+    }
+  }
 
   try {
     branch = execSync("git branch --show-current", {
       cwd: worktree,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     }).trim();
   } catch {}
 
-  return { files, lines, commits, branch };
+  return { files, lines, commits, branch, ...(gitError ? { gitError } : {}) };
 }
 
 export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
@@ -72,21 +92,35 @@ export function parseHandoff(stdout: string, marker?: string): ParsedHandoff {
   const lines = block.split("\n");
   const result: ParsedHandoff = { missing: false };
 
+  const FIELDS = ["claimed:", "commits:", "checks:", "uncertain:", "not_done:"];
+  let currentField: keyof ParsedHandoff | null = null;
+
   for (const line of lines) {
-    if (line.startsWith("claimed:")) {
-      result.claimed = line.slice("claimed:".length).trim();
-    } else if (line.startsWith("commits:")) {
-      const val = line.slice("commits:".length).trim();
-      result.commits =
-        val && val !== "none" ? val.split(/\s+/).filter(Boolean) : [];
-    } else if (line.startsWith("checks:")) {
-      result.checks = line.slice("checks:".length).trim();
-    } else if (line.startsWith("uncertain:")) {
-      const val = line.slice("uncertain:".length).trim();
-      result.uncertain = val && val !== "none" ? [val] : [];
-    } else if (line.startsWith("not_done:")) {
-      const val = line.slice("not_done:".length).trim();
-      result.not_done = val && val !== "none" ? [val] : [];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      currentField = null;
+      continue;
+    }
+
+    const fieldMatch = FIELDS.find((f) => trimmed.startsWith(f));
+    if (fieldMatch) {
+      currentField = fieldMatch.slice(0, -1) as keyof ParsedHandoff;
+      const val = trimmed.slice(fieldMatch.length).trim();
+      if (currentField === "claimed") {
+        result.claimed = val || undefined;
+      } else if (currentField === "checks") {
+        result.checks = val || undefined;
+      } else if (currentField === "commits") {
+        result.commits =
+          val && val !== "none" ? val.split(/\s+/).filter(Boolean) : [];
+      } else if (currentField === "uncertain") {
+        result.uncertain = val && val !== "none" ? [val] : [];
+      } else if (currentField === "not_done") {
+        result.not_done = val && val !== "none" ? [val] : [];
+      }
+    } else if (currentField === "uncertain" || currentField === "not_done") {
+      const arr = result[currentField] as string[] | undefined;
+      if (arr) arr.push(trimmed);
     }
   }
 
@@ -110,6 +144,9 @@ export function renderHandoff(
 
   lines.push("");
   lines.push("--- git facts ---");
+  if (facts.gitError) {
+    lines.push(`⚠ ${facts.gitError}`);
+  }
   lines.push(`branch: ${facts.branch}`);
   lines.push(`files changed: ${facts.files}`);
   lines.push(`lines changed: ${facts.lines}`);

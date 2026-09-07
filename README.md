@@ -12,20 +12,26 @@ git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 
-# 2. Scaffold .fapony/ (plan/, spec/, .memory/) into your project worktree
-fapony init /path/to/your-worktree
+# 2. Run the interactive wizard (creates config + scaffolds .fapony/ in one step)
+fapony setup
 
-# 3. Point fapony at your worktree and your agents
-#    (fapony.config.json in the fapony checkout — see "Config" below)
-
-# 4. Write a plan — use the template, or draft one with your agent
+# 3. Write a plan — use the template, or draft one with your agent
 cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
 
-# 5. Run
+# 4. Run
 fapony kickoff <worktree-key>     # auto-detects the single pending plan
 fapony status                     # what's running, what awaits review
 fapony gate <run-id> pass         # or: fail "missing error handling on X"
 fapony stats                      # pass/stall rate, avg rounds, timing KPIs
+```
+
+### Manual setup (alternative)
+
+If you prefer to configure by hand instead of the wizard:
+
+```bash
+fapony init /path/to/your-worktree       # scaffold .fapony/ only
+cp fapony.config.example.json fapony.config.json  # then edit to match your setup
 ```
 
 After a run you get a **handoff**: verifiable git facts first (files, lines, commits, branch), then the executor's own report (what it was unsure about, what it didn't finish). You — or a review agent — judge from that, not from a chat transcript.
@@ -178,6 +184,7 @@ cat prompts/plan-with-me.md | <your-agent>  # anything that reads stdin
 ## CLI
 
 ```bash
+fapony setup                            # interactive wizard (config + scaffold)
 fapony init <path>                       # scaffold .fapony/ into a worktree
 fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty]
 fapony kickoff <key>                     # auto-detect the single pending plan
@@ -196,7 +203,7 @@ fapony test                              # self-check
 
 ## Config
 
-`fapony.config.json` lives in the fapony checkout. The checked-in [fapony.config.json](fapony.config.json) is a complete working example; every section is optional with sane defaults. Key fields:
+`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) to get a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
 - `executor.cmd` — command to spawn (receives the prompt via stdin); `roles.executor` overrides it per-role with `{model}` support

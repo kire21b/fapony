@@ -9,9 +9,12 @@ export interface PlanHygieneWarning {
   detail: string;
 }
 
-const SECTION7_START_RE = /^##\s*7\./;
+const SECTION7_START_RE = /^##\s*7(?:[\s.\-:—]|$)/;
 const NEXT_HEADING_RE = /^##\s/;
 const SECTION7_LEAK_LINES = 5;
+// "No spec" sentinel in any authoring language — anything else that looks
+// like a value counts as linked. A bare "none"/"n/a" must not warn spec_leak.
+const NO_SPEC_RE = /ไม่มี|\bnone\b|\bn\/a\b|\bno spec\b|^\s*(—|–|-)\s*$/i;
 
 /** Lines between the "## 7." heading and the next "## " heading (or EOF). */
 function section7Lines(planText: string): string[] {
@@ -31,7 +34,10 @@ export function checkPlanHygiene(
   config?: Config,
 ): PlanHygieneWarning[] {
   const warnings: PlanHygieneWarning[] = [];
-  const lineCount = planText.split("\n").length;
+  const lines = planText.split("\n");
+  // A trailing newline is a terminator, not an extra line.
+  const lineCount =
+    lines.length - (planText.endsWith("\n") && lines.length > 0 ? 1 : 0);
   const maxLines = planMaxLines(config);
 
   if (lineCount > maxLines) {
@@ -42,7 +48,7 @@ export function checkPlanHygiene(
   }
 
   const sourceMatch = planText.match(sourceSpecRE(config));
-  const hasSpec = !!sourceMatch && !/ไม่มี/.test(sourceMatch[1] ?? "");
+  const hasSpec = !!sourceMatch && !NO_SPEC_RE.test(sourceMatch[1] ?? "");
   if (hasSpec) {
     const nonEmpty = section7Lines(planText).filter((l) => l.trim()).length;
     if (nonEmpty > SECTION7_LEAK_LINES) {

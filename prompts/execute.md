@@ -15,6 +15,10 @@ Work only inside this worktree. Never talk to the orchestrator outside the HANDO
 
 - If review feedback is present: fix every point first, then continue the plan.
 - Run the relevant checks (typecheck/lint/tests) yourself before claiming anything in `checks:` — never report a check you did not run.
+- If you touched non-trivial logic (a branch, a loop, a parser, a money/security path) and no test covers it, add one before committing — smallest thing that fails if the logic breaks.
+- Before writing new code, check for an existing function/module/lib in this repo that already does it — reuse or extend it instead of duplicating. New abstraction only when nothing existing fits.
+- Handle the edge cases a reviewer would poke first: empty/null/zero input, boundary values, and errors at trust boundaries — don't let them fail silently or crash uncaught.
+- If the intended behavior is genuinely ambiguous, don't guess silently — pick the safest/most conservative behavior and say so in `uncertain:`, so the gate can catch a wrong guess instead of it shipping unquestioned.
 - Commit as you go — split by concern/domain, one commit per feature/area touched. Commit messages follow conventional commits.
 - If you cannot finish everything, stop cleanly, commit what works, and list the rest in `not_done:` — do not leave the tree dirty or half-working.
 

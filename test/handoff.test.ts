@@ -62,3 +62,73 @@ export function testRenderHandoff(): void {
 
   console.log("  ✓ renderHandoff");
 }
+
+export function testParseHandoffMultiLine(): void {
+  const block = `
+## HANDOFF
+claimed: abc123
+commits: a1b2c3 d4e5f6
+checks: typecheck pass
+uncertain: the auth flow might need refactoring
+  also the retry logic is unclear
+  and error handling could be better
+not_done: tests
+  integration tests
+  edge cases
+  `.trim();
+
+  const parsed = parseHandoff(block);
+  assert.equal(parsed.missing, false);
+  assert.deepEqual(parsed.uncertain, [
+    "the auth flow might need refactoring",
+    "also the retry logic is unclear",
+    "and error handling could be better",
+  ]);
+  assert.deepEqual(parsed.not_done, ["tests", "integration tests", "edge cases"]);
+
+  // Single-line still works
+  const singleLine = `
+## HANDOFF
+claimed: x
+uncertain: maybe
+not_done: tests
+  `.trim();
+  const single = parseHandoff(singleLine);
+  assert.deepEqual(single.uncertain, ["maybe"]);
+  assert.deepEqual(single.not_done, ["tests"]);
+
+  // Empty line resets current field
+  const withBlank = `
+## HANDOFF
+uncertain: first issue
+
+not_done: leftover from blank
+  `.trim();
+  const blankParsed = parseHandoff(withBlank);
+  // blank line resets currentField, so "not_done:" starts fresh
+  assert.deepEqual(blankParsed.uncertain, ["first issue"]);
+  assert.deepEqual(blankParsed.not_done, ["leftover from blank"]);
+
+  console.log("  ✓ parseHandoff multi-line uncertain/not_done");
+}
+
+export function testRenderHandoffGitError(): void {
+  const facts = {
+    files: 0,
+    lines: 0,
+    commits: [] as string[],
+    branch: "",
+    gitError: "git diff failed: bad revision 'abc123'",
+  };
+  const parsed = { missing: true };
+  const output = renderHandoff(facts, parsed);
+  assert(output.includes("⚠ git diff failed: bad revision 'abc123'"));
+  assert(output.includes("branch: "));
+
+  // No gitError → no warning line
+  const cleanFacts = { files: 1, lines: 2, commits: ["a"], branch: "main" };
+  const cleanOutput = renderHandoff(cleanFacts, parsed);
+  assert(!cleanOutput.includes("⚠"));
+
+  console.log("  ✓ renderHandoff gitError warning");
+}

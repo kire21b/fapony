@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { assertSafe } from "../src/safety.js";
+import { assertNoPromptInArgv, assertSafe } from "../src/safety.js";
 
 export function testAssertSafe(): void {
   const dangerous = [
@@ -34,4 +34,36 @@ export function testAssertSafe(): void {
   }
 
   console.log("  ✓ assertSafe");
+}
+
+export function testAssertNoPromptInArgv(): void {
+  // cmd without {PROMPT} should pass
+  assertNoPromptInArgv(["claude", "-p", "sonnet"], "gate");
+
+  // cmd with {PROMPT} should throw
+  assert.throws(
+    () => assertNoPromptInArgv(["claude", "-p", "{model}", "{PROMPT}"], "gate"),
+    /role "gate" cmd contains \{PROMPT\}/,
+  );
+
+  // {PROMPT} in any position should be caught
+  assert.throws(
+    () => assertNoPromptInArgv(["{PROMPT}", "claude"], "planner"),
+    /role "planner" cmd contains \{PROMPT\}/,
+  );
+
+  // {PROMPT} embedded in a longer string — regression guard
+  assert.throws(
+    () => assertNoPromptInArgv(["echo-{PROMPT}-done"], "bigFixer"),
+    /role "bigFixer" cmd contains \{PROMPT\}/,
+  );
+
+  // no false positive on similar patterns
+  assertNoPromptInArgv(["echo", "PROMPT"], "test");
+  assertNoPromptInArgv(["echo", "{prompt}"], "test"); // case-sensitive
+
+  // empty argv — nothing to check
+  assertNoPromptInArgv([], "gate");
+
+  console.log("  ✓ assertNoPromptInArgv");
 }

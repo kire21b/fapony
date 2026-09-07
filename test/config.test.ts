@@ -261,3 +261,90 @@ export function testSourceAndShippedRE(): void {
 
   console.log("  ✓ source + shipped regex overrides");
 }
+
+export function testConfigDriftWarning(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-drift-"));
+  try {
+    const file = join(dir, "fapony.config.json");
+    // Config with both executor.cmd and roles.executor.cmd
+    writeFileSync(
+      file,
+      JSON.stringify({
+        executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
+        roles: {
+          executor: {
+            cmd: ["opencode", "run", "--model", "{model}"],
+            model: "mimo",
+            timeoutMin: 45,
+          },
+        },
+      }),
+    );
+
+    // Capture console.error
+    const origError = console.error;
+    let captured = "";
+    console.error = (...args: unknown[]) => {
+      captured += args.join(" ");
+    };
+
+    try {
+      loadConfig(file);
+      assert(
+        captured.includes("roles.executor.cmd wins"),
+        `expected drift warning, got: ${captured}`,
+      );
+    } finally {
+      console.error = origError;
+    }
+
+    // Config with only roles.executor — no warning
+    writeFileSync(
+      file,
+      JSON.stringify({
+        roles: {
+          executor: {
+            cmd: ["opencode", "run", "--model", "{model}"],
+            model: "mimo",
+          },
+        },
+      }),
+    );
+    captured = "";
+    console.error = (...args: unknown[]) => {
+      captured += args.join(" ");
+    };
+    try {
+      loadConfig(file);
+      assert.equal(captured, "", "should not warn when only roles.executor exists");
+    } finally {
+      console.error = origError;
+    }
+
+    // Config with only executor (legacy, no roles) — no warning
+    writeFileSync(
+      file,
+      JSON.stringify({
+        executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
+      }),
+    );
+    captured = "";
+    console.error = (...args: unknown[]) => {
+      captured += args.join(" ");
+    };
+    try {
+      loadConfig(file);
+      assert.equal(
+        captured,
+        "",
+        "should not warn when only executor exists (legacy fallback)",
+      );
+    } finally {
+      console.error = origError;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  console.log("  ✓ config drift warning (B2)");
+}

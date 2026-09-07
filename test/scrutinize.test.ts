@@ -227,3 +227,36 @@ export async function testSpawnScrutinizeFixRejectsDangerousCmd(): Promise<void>
 
   console.log("  ✓ spawnScrutinizeFix assertSafe");
 }
+
+export async function testSpawnRejectsPromptPlaceholder(): Promise<void> {
+  const repo = createTestRepo();
+  try {
+    await withTmpHome(async () => {
+      const config = makeConfig(true);
+      config.roles!.scrutinizeFix = {
+        cmd: ["claude", "-p", "{model}", "{PROMPT}"],
+        timeoutMin: 1,
+      };
+      const runResult = {
+        runId: 1,
+        facts: { files: 1, lines: 10, commits: [], branch: "main" },
+        parsed: { missing: true },
+      };
+      let threw = false;
+      try {
+        await spawnScrutinizeFix(config, repo.dir, runResult);
+      } catch (e) {
+        threw = true;
+        assert(
+          (e as Error).message.includes("{PROMPT}"),
+          `should refuse {PROMPT} in cmd, got: ${(e as Error).message}`,
+        );
+      }
+      assert(threw, "{PROMPT} in cmd should throw, not spawn");
+    });
+  } finally {
+    repo.cleanup();
+  }
+
+  console.log("  ✓ spawn rejects {PROMPT} in cmd (B1 integration)");
+}

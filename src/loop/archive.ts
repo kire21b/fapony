@@ -2,7 +2,7 @@
 
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { archiveMsg, type Config, shippedRE } from "../db/index.js";
 import { type PlanMvResult, planMv } from "../planmv.js";
 
@@ -31,6 +31,7 @@ export function autoArchivePlan(
       hash = execSync("git rev-parse --short HEAD", {
         cwd: worktree,
         encoding: "utf-8",
+        timeout: 15_000,
       }).trim();
       writeFileSync(
         filePath,
@@ -51,13 +52,17 @@ export function autoArchivePlan(
   if (!result.ok) return result;
 
   try {
-    const fileName = planRelPath.split("/").pop();
+    const fileName = basename(planRelPath);
+    if (!fileName) {
+      return { ok: false, error: `empty plan path: ${planRelPath}` };
+    }
     const msg = config
-      ? archiveMsg(config, fileName!, hash)
+      ? archiveMsg(config, fileName, hash)
       : `chore(plan): archive ${fileName} (shipped ${hash})`;
     execSync(`git commit -m "${msg.replace(/"/g, "'")}"`, {
       cwd: worktree,
       stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
     });
   } catch (e) {
     return {

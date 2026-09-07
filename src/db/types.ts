@@ -112,6 +112,20 @@ export interface Config {
     // fallback role timeout (minutes) when roles.<name>.timeoutMin is unset.
     timeoutMin?: number;
   } | null;
+  // --- Resilience (retry + backoff + interrupt) ---
+  // Omit or null = old behavior (fail → stalled immediately, no retry).
+  resilience?: {
+    retry?: {
+      maxAttempts?: number;
+      limitBaseMs?: number;
+      crashBaseMs?: number;
+      maxMs?: number;
+    } | null;
+    patterns?: {
+      limit?: string[];
+      auth?: string[];
+    } | null;
+  } | null;
 }
 
 export interface RolePricing {

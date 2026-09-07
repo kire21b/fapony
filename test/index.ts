@@ -8,6 +8,7 @@ import {
 } from "./archive.test.js";
 import {
   testConfigDefaults,
+  testConfigDriftWarning,
   testConfigFileOverrides,
   testCustomMarkersParse,
   testCustomSafetyDeny,
@@ -23,14 +24,25 @@ import {
   testCostTelemetryAllowlist,
   testCostUsdEstimate,
 } from "./cost.test.js";
-import { testDbLifecycle, testGetLastPlanUpdate } from "./db.test.js";
+import {
+  testDbLifecycle,
+  testGetLastPlanUpdate,
+  testLegacyDbStampedWithoutDataLoss,
+  testMigrateDbRejectsNewerSchema,
+  testSchemaVersionStamped,
+} from "./db.test.js";
 import {
   testGateOnceAlreadyPassed,
   testGateOnceFail,
   testGateOnceMaxRounds,
   testGateOncePass,
 } from "./gate.test.js";
-import { testParseHandoff, testRenderHandoff } from "./handoff.test.js";
+import {
+  testParseHandoff,
+  testParseHandoffMultiLine,
+  testRenderHandoff,
+  testRenderHandoffGitError,
+} from "./handoff.test.js";
 import {
   testInitCreatesDirectories,
   testInitIdempotent,
@@ -43,6 +55,8 @@ import {
   testKickoffSinglePending,
 } from "./kickoff.test.js";
 import {
+  testClaimMemoryFailGracefully,
+  testClaimMemoryTimeout,
   testMemoryDefaultWiringNoFile,
   testMemoryDefaultWiringWithFile,
   testMemoryExplicitConfigWins,
@@ -53,6 +67,8 @@ import {
   testParsePlanUpdate,
 } from "./parse.test.js";
 import {
+  testPlanHygieneEnglishNoneNoLeak,
+  testPlanHygieneHeadingVariant,
   testPlanHygieneNoSpecNoLeakWarning,
   testPlanHygieneOk,
   testPlanHygieneSpecLeak,
@@ -60,36 +76,118 @@ import {
 } from "./planlint.test.js";
 import {
   testPlanMvAlreadyDatedNotDoublePrefixed,
+  testPlanMvDestCollision,
   testPlanMvDryRun,
+  testPlanMvInboundLinks,
+  testPlanMvMissingFile,
   testPlanMvNoHeader,
   testPlanMvNormalizeLinks,
   testPlanMvWithHeader,
 } from "./planmv.test.js";
 import {
+  testBackoffCappedAtMax,
+  testBackoffExponential,
+  testBackoffJitterRange,
+  testClassifyAuth,
+  testClassifyCrash,
+  testClassifyCustomPatterns,
+  testClassifyEmpty,
+  testClassifyEmptyExitZeroStderrAuth,
+  testClassifyLimit,
+  testClassifyLimit429,
+  testClassifyLimitNeedsContext,
+  testClassifyTailTruncated,
+  testClassifyTimeout,
+  testFlakyAgentRetriesAndSucceeds,
+  testIsSigintReceivedDefaultFalse,
+  testSigintHandlerMarksStopped,
+  testSleepInterruptibleAborts,
+  testSleepInterruptibleCompletes,
+  testWithRetryAbortedBeforeAttempt,
+  testWithRetryAuthNotRetried,
+  testWithRetryCanRetryGateBlocks,
+  testWithRetryExhausts,
+  testWithRetrySucceedsAfterTwoFails,
+  testWithRetrySucceedsFirstTry,
+  testWithRetryTerminalAttemptNumber,
+  testWithRetryTimeoutNotRetried,
+} from "./resilience.test.js";
+import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
+  testRunOnceAbortedMarksStopped,
 } from "./run.test.js";
-import { testAssertSafe } from "./safety.test.js";
+import { testAssertNoPromptInArgv, testAssertSafe } from "./safety.test.js";
 import {
   testBuildScrutinizePrompt,
   testResolveChangedFiles,
   testShouldScrutinizeFix,
+  testSpawnRejectsPromptPlaceholder,
   testSpawnScrutinizeFix,
   testSpawnScrutinizeFixRejectsDangerousCmd,
 } from "./scrutinize.test.js";
+import {
+  testBuildSetupConfigNoMemory,
+  testBuildSetupConfigWithMemory,
+  testCmdSetupBunMissing,
+  testCmdSetupGitMissing,
+  testCmdSetupHappyPathScaffolds,
+  testCmdSetupInvalidPath,
+  testCmdSetupOverwriteNoKeepsFile,
+  testCmdSetupOverwriteYesWritesThrough,
+  testCmdSetupScaffoldAlreadyExists,
+  testParseTimeoutMinutes,
+  testShouldOverwriteConfig,
+  testSplitCmdEmptyQuotedString,
+  testSplitCmdEmptyString,
+  testSplitCmdMultipleQuotedArgs,
+  testSplitCmdNoQuotes,
+  testSplitCmdQuotedArg,
+  testSplitCmdSimpleArgs,
+  testSplitCmdSingleQuotedArg,
+  testValidateWorktreePath,
+  testValidateWorktreePathRejectsFile,
+} from "./setup.test.js";
+import {
+  testSigintMarksStoppedAndLogs,
+  testSigintSkipsTerminalRuns,
+} from "./sigint.test.js";
 import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
+import {
+  testCmdUpdateAlreadyUpToDate,
+  testCmdUpdateDirtyDeclined,
+  testCmdUpdateDirtyPullOk,
+  testCmdUpdateInstallFailureWarns,
+  testCmdUpdateLockfileTriggersInstall,
+  testCmdUpdateNotARepo,
+  testCmdUpdatePullFailPopFail,
+  testCmdUpdatePullFailPopOk,
+  testFormatDirtyBlock,
+  testIsUpToDate,
+  testParseDirtyLines,
+  testShouldProceedAfterDirty,
+  testUpdateReadVersionResolves,
+  testUpdateRootIsRepoRoot,
+} from "./update.test.js";
+import { testIsAffirmative } from "./util.test.js";
 
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
+  testAssertNoPromptInArgv();
   testParseHandoff();
+  testParseHandoffMultiLine();
   testDbLifecycle();
+  testSchemaVersionStamped();
+  testLegacyDbStampedWithoutDataLoss();
+  testMigrateDbRejectsNewerSchema();
   testRenderHandoff();
-  testParseGateVerdict();
+  testRenderHandoffGitError();
+  await testParseGateVerdict();
   testParsePlanUpdate();
   testFixtureGuard();
   testGetLastPlanUpdate();
@@ -101,7 +199,38 @@ export async function cmdTest(): Promise<void> {
   testPlanMvWithHeader();
   testPlanMvNormalizeLinks();
   testPlanMvDryRun();
+  testPlanMvMissingFile();
+  testPlanMvDestCollision();
+  testPlanMvInboundLinks();
   testPlanMvAlreadyDatedNotDoublePrefixed();
+  testClassifyAuth();
+  testClassifyTimeout();
+  testClassifyLimit();
+  testClassifyLimit429();
+  testClassifyCrash();
+  testClassifyEmpty();
+  testClassifyEmptyExitZeroStderrAuth();
+  testClassifyTailTruncated();
+  testClassifyCustomPatterns();
+  testClassifyLimitNeedsContext();
+  testBackoffExponential();
+  testBackoffCappedAtMax();
+  testBackoffJitterRange();
+  await testSleepInterruptibleCompletes();
+  await testSleepInterruptibleAborts();
+  await testWithRetrySucceedsFirstTry();
+  await testWithRetrySucceedsAfterTwoFails();
+  await testWithRetryExhausts();
+  await testWithRetryAuthNotRetried();
+  await testWithRetryTimeoutNotRetried();
+  await testWithRetryAbortedBeforeAttempt();
+  await testWithRetryTerminalAttemptNumber();
+  await testWithRetryCanRetryGateBlocks();
+  await testFlakyAgentRetriesAndSucceeds();
+  await testSigintHandlerMarksStopped();
+  testIsSigintReceivedDefaultFalse();
+  await testSigintMarksStoppedAndLogs();
+  await testSigintSkipsTerminalRuns();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
@@ -112,11 +241,14 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
+  testClaimMemoryFailGracefully();
+  testClaimMemoryTimeout();
   testShouldScrutinizeFix();
   testBuildScrutinizePrompt();
   testResolveChangedFiles();
   await testSpawnScrutinizeFix();
   await testSpawnScrutinizeFixRejectsDangerousCmd();
+  await testSpawnRejectsPromptPlaceholder();
   testAutoArchivePlanSynthesizesHeader();
   testAutoArchivePlanKeepsExistingHeader();
   testAutoArchivePlanNormalizesLinks();
@@ -128,12 +260,16 @@ export async function cmdTest(): Promise<void> {
   testTemplateArgsReplaceAll();
   testRenderRolePrompt();
   testSourceAndShippedRE();
+  testConfigDriftWarning();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
+  await testRunOnceAbortedMarksStopped();
   testPlanHygieneOk();
   testPlanHygieneTooLong();
   testPlanHygieneSpecLeak();
   testPlanHygieneNoSpecNoLeakWarning();
+  testPlanHygieneEnglishNoneNoLeak();
+  testPlanHygieneHeadingVariant();
   testStatusTableShowsNothingWhenEmpty();
   testStatusTableShowsPlanAndMemId();
   testStatusTableTruncatesLongMemId();
@@ -143,5 +279,40 @@ export async function cmdTest(): Promise<void> {
   testCostBeginEndRoundTrip();
   testCostHandoffAndFormat();
   testCostTelemetryAllowlist();
+  testSplitCmdSimpleArgs();
+  testSplitCmdQuotedArg();
+  testSplitCmdMultipleQuotedArgs();
+  testSplitCmdEmptyString();
+  testSplitCmdNoQuotes();
+  testSplitCmdEmptyQuotedString();
+  testSplitCmdSingleQuotedArg();
+  testBuildSetupConfigNoMemory();
+  testBuildSetupConfigWithMemory();
+  testValidateWorktreePath();
+  testValidateWorktreePathRejectsFile();
+  testShouldOverwriteConfig();
+  testParseTimeoutMinutes();
+  await testCmdSetupGitMissing();
+  await testCmdSetupBunMissing();
+  await testCmdSetupInvalidPath();
+  await testCmdSetupOverwriteNoKeepsFile();
+  await testCmdSetupOverwriteYesWritesThrough();
+  await testCmdSetupHappyPathScaffolds();
+  await testCmdSetupScaffoldAlreadyExists();
+  testIsAffirmative();
+  testParseDirtyLines();
+  testFormatDirtyBlock();
+  testShouldProceedAfterDirty();
+  testIsUpToDate();
+  testUpdateRootIsRepoRoot();
+  testUpdateReadVersionResolves();
+  await testCmdUpdateNotARepo();
+  await testCmdUpdateDirtyDeclined();
+  await testCmdUpdateDirtyPullOk();
+  await testCmdUpdatePullFailPopOk();
+  await testCmdUpdatePullFailPopFail();
+  await testCmdUpdateAlreadyUpToDate();
+  await testCmdUpdateLockfileTriggersInstall();
+  await testCmdUpdateInstallFailureWarns();
   console.log("\nall tests passed ✓");
 }
