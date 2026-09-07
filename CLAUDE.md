@@ -34,11 +34,12 @@ fapony/
     gate.ts           # gate CLI: pass/fail verdict + memory close (67 บรรทัด)
     handoff.ts        # gitFacts() + parseHandoff() + renderHandoff() (159 บรรทัด)
     parse.ts          # parseGateVerdict() + parsePlanUpdate() (67 บรรทัด)
+    plans.ts          # worktreeFromCwd() + pendingPlans() + resolvePlanArg() — ใช้ร่วมกันโดย status/run/kickoff
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY (70 บรรทัด)
     safety.ts         # assertSafe() deny-list (19 บรรทัด)
-    status.ts         # ตาราง runs ที่ยังไม่ passed/stopped (33 บรรทัด)
+    status.ts         # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
     stop.ts           # stop run + release memory claim (47 บรรทัด)
-    loop.ts           # loop driver: run → review → planner → repeat (pausable)
+    loop/             # loop driver: run → review → planner → repeat (pausable)
     planmv.ts         # archive shipped PLAN → .fapony/plan/done/ (validate + normalize links + git mv)
     init.ts           # fapony init — scaffold .fapony/{plan,spec,.memory}
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
@@ -312,10 +313,12 @@ executor ทุกครั้ง — เตือน (ไม่ block) เม�
 ## CLI Commands
 
 ```bash
-fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]
-fapony loop <worktree-key> --plan <path>  # start loop
-fapony loop <run-id>                      # resume after gate pass
-fapony status                    # ตาราง active runs
+fapony run [<key>] [<n>|<plan-prefix>] [--plan <path>] [--mem-id <id>] [--allow-dirty] [--loop]
+                                 # cwd อยู่ใน worktree → key ตกได้; pending เดียว → --plan ตกได้
+                                 # `fapony run 2` = plan #2 จาก ps · `fapony run PLAN-al` = ชื่อ prefix
+                                 # `fapony run <run-id>` = resume run เดิม (1 รอบ)
+                                 # `fapony run <run-id> --loop` = resume + loop จนจบ
+fapony ps | status               # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
 fapony stats                     # KPI ข้าม run ทั้งหมด — pass/stall rate, avg rounds, exec/review time
 fapony telemetry show|send       # opt-in เท่านั้น (default off) — ดู TELEMETRY.md ว่าส่งอะไรบ้าง
 fapony handoff <run-id>          # reprint handoff ล่าสุด
@@ -323,8 +326,8 @@ fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> pass|fail [note]  # review verdict + memory close
 fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
 fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
-fapony kickoff <worktree-key>  # auto-detect pending plan + run
-fapony test                      # self-check 36 ตัว
+fapony kickoff [<worktree-key>]  # auto-detect pending plan + run (key ตกได้เมื่อ cwd อยู่ใน worktree)
+fapony test                      # self-check ตัวเอง
 ```
 
 <!-- code-review-graph MCP tools -->

@@ -133,6 +133,20 @@ import {
   testPlanMvWithHeader,
 } from "./planmv.test.js";
 import {
+  testPendingPlansFilteredAndSorted,
+  testPendingPlansMissingDir,
+  testRenderPendingPlansSection,
+  testResolvePlanArgErrors,
+  testResolvePlanArgIndexAndPrefix,
+  testResolveRunArgsAutoSingle,
+  testResolveRunArgsErrors,
+  testResolveRunArgsFullForm,
+  testResolveRunArgsLoopFlag,
+  testResolveRunArgsRunIdHint,
+  testResolveRunArgsShortForms,
+  testWorktreeFromCwd,
+} from "./plans.test.js";
+import {
   testBackoffCappedAtMax,
   testBackoffExponential,
   testBackoffJitterRange,
@@ -286,6 +300,18 @@ export async function cmdTest(): Promise<void> {
   testKickoffShippedFiltered();
   testKickoffMultiplePending();
   testKickoffNoPending();
+  testWorktreeFromCwd();
+  testPendingPlansFilteredAndSorted();
+  testPendingPlansMissingDir();
+  testResolvePlanArgIndexAndPrefix();
+  testResolvePlanArgErrors();
+  testResolveRunArgsFullForm();
+  testResolveRunArgsShortForms();
+  testResolveRunArgsAutoSingle();
+  testResolveRunArgsErrors();
+  testResolveRunArgsLoopFlag();
+  testResolveRunArgsRunIdHint();
+  testRenderPendingPlansSection();
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();

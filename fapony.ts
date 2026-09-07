@@ -8,7 +8,7 @@ import { cmdHandoff } from "./src/handoff.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdKickoff } from "./src/kickoff.js";
-import { cmdLoop } from "./src/loop/index.js";
+
 import { cmdMcp } from "./src/mcp/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
 import { cmdRun } from "./src/run/index.js";
@@ -23,16 +23,14 @@ import { cmdUpdate } from "./src/update.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
-// Install SIGINT handler for long-running commands (run, loop)
-if (cmd === "run" || cmd === "loop") {
+// Install SIGINT handler for long-running commands (run)
+if (cmd === "run") {
   installSigintHandler();
 }
 
 if (cmd === "run") {
   await cmdRun(a);
-} else if (cmd === "loop") {
-  await cmdLoop(a);
-} else if (cmd === "status") {
+} else if (cmd === "status" || cmd === "ps") {
   cmdStatus(a);
 } else if (cmd === "stats") {
   cmdStats(a);
@@ -63,7 +61,7 @@ if (cmd === "run") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|run|loop|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|mcp|test> [args]",
+    "usage: fapony <setup|update|run|ps|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|mcp|test> [args]",
   );
   process.exit(1);
 }

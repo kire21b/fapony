@@ -1,8 +1,6 @@
-// src/loop/index.ts — fapony loop: run executor → review → planner → repeat until FILE_DONE.
+// src/loop/index.ts — runLoop: run executor → review → planner → repeat until FILE_DONE.
 //
-// Entry points:
-//   fapony loop <key> --plan <path>  → start new run
-//   fapony loop <run-id>             → resume after gate pass
+// Entry point: runLoop() called from cmdRun with --loop flag.
 //
 // When autoLoop: true + roles.gate exists:
 //   Loop spawns gate agent automatically instead of waiting for human.
@@ -23,7 +21,6 @@ import {
 } from "./spawn.js";
 
 export * from "./archive.js";
-// Re-export public symbols for backward compatibility (src/loop.ts shim)
 export * from "./prompt.js";
 export * from "./scrutinize.js";
 export { spawnScrutinizeFix } from "./spawn.js";
@@ -42,67 +39,29 @@ async function isRunAborted(
   return run?.status === "stopped";
 }
 
-export async function cmdLoop(args: string[]): Promise<void> {
+export interface RunLoopOpts {
+  worktreeKey: string;
+  planPath: string | null;
+  memId: string | null;
+  allowDirty: boolean;
+  runId?: number | null;
+}
+
+/**
+ * Core loop driver — run executor → review → planner → repeat until FILE_DONE.
+ * Does NOT call process.exit; throws on fatal errors.
+ */
+export async function runLoop(opts: RunLoopOpts): Promise<void> {
   const config = loadConfig();
-
-  // --- Parse args ---
-  const firstArg = args[0];
-  let runId: number | null = null;
-  let worktreeKey: string | null = null;
-  let planPath: string | null = null;
-  let memId: string | null = null;
-  let allowDirty = false;
+  let { worktreeKey, planPath, memId, allowDirty } = opts;
+  let runId = opts.runId ?? null;
   let nextPlanContent: string | null = null;
-
-  if (firstArg && /^\d+$/.test(firstArg)) {
-    runId = parseInt(firstArg, 10);
-  } else {
-    worktreeKey = firstArg ?? null;
-    for (let i = 1; i < args.length; i++) {
-      if (args[i] === "--plan" && args[i + 1]) {
-        planPath = args[++i];
-      } else if (args[i] === "--mem-id" && args[i + 1]) {
-        memId = args[++i];
-      } else if (args[i] === "--allow-dirty") {
-        allowDirty = true;
-      }
-    }
-  }
 
   const db = openDb();
 
-  // --- Resume mode ---
-  if (runId) {
-    const run = getRun(db, runId);
-    if (!run) {
-      console.error(`run ${runId} not found`);
-      process.exit(1);
-    }
-    worktreeKey = run.worktree;
-    planPath = run.plan;
-    memId = run.mem_id;
-
-    if (
-      run.status === "passed" ||
-      run.status === "stopped" ||
-      run.status === "stalled"
-    ) {
-      console.error(`run ${runId} is already ${run.status}`);
-      process.exit(0);
-    }
-  }
-
-  if (!worktreeKey) {
-    console.error(
-      "usage: fapony loop <worktree-key> --plan <path> [--mem-id <id>]",
-    );
-    process.exit(1);
-  }
-
   const worktree = config.worktrees[worktreeKey];
   if (!worktree) {
-    console.error(`unknown worktree key: ${worktreeKey}`);
-    process.exit(1);
+    throw new Error(`unknown worktree key: ${worktreeKey}`);
   }
 
   const hasPlanner = !!config.roles?.planner;
@@ -167,7 +126,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
         }
         console.log(`\nrun ${runId} awaiting review`);
         console.log(`Review: fapony gate ${runId} pass|fail [note]`);
-        console.log(`Resume loop: fapony loop ${runId}`);
+        console.log(`Resume loop: fapony run ${runId} --loop`);
         break;
       }
     }
@@ -235,8 +194,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
     nextPlanContent = null;
 
     if (result.error) {
-      console.error(result.error);
-      process.exit(1);
+      throw new Error(result.error);
     }
 
     runId = result.runId;
@@ -248,9 +206,6 @@ export async function cmdLoop(args: string[]): Promise<void> {
     }
 
     // --- Big diff route: spawn bigFixer instead of planner ---
-    // NOTE: bigFixer is fire-and-forget — it fixes and commits, then the loop
-    // continues to re-run executor. The fixerResult is not parsed or reviewed
-    // in this pass; the next executor run will pick up the fixes.
     if (result.isBig && config.roles?.bigFixer) {
       console.error(
         `\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`,
@@ -264,7 +219,7 @@ export async function cmdLoop(args: string[]): Promise<void> {
         break;
       }
 
-      // Verify bigFixer actually committed changes (not just printed output)
+      // Verify bigFixer actually committed changes
       try {
         const dirty = execSync("git status --porcelain", {
           cwd: worktree,
@@ -301,10 +256,6 @@ export async function cmdLoop(args: string[]): Promise<void> {
     }
 
     // --- Small diff route: scrutinize-fix pass before gate ---
-    // NOTE: symmetric to bigFixer but no continue — falls through to the
-    // awaiting_review block below so the normal gate logic (auto/manual)
-    // reviews the already-fixed diff. Fire-and-forget like bigFixer:
-    // commits its own fixes, failure here never blocks the gate.
     if (shouldScrutinizeFix(result, config)) {
       console.error(`\n--- scrutinize-fix pass for run ${runId} ---`);
       const fixed = await spawnScrutinizeFix(config, worktree, result, () =>
@@ -339,13 +290,13 @@ export async function cmdLoop(args: string[]): Promise<void> {
       console.log(`\nrun ${runId} awaiting review`);
       if (!autoLoop || !hasGate) {
         console.log(`Review: fapony gate ${runId} pass|fail [note]`);
-        console.log(`Resume loop: fapony loop ${runId}`);
+        console.log(`Resume loop: fapony run ${runId} --loop`);
         break;
       }
     }
   }
 
-  // Clean up SIGINT handler state — run is done, Ctrl-C should just exit
+  // Clean up SIGINT handler state
   setSigintRunId(null);
   setSigintPhase("spawn");
 }

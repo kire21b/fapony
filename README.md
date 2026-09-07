@@ -20,7 +20,7 @@ cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
 
 # 4. Run
 fapony kickoff <worktree-key>     # auto-detects the single pending plan
-fapony status                     # what's running, what awaits review
+fapony ps                         # what's running + pending plans (when inside a worktree)
 fapony gate <run-id> pass         # or: fail "missing error handling on X"
 fapony stats                      # pass/stall rate, avg rounds, timing KPIs
 ```
@@ -55,8 +55,8 @@ fapony run <worktree> --plan <path>
         ▼
   review gate (a reviewer agent, or you)
         │
-        ├─ pass → done (loop continues to the next chunk if you use `fapony loop`)
-        └─ fix needed → run again (round +1, cap 2)
+        ├─ pass → done
+        └─ fix needed → fapony run <run-id> --loop (round +1, cap 2)
              │
              └─ round 3? → STOP. The plan has a problem, not the code.
 ```
@@ -186,11 +186,13 @@ cat prompts/plan-with-me.md | <your-agent>  # anything that reads stdin
 ```bash
 fapony setup                            # interactive wizard (config + scaffold)
 fapony init <path>                       # scaffold .fapony/ into a worktree
-fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty]
-fapony kickoff <key>                     # auto-detect the single pending plan
-fapony loop <key> --plan <path>          # full loop: run → review → plan next chunk → repeat
-fapony loop <run-id>                     # resume a loop after a manual gate pass
-fapony status                            # active runs table
+fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]
+                                         # inside a worktree: key optional; pending single plan → --plan optional
+                                         # `fapony run 2` = plan #2 from ps · `fapony run PLAN-al` = name prefix
+                                         # `fapony run <run-id>` = resume run (single round)
+                                         # `fapony run <run-id> --loop` = resume + loop until done
+fapony kickoff <key>                     # auto-detect the single pending plan (key optional inside a worktree)
+fapony ps | status                       # active runs + pending plans (plans when inside a worktree)
 fapony stats                             # pass/stall rate, avg rounds, exec/review timing
 fapony handoff <run-id>                  # reprint a run's handoff
 fapony gate <run-id> pass|fail [note]    # review verdict (note: or pipe via stdin)
