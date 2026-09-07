@@ -7,11 +7,12 @@
 // When autoLoop: true + roles.gate exists:
 //   Loop spawns gate agent automatically instead of waiting for human.
 
+import { execSync } from "node:child_process";
 import { addEvent, getRun, loadConfig, openDb } from "../db/index.js";
 import { gateOnce } from "../gate.js";
 import { closeMemory, kickoffMemory } from "../memory.js";
 import { runOnce } from "../run/index.js";
-import { isSigintReceived, setSigintRunId } from "../sigint.js";
+import { isSigintReceived, setSigintPhase, setSigintRunId } from "../sigint.js";
 import { autoArchivePlan } from "./archive.js";
 import { shouldScrutinizeFix } from "./scrutinize.js";
 import {
@@ -254,6 +255,24 @@ export async function cmdLoop(args: string[]): Promise<void> {
         break;
       }
 
+      // Verify bigFixer actually committed changes (not just printed output)
+      try {
+        const dirty = execSync("git status --porcelain", {
+          cwd: worktree,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+          timeout: 10_000,
+        }).trim();
+        if (dirty) {
+          console.error(
+            `bigFixer left uncommitted changes — stopping loop to avoid spin`,
+          );
+          break;
+        }
+      } catch {
+        // git status failed — continue to gate, not fatal
+      }
+
       if (autoLoop && hasGate) {
         const gateResult = await spawnGate(config, worktree, {
           id: runId!,
@@ -279,6 +298,23 @@ export async function cmdLoop(args: string[]): Promise<void> {
         console.error(
           "scrutinize-fix produced no output — continuing to gate with original diff",
         );
+      } else {
+        // Verify it actually committed changes
+        try {
+          const dirty = execSync("git status --porcelain", {
+            cwd: worktree,
+            encoding: "utf-8",
+            stdio: ["pipe", "pipe", "pipe"],
+            timeout: 10_000,
+          }).trim();
+          if (dirty) {
+            console.error(
+              "scrutinize-fix produced output but left uncommitted changes — continuing to gate with original diff",
+            );
+          }
+        } catch {
+          // git status failed — not fatal
+        }
       }
     }
 
@@ -292,4 +328,8 @@ export async function cmdLoop(args: string[]): Promise<void> {
       }
     }
   }
+
+  // Clean up SIGINT handler state — run is done, Ctrl-C should just exit
+  setSigintRunId(null);
+  setSigintPhase("spawn");
 }

@@ -53,8 +53,11 @@ export function autoArchivePlan(
 
   try {
     const fileName = planRelPath.split("/").pop();
+    if (!fileName) {
+      return { ok: false, error: `empty plan path: ${planRelPath}` };
+    }
     const msg = config
-      ? archiveMsg(config, fileName!, hash)
+      ? archiveMsg(config, fileName, hash)
       : `chore(plan): archive ${fileName} (shipped ${hash})`;
     execSync(`git commit -m "${msg.replace(/"/g, "'")}"`, {
       cwd: worktree,
