@@ -55,6 +55,39 @@ import {
   testKickoffSinglePending,
 } from "./kickoff.test.js";
 import {
+  testErrorResult,
+  testExtractMultiFieldEmptyLineEndsField,
+  testExtractMultiFieldMultiLine,
+  testExtractMultiFieldNone,
+  testExtractMultiFieldNotFound,
+  testExtractMultiFieldSingle,
+  testHandoffCheckGoodHandoff,
+  testHandoffCheckMissingBlock,
+  testHandoffCheckMultiLineUncertain,
+  testHandoffCheckNotDoneFails,
+  testHandoffCheckUncertainFails,
+  testHandoffCheckWithFactsCrossRef,
+  testHandoffCheckWithoutFacts,
+  testHandoffCollectGitError,
+  testHandoffCollectMissingArgs,
+  testHandoffCollectValidRepo,
+  testJsonResult,
+  testMcpInitialize,
+  testMcpNotificationsIgnored,
+  testMcpToolsCallUnknownTool,
+  testMcpToolsList,
+  testMcpUnknownMethod,
+  testParseToolResult,
+  testReasonCodesAreLocked,
+  testVerdictSubmitInvalidReasonCode,
+  testVerdictSubmitInvalidRunId,
+  testVerdictSubmitInvalidVerdict,
+  testVerdictSubmitOtherRequiresNote,
+  testVerdictSubmitRunNotFound,
+  testVerdictSubmitStoresMcpSource,
+  testVerdictSubmitSuccess,
+} from "./mcp.test.js";
+import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
   testMemoryDefaultWiringNoFile,
@@ -314,5 +347,37 @@ export async function cmdTest(): Promise<void> {
   await testCmdUpdateAlreadyUpToDate();
   await testCmdUpdateLockfileTriggersInstall();
   await testCmdUpdateInstallFailureWarns();
+  // MCP handcheck tests
+  testMcpInitialize();
+  testMcpToolsList();
+  testMcpNotificationsIgnored();
+  testMcpUnknownMethod();
+  testMcpToolsCallUnknownTool();
+  testHandoffCollectMissingArgs();
+  testHandoffCollectValidRepo();
+  testHandoffCollectGitError();
+  testHandoffCheckMissingBlock();
+  testHandoffCheckGoodHandoff();
+  testHandoffCheckUncertainFails();
+  testHandoffCheckNotDoneFails();
+  testHandoffCheckWithFactsCrossRef();
+  testHandoffCheckWithoutFacts();
+  testHandoffCheckMultiLineUncertain();
+  testVerdictSubmitInvalidRunId();
+  testVerdictSubmitInvalidVerdict();
+  testVerdictSubmitInvalidReasonCode();
+  testVerdictSubmitOtherRequiresNote();
+  testVerdictSubmitRunNotFound();
+  testVerdictSubmitSuccess();
+  testVerdictSubmitStoresMcpSource();
+  testExtractMultiFieldNone();
+  testExtractMultiFieldSingle();
+  testExtractMultiFieldMultiLine();
+  testExtractMultiFieldEmptyLineEndsField();
+  testExtractMultiFieldNotFound();
+  testJsonResult();
+  testErrorResult();
+  testParseToolResult();
+  testReasonCodesAreLocked();
   console.log("\nall tests passed ✓");
 }
