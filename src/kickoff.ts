@@ -1,26 +1,28 @@
 // src/kickoff.ts — auto-detect pending plan and run.
-// Scans .fapony/plan/*.md, filters shipped plans, runs if exactly 1 pending.
+// Scans <planDir>/, filters shipped plans, runs if exactly 1 pending.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  handoffMarker,
-  loadConfig,
-  planDir,
-  planExtensions,
-  shippedRE,
-} from "./db/index.js";
+import { handoffMarker, loadConfig, planDir } from "./db/index.js";
 import { renderHandoff } from "./handoff.js";
+import { pendingPlans, worktreeFromCwd } from "./plans.js";
 import { runOnce } from "./run/index.js";
 
 export async function cmdKickoff(args: string[]): Promise<void> {
-  const worktreeKey = args[0];
+  const config = loadConfig();
+
+  let worktreeKey: string | null = args[0] ?? null;
   if (!worktreeKey) {
-    console.error("usage: fapony kickoff <worktree-key>");
-    process.exit(1);
+    worktreeKey = worktreeFromCwd(config);
+    if (!worktreeKey) {
+      console.error(
+        "usage: fapony kickoff <worktree-key>  — or cd into a configured worktree",
+      );
+      process.exit(1);
+    }
+    console.error(`kickoff: using worktree "${worktreeKey}" (from cwd)`);
   }
 
-  const config = loadConfig();
   const worktree = config.worktrees[worktreeKey];
   if (!worktree) {
     console.error(`unknown worktree key: ${worktreeKey}`);
@@ -30,27 +32,14 @@ export async function cmdKickoff(args: string[]): Promise<void> {
 
   // Scan <planDir>/ for plan files that are NOT shipped
   const planDirRel = planDir(config);
-  const exts = planExtensions(config);
-  const shipped = shippedRE(config);
   const planDirAbs = join(worktree, planDirRel);
-  const pending: string[] = [];
-  try {
-    const entries = readdirSync(planDirAbs, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !exts.some((e) => entry.name.endsWith(e)))
-        continue;
-      if (entry.name === "done") continue; // skip <planDir>/done/ subdir
-      const content = readFileSync(join(planDirAbs, entry.name), "utf-8");
-      if (!shipped.test(content)) {
-        pending.push(entry.name);
-      }
-    }
-  } catch {
+  if (!existsSync(planDirAbs)) {
     console.error(
       `${planDirRel}/ not found in ${worktree} — run fapony init first?`,
     );
     process.exit(1);
   }
+  const pending = pendingPlans(config, worktree);
 
   if (pending.length === 0) {
     console.error(`no pending plans found in ${planDirRel}/`);
@@ -59,11 +48,11 @@ export async function cmdKickoff(args: string[]): Promise<void> {
 
   if (pending.length > 1) {
     console.error(`ambiguous: ${pending.length} pending plans found:`);
-    for (const name of pending) {
-      console.error(`  ${planDirRel}/${name}`);
+    for (const [i, name] of pending.entries()) {
+      console.error(`  #${i + 1} ${planDirRel}/${name}`);
     }
     console.error(
-      `\nPick one and run: fapony run <key> --plan ${planDirRel}/<name>`,
+      `\nPick one: fapony run <plan-prefix>  ·  or: fapony run ${worktreeKey} --plan ${planDirRel}/<name>`,
     );
     process.exit(1);
   }
