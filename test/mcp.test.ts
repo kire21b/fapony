@@ -81,9 +81,31 @@ export function testHandoffCollectMissingArgs(): void {
   const result = toolHandoffCollect({});
   assert.ok(result.isError);
   assert.ok(
-    (parseToolResult(result) as { error: string }).error.includes("required"),
+    (parseToolResult(result) as { error: string }).error.includes("worktree"),
   );
-  console.log("  ✓ handoff_collect missing args returns error");
+  console.log("  ✓ handoff_collect missing worktree returns error");
+}
+
+export function testHandoffCollectAutoDetectRange(): void {
+  withTempRepo((dir) => {
+    // Create a second commit
+    writeFileSync(join(dir, "b.txt"), "new content\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync("git commit -m 'add b.txt'", { cwd: dir, stdio: "ignore" });
+
+    // Call without base_sha/head_sha — should auto-detect HEAD~1..HEAD
+    const result = toolHandoffCollect({ worktree: dir });
+
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      facts: { files_changed: number; commits: string[] };
+    };
+    assert.equal(data.facts.files_changed, 1);
+    assert.equal(data.facts.commits.length, 1);
+  });
+  console.log(
+    "  ✓ handoff_collect auto-detects commit range from recent commits",
+  );
 }
 
 export function testHandoffCollectValidRepo(): void {
@@ -122,18 +144,49 @@ export function testHandoffCollectValidRepo(): void {
 }
 
 export function testHandoffCollectGitError(): void {
-  const result = toolHandoffCollect({
-    base_sha: "nonexistent123",
-    head_sha: "nonexistent456",
-    worktree: "/tmp",
+  // Without base_sha/head_sha on a non-git-dir: auto-detect fails
+  const result = toolHandoffCollect({ worktree: "/tmp" });
+  assert.ok(result.isError);
+  assert.ok(
+    (parseToolResult(result) as { error: string }).error.includes(
+      "cannot auto-detect",
+    ),
+  );
+  console.log(
+    "  ✓ handoff_collect auto-detect fails gracefully on non-git dir",
+  );
+}
+
+export function testHandoffCollectExplicitRange(): void {
+  withTempRepo((dir) => {
+    // Create 3 commits
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    execSync("git add . && git commit -m 'a'", { cwd: dir, stdio: "ignore" });
+    writeFileSync(join(dir, "b.txt"), "b\n");
+    execSync("git add . && git commit -m 'b'", { cwd: dir, stdio: "ignore" });
+
+    const baseSha = execSync("git rev-parse HEAD~1", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+    const headSha = execSync("git rev-parse HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+
+    // Explicit range should still work
+    const result = toolHandoffCollect({
+      base_sha: baseSha,
+      head_sha: headSha,
+      worktree: dir,
+    });
+
+    const data = parseToolResult(result) as {
+      facts: { commits: string[] };
+    };
+    assert.equal(data.facts.commits.length, 1);
   });
-  // Should still return a result with git_error
-  const data = parseToolResult(result) as {
-    facts: { git_error: string | null };
-  };
-  assert.ok(data.facts.git_error);
-  assert.ok(data.facts.git_error.includes("git diff failed"));
-  console.log("  ✓ handoff_collect handles git error gracefully");
+  console.log("  ✓ handoff_collect with explicit range still works");
 }
 
 export function testHandoffCheckMissingBlock(): void {
@@ -254,6 +307,28 @@ export function testHandoffCheckWithoutFacts(): void {
   // When no facts provided, the check is skipped entirely (not in checks array)
   assert.equal(crossRef, undefined);
   console.log("  ✓ handoff_check skips facts_cross_referenced when no facts");
+}
+
+export function testHandoffCheckAutoGenerate(): void {
+  const facts = { commits: ["abc123", "def456"] };
+  const result = toolHandoffCheck({ auto_generate: true, facts });
+  const data = parseToolResult(result) as {
+    checks: { name: string; pass: boolean }[];
+    summary: { total: number; passed: number; failed: number };
+  };
+  // Auto-generated handoff should pass all checks (no uncertainty, no not_done)
+  assert.ok(data.summary.total >= 5);
+  assert.equal(data.summary.failed, 0);
+  console.log("  ✓ handoff_check auto-generates handoff from facts");
+}
+
+export function testHandoffCheckAutoGenerateRequiresFacts(): void {
+  const result = toolHandoffCheck({ auto_generate: true });
+  assert.ok(result.isError);
+  assert.ok(
+    (parseToolResult(result) as { error: string }).error.includes("facts"),
+  );
+  console.log("  ✓ handoff_check auto_generate without facts returns error");
 }
 
 export function testHandoffCheckMultiLineUncertain(): void {

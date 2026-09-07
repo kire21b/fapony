@@ -62,6 +62,8 @@ import {
   testExtractMultiFieldNone,
   testExtractMultiFieldNotFound,
   testExtractMultiFieldSingle,
+  testHandoffCheckAutoGenerate,
+  testHandoffCheckAutoGenerateRequiresFacts,
   testHandoffCheckGoodHandoff,
   testHandoffCheckMissingBlock,
   testHandoffCheckMultiLineUncertain,
@@ -69,6 +71,8 @@ import {
   testHandoffCheckUncertainFails,
   testHandoffCheckWithFactsCrossRef,
   testHandoffCheckWithoutFacts,
+  testHandoffCollectAutoDetectRange,
+  testHandoffCollectExplicitRange,
   testHandoffCollectGitError,
   testHandoffCollectMissingArgs,
   testHandoffCollectValidRepo,
@@ -355,12 +359,16 @@ export async function cmdTest(): Promise<void> {
   testMcpUnknownMethod();
   testMcpToolsCallUnknownTool();
   testHandoffCollectMissingArgs();
+  testHandoffCollectAutoDetectRange();
+  testHandoffCollectExplicitRange();
   testHandoffCollectValidRepo();
   testHandoffCollectGitError();
   testHandoffCheckMissingBlock();
   testHandoffCheckGoodHandoff();
   testHandoffCheckUncertainFails();
   testHandoffCheckNotDoneFails();
+  testHandoffCheckAutoGenerate();
+  testHandoffCheckAutoGenerateRequiresFacts();
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();

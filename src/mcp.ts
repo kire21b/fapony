@@ -31,49 +31,60 @@ export const TOOLS = [
     name: "handoff_collect",
     description:
       "Collect machine facts from git: diff stat, commits, branch. " +
-      "Returns verified facts (fapony runs git directly, not trusting agent claims).",
+      "Returns verified facts (fapony runs git directly, not trusting agent claims). " +
+      "If base_sha/head_sha are omitted, auto-detects from recent commits (HEAD~1..HEAD).",
     inputSchema: {
       type: "object" as const,
       properties: {
         base_sha: {
           type: "string",
-          description: "Git base SHA for diff range",
+          description:
+            "Git base SHA for diff range. Defaults to HEAD~1 if omitted.",
         },
         head_sha: {
           type: "string",
-          description: "Git head SHA for diff range",
+          description:
+            "Git head SHA for diff range. Defaults to HEAD if omitted.",
         },
         worktree: {
           type: "string",
           description: "Absolute path to git worktree",
         },
       },
-      required: ["base_sha", "head_sha", "worktree"],
+      required: ["worktree"],
     },
   },
   {
     name: "handoff_check",
     description:
       "Verify handoff conformance: check that executor's handoff block has " +
-      "required fields, no unresolved uncertainty, and facts cross-reference.",
+      "required fields, no unresolved uncertainty, and facts cross-reference. " +
+      "Set auto_generate to true to build handoff text from git facts automatically.",
     inputSchema: {
       type: "object" as const,
       properties: {
         handoff: {
           type: "string",
-          description: "Raw handoff text (must contain ## HANDOFF block)",
+          description:
+            "Raw handoff text (must contain ## HANDOFF block). " +
+            "If auto_generate is true, this is optional and will be built from facts.",
         },
         facts: {
           type: "object",
           description:
             "Optional facts from handoff_collect for cross-reference",
         },
+        auto_generate: {
+          type: "boolean",
+          description:
+            "If true, auto-generate handoff text from git facts (commits, branch)",
+        },
         plan_ref: {
           type: "string",
           description: "Optional plan file reference",
         },
       },
-      required: ["handoff"],
+      required: [],
     },
   },
   {
@@ -161,12 +172,32 @@ function execGitSafe(
 export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
   const { base_sha, head_sha, worktree } = args;
 
-  if (
-    typeof base_sha !== "string" ||
-    typeof head_sha !== "string" ||
-    typeof worktree !== "string"
-  ) {
-    return errorResult("base_sha, head_sha, and worktree are required strings");
+  if (typeof worktree !== "string") {
+    return errorResult("worktree is required as a string");
+  }
+
+  // Auto-detect commit range if not provided
+  let resolvedBaseSha = base_sha;
+  let resolvedHeadSha = head_sha;
+
+  if (typeof resolvedBaseSha !== "string") {
+    const detected = execGitSafe("git rev-parse HEAD~1", worktree);
+    if (!detected.ok) {
+      return errorResult(
+        `cannot auto-detect base_sha: ${detected.error}. Provide base_sha explicitly.`,
+      );
+    }
+    resolvedBaseSha = detected.output;
+  }
+
+  if (typeof resolvedHeadSha !== "string") {
+    const detected = execGitSafe("git rev-parse HEAD", worktree);
+    if (!detected.ok) {
+      return errorResult(
+        `cannot auto-detect head_sha: ${detected.error}. Provide head_sha explicitly.`,
+      );
+    }
+    resolvedHeadSha = detected.output;
   }
 
   // Diff stat
@@ -177,7 +208,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
   let gitError: string | undefined;
 
   const diffResult = execGitSafe(
-    `git diff --stat ${base_sha}..${head_sha} -- .`,
+    `git diff --stat ${resolvedBaseSha}..${resolvedHeadSha} -- .`,
     worktree,
   );
 
@@ -195,7 +226,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
 
   // Commits
   const logResult = execGitSafe(
-    `git log --oneline ${base_sha}..${head_sha}`,
+    `git log --oneline ${resolvedBaseSha}..${resolvedHeadSha}`,
     worktree,
   );
   const commits = logResult.ok
@@ -211,7 +242,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
 
   // Check file types
   const nameResult = execGitSafe(
-    `git diff --name-only ${base_sha}..${head_sha}`,
+    `git diff --name-only ${resolvedBaseSha}..${resolvedHeadSha}`,
     worktree,
   );
   const names = nameResult.ok
@@ -280,16 +311,40 @@ export function extractMultiField(text: string, field: string): string[] {
 }
 
 export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
-  const { handoff, facts } = args;
+  const { handoff, facts, auto_generate } = args;
 
-  if (typeof handoff !== "string") {
-    return errorResult("handoff is required as a string");
+  // Auto-generate handoff text from facts if requested
+  let resolvedHandoff = handoff;
+  if (auto_generate === true && typeof resolvedHandoff !== "string") {
+    if (facts && typeof facts === "object") {
+      const f = facts as Record<string, unknown>;
+      const commits = Array.isArray(f.commits) ? (f.commits as string[]) : [];
+      const headSha =
+        commits.length > 0 ? commits[commits.length - 1] : "unknown";
+      const commitsStr = commits.length > 0 ? commits.join(" ") : "none";
+      resolvedHandoff = [
+        "## HANDOFF",
+        `claimed: ${headSha}`,
+        `commits: ${commitsStr}`,
+        "checks: (not specified)",
+        "uncertain: none",
+        "not_done: none",
+      ].join("\n");
+    } else {
+      return errorResult("auto_generate requires facts with commits");
+    }
+  }
+
+  if (typeof resolvedHandoff !== "string") {
+    return errorResult(
+      "handoff is required as a string (or set auto_generate=true with facts)",
+    );
   }
 
   const checks: CheckResult[] = [];
 
   // 1. has_handoff_block
-  const hasBlock = handoff.includes("## HANDOFF");
+  const hasBlock = resolvedHandoff.includes("## HANDOFF");
   checks.push({
     name: "has_handoff_block",
     pass: hasBlock,
@@ -305,11 +360,11 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
   }
 
   // Extract claimed
-  const claimedMatch = handoff.match(/claimed:\s*(.+)/i);
+  const claimedMatch = resolvedHandoff.match(/claimed:\s*(.+)/i);
   const claimed = claimedMatch?.[1]?.trim() ?? "";
 
   // Extract commits
-  const commitsMatch = handoff.match(/commits:\s*(.+)/i);
+  const commitsMatch = resolvedHandoff.match(/commits:\s*(.+)/i);
   const commitsStr = commitsMatch?.[1]?.trim() ?? "";
   const handoffCommits =
     commitsStr && commitsStr !== "none"
@@ -317,12 +372,12 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
       : [];
 
   // Extract checks
-  const checksMatch = handoff.match(/checks:\s*(.+)/i);
+  const checksMatch = resolvedHandoff.match(/checks:\s*(.+)/i);
   const checksField = checksMatch?.[1]?.trim() ?? "";
 
   // Extract uncertain (multi-line)
-  const uncertainLines = extractMultiField(handoff, "uncertain");
-  const notDoneLines = extractMultiField(handoff, "not_done");
+  const uncertainLines = extractMultiField(resolvedHandoff, "uncertain");
+  const notDoneLines = extractMultiField(resolvedHandoff, "not_done");
 
   // 2. claimed_matches_commits
   if (claimed && claimed !== "none") {

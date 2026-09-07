@@ -23,11 +23,13 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
 
 ```jsonc
 {
-  "base_sha": "abc123",     // required — git base for diff
-  "head_sha": "def456",     // required — git head for diff
-  "worktree": "/path/to/repo" // required — absolute path to git worktree
+  "worktree": "/path/to/repo",  // required — absolute path to git worktree
+  "base_sha": "abc123",         // optional — defaults to HEAD~1 if omitted
+  "head_sha": "def456"          // optional — defaults to HEAD if omitted
 }
 ```
+
+> When `base_sha`/`head_sha` are omitted, the server auto-detects the commit range from recent commits (`HEAD~1..HEAD`). This covers the common case of verifying the latest commit without needing to know git SHAs.
 
 ### `handoff_collect` — output
 
@@ -57,11 +59,14 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
 
 ```jsonc
 {
-  "handoff": "## HANDOFF\nclaimed: ...\nchecks: ...",  // required — raw handoff text
-  "facts": { /* from handoff_collect output */ },       // optional — if omitted, skip fact cross-reference
+  "handoff": "## HANDOFF\nclaimed: ...\nchecks: ...",  // required unless auto_generate
+  "facts": { /* from handoff_collect output */ },       // optional — for cross-reference
+  "auto_generate": true,                                // optional — build handoff from facts
   "plan_ref": "PLAN-foo.md"                            // optional — for plan-scope check
 }
 ```
+
+> When `auto_generate` is `true`, the server builds the handoff text from git facts (commits, branch) automatically. The agent doesn't need to format the `## HANDOFF` block manually. Use this when you want to verify the commit without writing the handoff template yourself.
 
 ### `handoff_check` — output
 
@@ -185,6 +190,7 @@ allowlist คำสั่งที่ user ประกาศไว้ — ไ�
 | `run_id` ไม่มีใน DB | `verdict_submit` returns `{ stored: false, error: "run not found" }` |
 | `reason_code = "other"` ไม่มี `note` | `verdict_submit` returns validation error |
 | `facts` param omitted in `handoff_check` | `facts_cross_referenced` check is skipped entirely (not in checks array) |
+| `auto_generate` without `facts` | Returns validation error ("auto_generate requires facts with commits") |
 | Agent ส่ง input ร้าย | `assertSafe()` + input validation ปฏิเสธ |
 
 ## Examples
@@ -298,6 +304,34 @@ allowlist คำสั่งที่ user ประกาศไว้ — ไ�
     {
       "type": "text",
       "text": "{\"stored\":false,\"error\":\"reason_code 'other' requires a note\"}"
+    }
+  ]
+}
+```
+
+### handoff_check — auto_generate (no handoff text needed)
+
+**Request:**
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "handoff_check",
+    "arguments": {
+      "auto_generate": true,
+      "facts": { "commits": ["a1b2c3d", "e4f5g6h"] }
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"checks\":[{\"name\":\"has_handoff_block\",\"pass\":true,\"note\":\"\"},{\"name\":\"claimed_matches_commits\",\"pass\":true,\"note\":\"claimed commit e4f5g6h found in handoff commits\"},{\"name\":\"uncertain_not_empty\",\"pass\":true,\"note\":\"\"},{\"name\":\"not_done_not_empty\",\"pass\":true,\"note\":\"\"},{\"name\":\"checks_declared\",\"pass\":true,\"note\":\"checks field present\"},{\"name\":\"facts_cross_referenced\",\"pass\":true,\"note\":\"2/2 commits in handoff match git facts\"}],\"summary\":{\"total\":6,\"passed\":6,\"failed\":0,\"needs_human_review\":false}}"
     }
   ]
 }
