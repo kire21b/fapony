@@ -141,9 +141,7 @@ export interface WithRetryOpts<T> {
   isAborted: () => Promise<boolean>;
   canRetry?: () => Promise<boolean>;
   onRetry?: (fail: FailureInfo, nextAttempt: number, delayMs: number) => void;
-  role?: string;
-  runId?: number;
-  classify?: (result: { ok: boolean; stdout?: string; exitCode?: number; timedOut?: boolean }) => FailureInfo;
+  onBeforeAttempt?: (attempt: number) => void;
 }
 
 export type WithRetryResult<T> =
@@ -160,13 +158,16 @@ export async function withRetry<T>(
   attempt: (n: number) => Promise<{ ok: true; value: T } | { ok: false; fail: FailureInfo }>,
   opts: WithRetryOpts<T>,
 ): Promise<WithRetryResult<T>> {
-  const { policy, isAborted, canRetry, onRetry } = opts;
+  const { policy, isAborted, canRetry, onRetry, onBeforeAttempt } = opts;
 
   for (let n = 1; n <= policy.maxAttempts; n++) {
     // Check abort before each attempt
     if (await isAborted()) {
       return { ok: false, fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "aborted" }, exhausted: false };
     }
+
+    // Notify caller before attempt (e.g. set SIGINT phase to "spawn")
+    onBeforeAttempt?.(n);
 
     // canRetry gate only applies to retries (n > 1), not the first attempt
     if (n > 1 && canRetry && !(await canRetry())) {

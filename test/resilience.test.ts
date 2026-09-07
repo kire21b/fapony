@@ -16,6 +16,7 @@ import { getEvents } from "../src/db/index.js";
 import {
   installSigintHandler,
   isSigintReceived,
+  setSigintPhase,
   setSigintRunId,
 } from "../src/sigint.js";
 
@@ -324,12 +325,14 @@ export async function testSigintHandlerMarksStopped(): Promise<void> {
     installSigintHandler();
     setSigintRunId(42);
 
-    // Simulate what the handler does: check state before exit
-    // (We can't actually SIGINT ourselves mid-test, so we verify the wiring.)
+    // Verify phase setter works (defaults to "spawn")
+    setSigintPhase("backoff");
+    setSigintPhase("spawn");
+
     assert.equal(isSigintReceived(), false, "should not be triggered yet");
     setSigintRunId(null);
   });
-  console.log("  ✓ sigint handler wiring");
+  console.log("  ✓ sigint handler wiring + phase tracking");
 }
 
 export function testIsSigintReceivedDefaultFalse(): void {

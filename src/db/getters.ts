@@ -143,9 +143,9 @@ export function promptFileFor(
   return join(process.cwd(), p);
 }
 
-/** Returns true if resilience retry is enabled (config.resilience != null). */
+/** Returns true if resilience retry is enabled (config.resilience !== null). */
 export function resilienceEnabled(config: Config): boolean {
-  return config.resilience !== null && config.resilience !== undefined;
+  return config.resilience !== null;
 }
 
 /** Resolve retry policy from config, falling back to defaults. */

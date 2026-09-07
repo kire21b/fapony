@@ -29,7 +29,7 @@ import {
   classifyFailure,
   withRetry,
 } from "../resilience.js";
-import { setSigintRunId } from "../sigint.js";
+import { setSigintPhase, setSigintRunId } from "../sigint.js";
 import { gitGuard } from "./guard.js";
 import { resolvePlan } from "./plan.js";
 import { spawnExecutor } from "./spawn.js";
@@ -138,6 +138,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const useResilience = resilienceEnabled(config);
 
   let stdout = "";
+  let stderr = "";
   let exitCode = 0;
   let timedOut = false;
 
@@ -209,11 +210,13 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
             tail: fail.tail,
           });
           if (delayMs > 0) {
+            setSigintPhase("backoff");
             console.error(
               `executor attempt ${nextAttempt - 1} failed (${fail.cls}) — retrying in ${(delayMs / 1000).toFixed(0)}s...`,
             );
           }
         },
+        onBeforeAttempt: () => setSigintPhase("spawn"),
       },
     );
 
@@ -237,6 +240,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
       runId,
     });
     stdout = result.stdout;
+    stderr = result.stderr;
     exitCode = result.exitCode;
     timedOut = result.timedOut;
   }
@@ -250,7 +254,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
         exitCode,
         timedOut,
         stdout,
-        stderr: "",
+        stderr,
         limitPatterns: patterns.limit,
         authPatterns: patterns.auth,
       });

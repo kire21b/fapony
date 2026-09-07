@@ -1,6 +1,6 @@
 // src/sigint.ts — SIGINT handler for graceful shutdown.
 //
-// Usage: call installSigintHandler(entry) before running any long operation.
+// Usage: call installSigintHandler() before running any long operation.
 // The handler will:
 //   - 1st Ctrl-C: log "interrupted" event, mark run as stopped, release memory, exit 130
 //   - 2nd Ctrl-C (during cleanup): force exit 130 immediately
@@ -14,6 +14,7 @@ import { closeMemory } from "./memory.js";
 let installed = false;
 let forceExit = false;
 let currentRunId: number | null = null;
+let currentPhase: "spawn" | "backoff" = "spawn";
 
 /**
  * Set the current run ID for SIGINT handling.
@@ -21,6 +22,13 @@ let currentRunId: number | null = null;
  */
 export function setSigintRunId(runId: number | null): void {
   currentRunId = runId;
+}
+
+/**
+ * Set the current phase so the SIGINT handler logs the correct `during` field.
+ */
+export function setSigintPhase(phase: "spawn" | "backoff"): void {
+  currentPhase = phase;
 }
 
 /**
@@ -51,7 +59,7 @@ export function installSigintHandler(): void {
         const run = getRun(db, currentRunId);
         if (run && run.status !== "passed" && run.status !== "stopped") {
           addEvent(db, currentRunId, "interrupted", {
-            during: "spawn", // generic; callers may refine
+            during: currentPhase,
           });
           setStatus(db, currentRunId, "stopped");
           if (run.mem_id) {

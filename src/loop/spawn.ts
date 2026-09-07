@@ -19,6 +19,7 @@ import {
   withRetry,
   type FailureInfo,
 } from "../resilience.js";
+import { setSigintPhase } from "../sigint.js";
 import { assertSafe } from "../safety.js";
 import { templateArgs } from "../util.js";
 import { renderRolePrompt } from "./prompt.js";
@@ -166,11 +167,13 @@ async function runSpawn(
       onRetry: (fail, nextAttempt, delayMs) => {
         addSpawnFailEvent(db, runId, role, fail, nextAttempt - 1);
         if (delayMs > 0) {
+          setSigintPhase("backoff");
           console.error(
             `${role} attempt ${nextAttempt - 1} failed (${fail.cls}) — retrying in ${(delayMs / 1000).toFixed(0)}s...`,
           );
         }
       },
+      onBeforeAttempt: () => setSigintPhase("spawn"),
     },
   );
 
@@ -178,11 +181,7 @@ async function runSpawn(
     return retryResult.value.stdout || null;
   }
 
-  // Log final failure if not already logged by onRetry
-  if (retryResult.exhausted) {
-    addSpawnFailEvent(db, runId, role, retryResult.fail, policy.maxAttempts);
-  }
-
+  // onRetry already logged spawn_fail for every failure including the last attempt
   return null;
 }
 

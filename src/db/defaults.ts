@@ -67,5 +67,6 @@ export const DEFAULT_CONFIG: Config = {
   planmv: null,
   display: null,
   defaults: null,
-  resilience: null,
+  // resilience omitted (undefined) = ON by default.
+  // Set to null in user config to explicitly disable.
 };
