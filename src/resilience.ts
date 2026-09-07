@@ -113,7 +113,7 @@ export function backoffDelayMs(
   maxMs: number,
   rand: () => number = Math.random,
 ): number {
-  const raw = Math.min(maxMs, baseMs * Math.pow(2, attempt - 1));
+  const raw = Math.min(maxMs, baseMs * 2 ** (attempt - 1));
   return Math.floor(raw / 2 + (rand() * raw) / 2);
 }
 
@@ -138,7 +138,7 @@ export async function sleepInterruptible(
   return await isAborted();
 }
 
-export interface WithRetryOpts<T> {
+export interface WithRetryOpts {
   policy: RetryPolicy;
   isAborted: () => Promise<boolean>;
   canRetry?: () => Promise<boolean>;
@@ -157,15 +157,21 @@ export type WithRetryResult<T> =
  * canRetry (optional) gates whether retry is allowed at all (e.g. clean-tree gate).
  */
 export async function withRetry<T>(
-  attempt: (n: number) => Promise<{ ok: true; value: T } | { ok: false; fail: FailureInfo }>,
-  opts: WithRetryOpts<T>,
+  attempt: (
+    n: number,
+  ) => Promise<{ ok: true; value: T } | { ok: false; fail: FailureInfo }>,
+  opts: WithRetryOpts,
 ): Promise<WithRetryResult<T>> {
   const { policy, isAborted, canRetry, onRetry, onBeforeAttempt } = opts;
 
   for (let n = 1; n <= policy.maxAttempts; n++) {
     // Check abort before each attempt
     if (await isAborted()) {
-      return { ok: false, fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "aborted" }, exhausted: false };
+      return {
+        ok: false,
+        fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "aborted" },
+        exhausted: false,
+      };
     }
 
     // Notify caller before attempt (e.g. set SIGINT phase to "spawn")
@@ -173,7 +179,16 @@ export async function withRetry<T>(
 
     // canRetry gate only applies to retries (n > 1), not the first attempt
     if (n > 1 && canRetry && !(await canRetry())) {
-      return { ok: false, fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "canRetry=false" }, exhausted: false };
+      return {
+        ok: false,
+        fail: {
+          cls: "crash",
+          exitCode: 1,
+          timedOut: false,
+          tail: "canRetry=false",
+        },
+        exhausted: false,
+      };
     }
 
     const result = await attempt(n);
@@ -207,5 +222,9 @@ export async function withRetry<T>(
   }
 
   // Shouldn't reach, but safety
-  return { ok: false, fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "exhausted" }, exhausted: true };
+  return {
+    ok: false,
+    fail: { cls: "crash", exitCode: 1, timedOut: false, tail: "exhausted" },
+    exhausted: true,
+  };
 }

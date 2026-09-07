@@ -8,11 +8,10 @@ import {
   backoffDelayMs,
   classifyFailure,
   DEFAULT_RETRY_POLICY,
+  type FailureInfo,
   sleepInterruptible,
   withRetry,
-  type FailureInfo,
 } from "../src/resilience.js";
-import { getEvents } from "../src/db/index.js";
 import {
   installSigintHandler,
   isSigintReceived,
@@ -30,7 +29,8 @@ export function testClassifyAuth(): void {
     stderr: "Error: invalid api key provided",
   });
   if (info.cls !== "auth") throw new Error(`expected auth, got ${info.cls}`);
-  if (info.exitCode !== 1) throw new Error(`expected exitCode 1, got ${info.exitCode}`);
+  if (info.exitCode !== 1)
+    throw new Error(`expected exitCode 1, got ${info.exitCode}`);
 }
 
 export function testClassifyTimeout(): void {
@@ -40,7 +40,8 @@ export function testClassifyTimeout(): void {
     stdout: "",
     stderr: "",
   });
-  if (info.cls !== "timeout") throw new Error(`expected timeout, got ${info.cls}`);
+  if (info.cls !== "timeout")
+    throw new Error(`expected timeout, got ${info.cls}`);
 }
 
 export function testClassifyLimit(): void {
@@ -92,7 +93,8 @@ export function testClassifyEmptyExitZeroStderrAuth(): void {
     stdout: "",
     stderr: "Error: unauthorized, invalid api key",
   });
-  if (info.cls !== "auth") throw new Error(`expected auth from stderr-only, got ${info.cls}`);
+  if (info.cls !== "auth")
+    throw new Error(`expected auth from stderr-only, got ${info.cls}`);
 }
 
 export function testClassifyTailTruncated(): void {
@@ -103,7 +105,8 @@ export function testClassifyTailTruncated(): void {
     stdout: longStdout,
     stderr: "",
   });
-  if (info.tail.length > 200) throw new Error(`tail too long: ${info.tail.length}`);
+  if (info.tail.length > 200)
+    throw new Error(`tail too long: ${info.tail.length}`);
 }
 
 export function testClassifyCustomPatterns(): void {
@@ -145,7 +148,8 @@ export function testBackoffJitterRange(): void {
   // Multiple samples should be in [raw/2, raw]
   for (let i = 0; i < 20; i++) {
     const delay = backoffDelayMs(1, 5000, 60000);
-    if (delay < 2500 || delay > 5000) throw new Error(`delay out of range: ${delay}`);
+    if (delay < 2500 || delay > 5000)
+      throw new Error(`delay out of range: ${delay}`);
   }
 }
 
@@ -183,7 +187,8 @@ export async function testWithRetrySucceedsFirstTry(): Promise<void> {
     },
   );
   if (!result.ok) throw new Error("should succeed");
-  if (result.value !== "done") throw new Error(`unexpected value: ${result.value}`);
+  if (result.value !== "done")
+    throw new Error(`unexpected value: ${result.value}`);
   if (attempts !== 1) throw new Error(`expected 1 attempt, got ${attempts}`);
 }
 
@@ -194,20 +199,34 @@ export async function testWithRetrySucceedsAfterTwoFails(): Promise<void> {
     async (n) => {
       attempts++;
       if (n < 3) {
-        return { ok: false as const, fail: { cls: "limit" as const, exitCode: 1, timedOut: false, tail: "rate limit" } };
+        return {
+          ok: false as const,
+          fail: {
+            cls: "limit" as const,
+            exitCode: 1,
+            timedOut: false,
+            tail: "rate limit",
+          },
+        };
       }
       return { ok: true as const, value: "ok" };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3, limitBaseMs: 10 },
       isAborted: async () => false,
-      onRetry: (fail, next, delay) => { failures.push(fail); void next; void delay; },
+      onRetry: (fail, next, delay) => {
+        failures.push(fail);
+        void next;
+        void delay;
+      },
     },
   );
   if (!result.ok) throw new Error("should succeed");
-  if (result.value !== "ok") throw new Error(`unexpected value: ${result.value}`);
+  if (result.value !== "ok")
+    throw new Error(`unexpected value: ${result.value}`);
   if (attempts !== 3) throw new Error(`expected 3 attempts, got ${attempts}`);
-  if (failures.length !== 2) throw new Error(`expected 2 failures logged, got ${failures.length}`);
+  if (failures.length !== 2)
+    throw new Error(`expected 2 failures logged, got ${failures.length}`);
 }
 
 export async function testWithRetryExhausts(): Promise<void> {
@@ -215,7 +234,15 @@ export async function testWithRetryExhausts(): Promise<void> {
   const result = await withRetry(
     async () => {
       attempts++;
-      return { ok: false as const, fail: { cls: "crash" as const, exitCode: 1, timedOut: false, tail: "boom" } };
+      return {
+        ok: false as const,
+        fail: {
+          cls: "crash" as const,
+          exitCode: 1,
+          timedOut: false,
+          tail: "boom",
+        },
+      };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3, crashBaseMs: 5 },
@@ -232,7 +259,15 @@ export async function testWithRetryAuthNotRetried(): Promise<void> {
   const result = await withRetry(
     async () => {
       attempts++;
-      return { ok: false as const, fail: { cls: "auth" as const, exitCode: 1, timedOut: false, tail: "bad key" } };
+      return {
+        ok: false as const,
+        fail: {
+          cls: "auth" as const,
+          exitCode: 1,
+          timedOut: false,
+          tail: "bad key",
+        },
+      };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
@@ -241,7 +276,8 @@ export async function testWithRetryAuthNotRetried(): Promise<void> {
   );
   if (result.ok) throw new Error("should fail");
   if (!result.exhausted) throw new Error("should be exhausted");
-  if (attempts !== 1) throw new Error(`auth should not retry, got ${attempts} attempts`);
+  if (attempts !== 1)
+    throw new Error(`auth should not retry, got ${attempts} attempts`);
 }
 
 export async function testWithRetryTimeoutNotRetried(): Promise<void> {
@@ -249,7 +285,15 @@ export async function testWithRetryTimeoutNotRetried(): Promise<void> {
   const result = await withRetry(
     async () => {
       attempts++;
-      return { ok: false as const, fail: { cls: "timeout" as const, exitCode: 1, timedOut: true, tail: "" } };
+      return {
+        ok: false as const,
+        fail: {
+          cls: "timeout" as const,
+          exitCode: 1,
+          timedOut: true,
+          tail: "",
+        },
+      };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
@@ -257,7 +301,8 @@ export async function testWithRetryTimeoutNotRetried(): Promise<void> {
     },
   );
   if (result.ok) throw new Error("should fail");
-  if (attempts !== 1) throw new Error(`timeout should not retry, got ${attempts} attempts`);
+  if (attempts !== 1)
+    throw new Error(`timeout should not retry, got ${attempts} attempts`);
 }
 
 export async function testWithRetryTerminalAttemptNumber(): Promise<void> {
@@ -265,17 +310,29 @@ export async function testWithRetryTerminalAttemptNumber(): Promise<void> {
   const logged: number[] = [];
   const result = await withRetry(
     async () => {
-      return { ok: false as const, fail: { cls: "auth" as const, exitCode: 1, timedOut: false, tail: "bad key" } };
+      return {
+        ok: false as const,
+        fail: {
+          cls: "auth" as const,
+          exitCode: 1,
+          timedOut: false,
+          tail: "bad key",
+        },
+      };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
       isAborted: async () => false,
-      onRetry: (_fail, nextAttempt) => { logged.push(nextAttempt - 1); },
+      onRetry: (_fail, nextAttempt) => {
+        logged.push(nextAttempt - 1);
+      },
     },
   );
   if (result.ok) throw new Error("should fail");
   if (logged.length !== 1 || logged[0] !== 1) {
-    throw new Error(`terminal failure should log attempt 1, got ${JSON.stringify(logged)}`);
+    throw new Error(
+      `terminal failure should log attempt 1, got ${JSON.stringify(logged)}`,
+    );
   }
 }
 
@@ -288,14 +345,16 @@ export function testClassifyLimitNeedsContext(): void {
     stdout: "at foo.ts:429:12",
     stderr: "",
   });
-  if (lineNo.cls !== "crash") throw new Error(`expected crash, got ${lineNo.cls}`);
+  if (lineNo.cls !== "crash")
+    throw new Error(`expected crash, got ${lineNo.cls}`);
   const accredited = classifyFailure({
     exitCode: 1,
     timedOut: false,
     stdout: "",
     stderr: "test accredited the wrong account",
   });
-  if (accredited.cls !== "crash") throw new Error(`expected crash, got ${accredited.cls}`);
+  if (accredited.cls !== "crash")
+    throw new Error(`expected crash, got ${accredited.cls}`);
 }
 
 export async function testWithRetryAbortedBeforeAttempt(): Promise<void> {
@@ -311,7 +370,8 @@ export async function testWithRetryAbortedBeforeAttempt(): Promise<void> {
     },
   );
   if (result.ok) throw new Error("should fail");
-  if (attempts !== 0) throw new Error(`should not attempt when aborted, got ${attempts}`);
+  if (attempts !== 0)
+    throw new Error(`should not attempt when aborted, got ${attempts}`);
 }
 
 export async function testWithRetryCanRetryGateBlocks(): Promise<void> {
@@ -319,7 +379,10 @@ export async function testWithRetryCanRetryGateBlocks(): Promise<void> {
   const result = await withRetry(
     async () => {
       attempts++;
-      return { ok: false as const, fail: { cls: "limit" as const, exitCode: 1, timedOut: false, tail: "" } };
+      return {
+        ok: false as const,
+        fail: { cls: "limit" as const, exitCode: 1, timedOut: false, tail: "" },
+      };
     },
     {
       policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
@@ -328,8 +391,10 @@ export async function testWithRetryCanRetryGateBlocks(): Promise<void> {
     },
   );
   if (result.ok) throw new Error("should fail");
-  if (result.exhausted) throw new Error("gate-blocked should NOT report exhausted");
-  if (attempts !== 1) throw new Error(`expected 1 attempt (gate blocked), got ${attempts}`);
+  if (result.exhausted)
+    throw new Error("gate-blocked should NOT report exhausted");
+  if (attempts !== 1)
+    throw new Error(`expected 1 attempt (gate blocked), got ${attempts}`);
 }
 
 // --- Integration: flaky agent that fails N times then succeeds ---
@@ -342,7 +407,12 @@ export async function testFlakyAgentRetriesAndSucceeds(): Promise<void> {
       if (n <= 2) {
         return {
           ok: false as const,
-          fail: classifyFailure({ exitCode: 1, timedOut: false, stdout: "", stderr: "rate limit exceeded" }),
+          fail: classifyFailure({
+            exitCode: 1,
+            timedOut: false,
+            stdout: "",
+            stderr: "rate limit exceeded",
+          }),
         };
       }
       return { ok: true as const, value: `success on attempt ${n}` };

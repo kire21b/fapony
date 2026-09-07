@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
-import { claimMemory, closeMemory, DEFAULT_MEMORY, resolveMemoryConfig } from "../src/memory.js";
+import {
+  claimMemory,
+  DEFAULT_MEMORY,
+  resolveMemoryConfig,
+} from "../src/memory.js";
 
 const BASE_CONFIG: Config = {
   worktrees: { test: "/tmp/test" },
@@ -111,7 +115,9 @@ export function testClaimMemoryTimeout(): void {
   assert.equal(result, false, "should return false for hanging command");
   // Should complete in ~15s (timeout), not 999s (the sleep)
   if (elapsed > 20_000) {
-    throw new Error(`timeout test took too long: ${elapsed}ms — execSync may be hanging`);
+    throw new Error(
+      `timeout test took too long: ${elapsed}ms — execSync may be hanging`,
+    );
   }
 
   console.log("  ✓ claimMemory timeout prevents hang");

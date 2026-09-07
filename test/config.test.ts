@@ -316,7 +316,11 @@ export function testConfigDriftWarning(): void {
     };
     try {
       loadConfig(file);
-      assert.equal(captured, "", "should not warn when only roles.executor exists");
+      assert.equal(
+        captured,
+        "",
+        "should not warn when only roles.executor exists",
+      );
     } finally {
       console.error = origError;
     }

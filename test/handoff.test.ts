@@ -84,7 +84,11 @@ not_done: tests
     "also the retry logic is unclear",
     "and error handling could be better",
   ]);
-  assert.deepEqual(parsed.not_done, ["tests", "integration tests", "edge cases"]);
+  assert.deepEqual(parsed.not_done, [
+    "tests",
+    "integration tests",
+    "edge cases",
+  ]);
 
   // Single-line still works
   const singleLine = `

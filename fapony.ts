@@ -12,13 +12,13 @@ import { cmdLoop } from "./src/loop/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
 import { cmdRun } from "./src/run/index.js";
 import { cmdSetup } from "./src/setup.js";
+import { installSigintHandler } from "./src/sigint.js";
 import { cmdStats } from "./src/stats.js";
 import { cmdStatus } from "./src/status.js";
 import { cmdStop } from "./src/stop.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";
-import { installSigintHandler } from "./src/sigint.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 

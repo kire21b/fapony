@@ -160,10 +160,17 @@ export function retryPolicy(config: Config) {
 }
 
 /** Resolve regex patterns for classify, falling back to defaults. */
-export function resiliencePatterns(config: Config): { limit: RegExp[]; auth: RegExp[] } {
+export function resiliencePatterns(config: Config): {
+  limit: RegExp[];
+  auth: RegExp[];
+} {
   const p = config.resilience?.patterns ?? DEFAULT_RESILIENCE.patterns!;
   return {
-    limit: (p.limit ?? DEFAULT_RESILIENCE.patterns!.limit!).map((s) => new RegExp(s, "i")),
-    auth: (p.auth ?? DEFAULT_RESILIENCE.patterns!.auth!).map((s) => new RegExp(s, "i")),
+    limit: (p.limit ?? DEFAULT_RESILIENCE.patterns!.limit!).map(
+      (s) => new RegExp(s, "i"),
+    ),
+    auth: (p.auth ?? DEFAULT_RESILIENCE.patterns!.auth!).map(
+      (s) => new RegExp(s, "i"),
+    ),
   };
 }

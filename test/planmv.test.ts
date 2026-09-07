@@ -172,7 +172,11 @@ export function testPlanMvMissingFile(): void {
     const result = planMv(join(dir, ".fapony", "plan", "PLAN-nope.md"), {
       repoRoot: dir,
     });
-    assert.equal(result.ok, false, "missing file must return ok:false, not throw");
+    assert.equal(
+      result.ok,
+      false,
+      "missing file must return ok:false, not throw",
+    );
     assert(
       result.error?.includes("cannot read"),
       `error should mention unreadable file, got: ${result.error}`,
@@ -203,7 +207,11 @@ export function testPlanMvDestCollision(): void {
       stdio: "ignore",
     });
     const second = planMv(planPath, { repoRoot: dir });
-    assert.equal(second.ok, false, "second archive must return ok:false, not throw");
+    assert.equal(
+      second.ok,
+      false,
+      "second archive must return ok:false, not throw",
+    );
     assert(
       second.error?.includes("already exists"),
       `error should mention existing destination, got: ${second.error}`,

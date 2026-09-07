@@ -25,10 +25,7 @@ import {
 } from "../db/index.js";
 import { gitFacts, parseHandoff } from "../handoff.js";
 import { claimMemory, closeMemory } from "../memory.js";
-import {
-  classifyFailure,
-  withRetry,
-} from "../resilience.js";
+import { classifyFailure, withRetry } from "../resilience.js";
 import { setSigintPhase, setSigintRunId } from "../sigint.js";
 import { gitGuard } from "./guard.js";
 import { resolvePlan } from "./plan.js";
@@ -138,7 +135,6 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const useResilience = resilienceEnabled(config);
 
   let stdout = "";
-  let stderr = "";
   let lastStderr = "";
   let exitCode = 0;
   let timedOut = false;
@@ -233,7 +229,9 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
       // executor, so record stopped, not stalled (stall-rate stats must
       // not inherit user aborts).
       setStatus(db, runId, "stopped");
-      addEvent(db, runId, "stopped", { reason: "aborted during retry backoff" });
+      addEvent(db, runId, "stopped", {
+        reason: "aborted during retry backoff",
+      });
       console.error(`\nfapony: run ${runId} stopped (aborted)`);
 
       if (memId) closeMemory(config, worktree, memId, `run ${runId} stopped`);
@@ -262,7 +260,6 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
       runId,
     });
     stdout = result.stdout;
-    stderr = result.stderr;
     lastStderr = result.lastStderr;
     exitCode = result.exitCode;
     timedOut = result.timedOut;

@@ -14,13 +14,9 @@ import {
   safetyDeny,
 } from "../db/index.js";
 import { parseGateVerdict, parsePlanUpdate } from "../parse.js";
-import {
-  classifyFailure,
-  withRetry,
-  type FailureInfo,
-} from "../resilience.js";
-import { setSigintPhase } from "../sigint.js";
+import { classifyFailure, type FailureInfo, withRetry } from "../resilience.js";
 import { assertNoPromptInArgv, assertSafe } from "../safety.js";
+import { setSigintPhase } from "../sigint.js";
 import { templateArgs } from "../util.js";
 import { renderRolePrompt } from "./prompt.js";
 import { buildScrutinizePrompt, resolveChangedFiles } from "./scrutinize.js";
@@ -44,7 +40,9 @@ async function runSpawnRaw(
   runId: number,
   role: string,
   stdin: string,
-): Promise<{ ok: true; value: SpawnAttemptResult } | { ok: false; fail: FailureInfo }> {
+): Promise<
+  { ok: true; value: SpawnAttemptResult } | { ok: false; fail: FailureInfo }
+> {
   const roleConfig = config.roles?.[role]!;
   assertNoPromptInArgv(roleConfig.cmd, role);
   const cmd = templateArgs(roleConfig.cmd, {
@@ -118,7 +116,12 @@ async function runSpawnRaw(
     endSpawn(db, spawnEventId, config, role, "");
     return {
       ok: false,
-      fail: { cls: "crash", exitCode: 1, timedOut: false, tail: (e as Error).message },
+      fail: {
+        cls: "crash",
+        exitCode: 1,
+        timedOut: false,
+        tail: (e as Error).message,
+      },
     };
   }
 }
@@ -148,7 +151,6 @@ async function runSpawn(
 
   // With retry
   const policy = retryPolicy(config);
-  const patterns = resiliencePatterns(config);
 
   const retryResult = await withRetry(
     async (_n) => {

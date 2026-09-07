@@ -32,7 +32,10 @@ export { spawnScrutinizeFix } from "./spawn.js";
  * Check if the current run has been stopped (by `fapony stop` from another terminal)
  * or SIGINT received. Used by retry loops to abort between attempts.
  */
-async function isRunAborted(db: ReturnType<typeof openDb>, runId: number | null): Promise<boolean> {
+async function isRunAborted(
+  db: ReturnType<typeof openDb>,
+  runId: number | null,
+): Promise<boolean> {
   if (isSigintReceived()) return true;
   if (!runId) return false;
   const run = getRun(db, runId);
@@ -127,7 +130,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
       if (autoLoop && hasGate) {
         console.error(`\n--- auto-gate for run ${runId} ---`);
 
-        const gateResult = await spawnGate(config, worktree, currentRun, () => isRunAborted(db, runId));
+        const gateResult = await spawnGate(config, worktree, currentRun, () =>
+          isRunAborted(db, runId),
+        );
         if (!gateResult) {
           console.error(
             "gate produced no VERDICT — stopping loop (§0.4 fail-safe)",
@@ -172,7 +177,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
     if (afterGate?.status === "passed" && hasPlanner) {
       console.error(`\n--- spawning planner for run ${runId} ---`);
 
-      const planUpdate = await spawnPlanner(config, worktree, afterGate, () => isRunAborted(db, runId));
+      const planUpdate = await spawnPlanner(config, worktree, afterGate, () =>
+        isRunAborted(db, runId),
+      );
       if (!planUpdate) {
         console.error(
           "planner produced no valid marker — stopping loop (§0.4 fail-safe)",
@@ -249,7 +256,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
         `\n--- big diff route (${result.facts.files} files, ${result.facts.lines} lines) — spawning bigFixer ---`,
       );
 
-      const fixerResult = await spawnBigFixer(config, worktree, result, () => isRunAborted(db, runId));
+      const fixerResult = await spawnBigFixer(config, worktree, result, () =>
+        isRunAborted(db, runId),
+      );
       if (!fixerResult) {
         console.error("bigFixer produced no output — stopping loop");
         break;
@@ -274,11 +283,16 @@ export async function cmdLoop(args: string[]): Promise<void> {
       }
 
       if (autoLoop && hasGate) {
-        const gateResult = await spawnGate(config, worktree, {
-          id: runId!,
-          mem_id: memId,
-          worktree: worktreeKey!,
-        }, () => isRunAborted(db, runId));
+        const gateResult = await spawnGate(
+          config,
+          worktree,
+          {
+            id: runId!,
+            mem_id: memId,
+            worktree: worktreeKey!,
+          },
+          () => isRunAborted(db, runId),
+        );
         if (gateResult) {
           gateOnce(runId!, gateResult.verdict, gateResult.note);
         }
@@ -293,7 +307,9 @@ export async function cmdLoop(args: string[]): Promise<void> {
     // commits its own fixes, failure here never blocks the gate.
     if (shouldScrutinizeFix(result, config)) {
       console.error(`\n--- scrutinize-fix pass for run ${runId} ---`);
-      const fixed = await spawnScrutinizeFix(config, worktree, result, () => isRunAborted(db, runId));
+      const fixed = await spawnScrutinizeFix(config, worktree, result, () =>
+        isRunAborted(db, runId),
+      );
       if (!fixed) {
         console.error(
           "scrutinize-fix produced no output — continuing to gate with original diff",

@@ -59,7 +59,11 @@ export function testPlanHygieneEnglishNoneNoLeak(): void {
 
 export function testPlanHygieneHeadingVariant(): void {
   const bulk = Array.from({ length: 10 }, (_, i) => `example ${i}`).join("\n");
-  for (const heading of ["## 7: Examples", "## 7 — Examples", "## 7 Examples"]) {
+  for (const heading of [
+    "## 7: Examples",
+    "## 7 — Examples",
+    "## 7 Examples",
+  ]) {
     const plan = `> **Source spec:** [spec/x.md](../spec/x.md)\n\n${heading}\n${bulk}\n\n## 8. References\n- link\n`;
     const warnings = checkPlanHygiene(plan);
     assert(

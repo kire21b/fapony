@@ -43,7 +43,7 @@ export function splitCmd(input: string): string[] {
 function defaultCheckCmd(cmd: string): boolean {
   // Allowlist first: cmd names are hardcoded at every call site, so anything
   // outside [word chars, dot, dash] is rejected before touching a shell.
-  if (!/^[A-Za-z0-9_.\-]+$/.test(cmd)) return false;
+  if (!/^[A-Za-z0-9_.-]+$/.test(cmd)) return false;
   try {
     execSync(`command -v ${cmd}`, { stdio: "pipe", timeout: 15_000 });
     return true;
