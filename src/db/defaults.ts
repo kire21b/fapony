@@ -38,6 +38,14 @@ export const DEFAULT_ROLE_TIMEOUTS: Record<string, number> = {
   scrutinizeFix: 15,
 };
 
+export const DEFAULT_RESILIENCE = {
+  retry: { maxAttempts: 3, limitBaseMs: 60000, crashBaseMs: 5000, maxMs: 600000 },
+  patterns: {
+    limit: ["rate\\s*limit", "\\b429\\b", "usage limit", "credit", "quota", "overloaded"],
+    auth: ["unauthorized", "invalid api key", "authentication"],
+  },
+};
+
 export const DEFAULT_CONFIG: Config = {
   worktrees: {},
   executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
@@ -59,4 +67,5 @@ export const DEFAULT_CONFIG: Config = {
   planmv: null,
   display: null,
   defaults: null,
+  resilience: null,
 };

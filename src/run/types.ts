@@ -9,6 +9,7 @@ export interface RunOnceOpts {
   planContent: string | null;
   memId: string | null;
   allowDirty: boolean;
+  isAborted?: () => Promise<boolean>;
 }
 
 export interface RunOnceResult {

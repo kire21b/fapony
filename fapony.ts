@@ -18,8 +18,14 @@ import { cmdStop } from "./src/stop.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";
+import { installSigintHandler } from "./src/sigint.js";
 
 const [cmd, ...a] = process.argv.slice(2);
+
+// Install SIGINT handler for long-running commands (run, loop)
+if (cmd === "run" || cmd === "loop") {
+  installSigintHandler();
+}
 
 if (cmd === "run") {
   await cmdRun(a);

@@ -12,6 +12,7 @@ import {
   DEFAULT_PLAN_DIR,
   DEFAULT_PLAN_EXTENSIONS,
   DEFAULT_PLAN_MAX_LINES,
+  DEFAULT_RESILIENCE,
   DEFAULT_ROLE_TIMEOUTS,
   DEFAULT_SAFETY_DENY,
   DEFAULT_SHIPPED_RE,
@@ -140,4 +141,29 @@ export function promptFileFor(
   if (!p) return null;
   if (p.startsWith("/")) return p;
   return join(process.cwd(), p);
+}
+
+/** Returns true if resilience retry is enabled (config.resilience != null). */
+export function resilienceEnabled(config: Config): boolean {
+  return config.resilience !== null && config.resilience !== undefined;
+}
+
+/** Resolve retry policy from config, falling back to defaults. */
+export function retryPolicy(config: Config) {
+  const r = config.resilience?.retry ?? DEFAULT_RESILIENCE.retry!;
+  return {
+    maxAttempts: r.maxAttempts ?? DEFAULT_RESILIENCE.retry!.maxAttempts!,
+    limitBaseMs: r.limitBaseMs ?? DEFAULT_RESILIENCE.retry!.limitBaseMs!,
+    crashBaseMs: r.crashBaseMs ?? DEFAULT_RESILIENCE.retry!.crashBaseMs!,
+    maxMs: r.maxMs ?? DEFAULT_RESILIENCE.retry!.maxMs!,
+  };
+}
+
+/** Resolve regex patterns for classify, falling back to defaults. */
+export function resiliencePatterns(config: Config): { limit: RegExp[]; auth: RegExp[] } {
+  const p = config.resilience?.patterns ?? DEFAULT_RESILIENCE.patterns!;
+  return {
+    limit: (p.limit ?? DEFAULT_RESILIENCE.patterns!.limit!).map((s) => new RegExp(s, "i")),
+    auth: (p.auth ?? DEFAULT_RESILIENCE.patterns!.auth!).map((s) => new RegExp(s, "i")),
+  };
 }

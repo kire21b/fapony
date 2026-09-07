@@ -72,6 +72,31 @@ import {
   testPlanMvWithHeader,
 } from "./planmv.test.js";
 import {
+  testBackoffCappedAtMax,
+  testBackoffExponential,
+  testBackoffJitterRange,
+  testClassifyAuth,
+  testClassifyCrash,
+  testClassifyCustomPatterns,
+  testClassifyEmpty,
+  testClassifyLimit,
+  testClassifyLimit429,
+  testClassifyTailTruncated,
+  testClassifyTimeout,
+  testFlakyAgentRetriesAndSucceeds,
+  testIsSigintReceivedDefaultFalse,
+  testSigintHandlerMarksStopped,
+  testSleepInterruptibleAborts,
+  testSleepInterruptibleCompletes,
+  testWithRetryAbortedBeforeAttempt,
+  testWithRetryAuthNotRetried,
+  testWithRetryCanRetryGateBlocks,
+  testWithRetryExhausts,
+  testWithRetrySucceedsAfterTwoFails,
+  testWithRetrySucceedsFirstTry,
+  testWithRetryTimeoutNotRetried,
+} from "./resilience.test.js";
+import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
 } from "./run.test.js";
@@ -146,6 +171,29 @@ export async function cmdTest(): Promise<void> {
   testPlanMvNormalizeLinks();
   testPlanMvDryRun();
   testPlanMvAlreadyDatedNotDoublePrefixed();
+  testClassifyAuth();
+  testClassifyTimeout();
+  testClassifyLimit();
+  testClassifyLimit429();
+  testClassifyCrash();
+  testClassifyEmpty();
+  testClassifyTailTruncated();
+  testClassifyCustomPatterns();
+  testBackoffExponential();
+  testBackoffCappedAtMax();
+  testBackoffJitterRange();
+  await testSleepInterruptibleCompletes();
+  await testSleepInterruptibleAborts();
+  await testWithRetrySucceedsFirstTry();
+  await testWithRetrySucceedsAfterTwoFails();
+  await testWithRetryExhausts();
+  await testWithRetryAuthNotRetried();
+  await testWithRetryTimeoutNotRetried();
+  await testWithRetryAbortedBeforeAttempt();
+  await testWithRetryCanRetryGateBlocks();
+  await testFlakyAgentRetriesAndSucceeds();
+  await testSigintHandlerMarksStopped();
+  testIsSigintReceivedDefaultFalse();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
