@@ -63,7 +63,8 @@ import {
   testExtractMultiFieldNotFound,
   testExtractMultiFieldSingle,
   testHandoffCheckAutoGenerate,
-  testHandoffCheckAutoGenerateRequiresFacts,
+  testHandoffCheckAutoGenerateRequiresAgentReport,
+  testHandoffCheckAutoGenerateWithUncertainty,
   testHandoffCheckGoodHandoff,
   testHandoffCheckMissingBlock,
   testHandoffCheckMultiLineUncertain,
@@ -368,7 +369,8 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckUncertainFails();
   testHandoffCheckNotDoneFails();
   testHandoffCheckAutoGenerate();
-  testHandoffCheckAutoGenerateRequiresFacts();
+  testHandoffCheckAutoGenerateRequiresAgentReport();
+  testHandoffCheckAutoGenerateWithUncertainty();
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();

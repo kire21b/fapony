@@ -214,7 +214,14 @@ export function testHandoffCheckGoodHandoff(): void {
   ].join("\n");
 
   const facts = { commits: ["abc123", "def456"] };
-  const result = toolHandoffCheck({ handoff, facts });
+  // Agent-reported fields provided as separate args
+  const result = toolHandoffCheck({
+    handoff,
+    facts,
+    uncertain: "none",
+    not_done: "none",
+    checks: "typecheck pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
     summary: { total: number; passed: number; failed: number };
@@ -236,7 +243,13 @@ export function testHandoffCheckUncertainFails(): void {
   ].join("\n");
 
   const facts = { commits: ["abc123"] };
-  const result = toolHandoffCheck({ handoff, facts });
+  const result = toolHandoffCheck({
+    handoff,
+    facts,
+    uncertain: "auth flow might need refactoring",
+    not_done: "none",
+    checks: "typecheck pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
     summary: { failed: number };
@@ -260,7 +273,13 @@ export function testHandoffCheckNotDoneFails(): void {
   ].join("\n");
 
   const facts = { commits: ["abc123"] };
-  const result = toolHandoffCheck({ handoff, facts });
+  const result = toolHandoffCheck({
+    handoff,
+    facts,
+    uncertain: "none",
+    not_done: "tests",
+    checks: "typecheck pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
   };
@@ -280,7 +299,13 @@ export function testHandoffCheckWithFactsCrossRef(): void {
   ].join("\n");
 
   const facts = { commits: ["abc123", "def456"] };
-  const result = toolHandoffCheck({ handoff, facts });
+  const result = toolHandoffCheck({
+    handoff,
+    facts,
+    uncertain: "none",
+    not_done: "none",
+    checks: "pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
   };
@@ -299,7 +324,12 @@ export function testHandoffCheckWithoutFacts(): void {
     "not_done: none",
   ].join("\n");
 
-  const result = toolHandoffCheck({ handoff });
+  const result = toolHandoffCheck({
+    handoff,
+    uncertain: "none",
+    not_done: "none",
+    checks: "pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean; note: string }[];
   };
@@ -311,24 +341,61 @@ export function testHandoffCheckWithoutFacts(): void {
 
 export function testHandoffCheckAutoGenerate(): void {
   const facts = { commits: ["abc123", "def456"] };
-  const result = toolHandoffCheck({ auto_generate: true, facts });
+  // Agent provides uncertain/not_done/checks → used in handoff
+  const result = toolHandoffCheck({
+    auto_generate: true,
+    facts,
+    uncertain: "none",
+    not_done: "none",
+    checks: "typecheck pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean }[];
-    summary: { total: number; passed: number; failed: number };
+    summary: { total: number; failed: number };
   };
-  // Auto-generated handoff should pass all checks (no uncertainty, no not_done)
-  assert.ok(data.summary.total >= 5);
+  // All checks pass because agent reported them
   assert.equal(data.summary.failed, 0);
-  console.log("  ✓ handoff_check auto-generates handoff from facts");
+  console.log(
+    "  ✓ handoff_check auto-generates claimed/commits, uses agent uncertain/not_done/checks",
+  );
 }
 
-export function testHandoffCheckAutoGenerateRequiresFacts(): void {
-  const result = toolHandoffCheck({ auto_generate: true });
-  assert.ok(result.isError);
-  assert.ok(
-    (parseToolResult(result) as { error: string }).error.includes("facts"),
+export function testHandoffCheckAutoGenerateRequiresAgentReport(): void {
+  const facts = { commits: ["abc123", "def456"] };
+  // Agent does NOT provide uncertain/not_done/checks → all 3 fail
+  const result = toolHandoffCheck({ auto_generate: true, facts });
+  const data = parseToolResult(result) as {
+    checks: { name: string; pass: boolean; note: string }[];
+    summary: { failed: number };
+  };
+  // uncertain_not_empty fails, not_done_not_empty fails, checks_declared fails
+  assert.ok(data.summary.failed >= 3);
+  const checksDecl = data.checks.find((c) => c.name === "checks_declared");
+  assert.equal(checksDecl?.pass, false);
+  assert.ok(checksDecl?.note.includes("did not report"));
+  console.log(
+    "  ✓ handoff_check auto_generate without agent report fails all 3 checks",
   );
-  console.log("  ✓ handoff_check auto_generate without facts returns error");
+}
+
+export function testHandoffCheckAutoGenerateWithUncertainty(): void {
+  const facts = { commits: ["abc123"] };
+  // Agent reports uncertainty → uncertain_not_empty fails
+  const result = toolHandoffCheck({
+    auto_generate: true,
+    facts,
+    uncertain: "auth flow might need refactoring",
+    not_done: "none",
+    checks: "pass",
+  });
+  const data = parseToolResult(result) as {
+    checks: { name: string; pass: boolean }[];
+    summary: { failed: number };
+  };
+  assert.equal(data.summary.failed, 1); // only uncertain fails
+  console.log(
+    "  ✓ handoff_check auto_generate catches agent-reported uncertainty",
+  );
 }
 
 export function testHandoffCheckMultiLineUncertain(): void {
@@ -342,7 +409,12 @@ export function testHandoffCheckMultiLineUncertain(): void {
     "not_done: none",
   ].join("\n");
 
-  const result = toolHandoffCheck({ handoff });
+  const result = toolHandoffCheck({
+    handoff,
+    uncertain: "first issue\n  also second issue",
+    not_done: "none",
+    checks: "pass",
+  });
   const data = parseToolResult(result) as {
     checks: { name: string; pass: boolean; note: string }[];
   };
@@ -609,7 +681,7 @@ export function testEndToEndPipeline(): void {
         facts: { commits: string[] };
       };
 
-      // Step 2: check
+      // Step 2: check (agent reports uncertain/not_done/checks)
       const handoff = [
         "## HANDOFF",
         `claimed: ${headSha}`,
@@ -621,6 +693,9 @@ export function testEndToEndPipeline(): void {
       const checkResult = toolHandoffCheck({
         handoff,
         facts: { commits: collectData.facts.commits },
+        uncertain: "none",
+        not_done: "none",
+        checks: "typecheck pass",
       });
       const checkData = parseToolResult(checkResult) as {
         summary: { failed: number };
