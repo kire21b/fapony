@@ -20,13 +20,16 @@ export function parseSourceSpec(
   return raw;
 }
 
-/** Read spec file, truncate to maxLines, return content or null. */
+/** Read spec file, truncate to maxLines, return content or null.
+ *  `baseDir` is the directory to resolve relative `specPath` from (usually the plan file's dir). */
 export function readSpec(
-  worktree: string,
+  baseDir: string,
   specPath: string,
   maxLines: number,
 ): string | null {
-  const resolved = join(worktree, specPath);
+  const resolved = specPath.startsWith("/")
+    ? specPath
+    : join(baseDir, specPath);
   if (!existsSync(resolved)) return null;
   try {
     const content = readFileSync(resolved, "utf-8");

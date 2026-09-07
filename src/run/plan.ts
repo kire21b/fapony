@@ -1,7 +1,7 @@
 // src/run/plan.ts — plan content resolution, hygiene check, spec injection
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type Config, specMaxLines } from "../db/index.js";
 import { checkPlanHygiene, checkSpecHygiene } from "../planlint.js";
 import { parseSourceSpec, readSpec } from "./spec.js";
@@ -47,12 +47,14 @@ export function resolvePlan(
     console.error(`⚠ spec hygiene: ${w.detail}`);
   }
 
-  // spec injection
+  // spec injection — resolve relative to the plan file's directory so that
+  // links like `../spec/SPEC-x.md` from `.fapony/plan/` resolve correctly.
   let specContent: string | null = null;
-  if (!isNoPlan(planContent)) {
+  if (!isNoPlan(planContent) && planPath) {
     const specPath = parseSourceSpec(planContent, config);
     if (specPath) {
-      specContent = readSpec(worktree, specPath, specMaxLines(config));
+      const planDir = dirname(join(worktree, planPath));
+      specContent = readSpec(planDir, specPath, specMaxLines(config));
       if (specContent) console.error(`spec attached: ${specPath}`);
     }
   }
