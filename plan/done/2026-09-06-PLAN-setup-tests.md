@@ -16,8 +16,8 @@
 แต่ตัว **orchestration** (`cmdSetup`, `cmdUpdate`) เอง ยังเรียก `execSync`/`readline`/
 `process.exit` ตรงๆ ข้างใน ไม่มี seam ⇒ branch ที่เป็นลำดับ if/else จริงไม่มี test คุมเลย
 
-จุดเสี่ยงสุดคือ [src/update.ts:118-130](../src/update.ts) และ
-[src/update.ts:139-148](../src/update.ts) — **stash-pop failure path** ที่เพิ่งแก้บั๊กไปเองใน
+จุดเสี่ยงสุดคือ [src/update.ts:118-130](../../src/update.ts) และ
+[src/update.ts:139-148](../../src/update.ts) — **stash-pop failure path** ที่เพิ่งแก้บั๊กไปเองใน
 `c3a45a5` (เดิมกลืน error เงียบ) จุดนี้ไม่มีอะไรจับถ้าใครมาแก้ซ้ำแล้วพลาดอีกรอบ
 
 ## 2. Scope (do / don't do)
@@ -102,9 +102,9 @@ const fakeGit = (args: string) => {
 
 ## 8. References
 
-- [src/update.ts](../src/update.ts) — orchestration ที่ต้องตัด seam (จุดเสี่ยงสุด: stash-pop)
-- [src/setup.ts](../src/setup.ts) — orchestration ที่ต้องตัด seam
-- [test/update.test.ts](../test/update.test.ts) — pure-function tests เดิม ต่อยอด
-- [test/setup.test.ts](../test/setup.test.ts) — pure-function tests เดิม ต่อยอด
-- [test/index.ts](../test/index.ts) — runner ที่ต้องลงทะเบียนเทสใหม่
-- กฎจาก [CLAUDE.md](../CLAUDE.md) § Rules for AI Agents ข้อ 1 (ห้าม abstraction เดียว) + § Edge Cases
+- [src/update.ts](../../src/update.ts) — orchestration ที่ต้องตัด seam (จุดเสี่ยงสุด: stash-pop)
+- [src/setup.ts](../../src/setup.ts) — orchestration ที่ต้องตัด seam
+- [test/update.test.ts](../../test/update.test.ts) — pure-function tests เดิม ต่อยอด
+- [test/setup.test.ts](../../test/setup.test.ts) — pure-function tests เดิม ต่อยอด
+- [test/index.ts](../../test/index.ts) — runner ที่ต้องลงทะเบียนเทสใหม่
+- กฎจาก [CLAUDE.md](../../CLAUDE.md) § Rules for AI Agents ข้อ 1 (ห้าม abstraction เดียว) + § Edge Cases

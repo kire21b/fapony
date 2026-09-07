@@ -2,7 +2,7 @@
 
 > ✅ **shipped** (68ac21d)
 > **Owner:** delamind · **Created:** 2026-09-07
-> **Source spec:** [SPEC-resilience.md](../spec/SPEC-resilience.md)
+> **Source spec:** [SPEC-resilience.md](../../spec/SPEC-resilience.md)
 
 ---
 
@@ -10,7 +10,7 @@
 
 วันนี้ agent (executor / gate / planner / fixer) ติด provider limit (rate limit, usage cap,
 credit หมด) หรือล่มชั่วคราว → fapony mark `stalled` แล้ว loop ตายทันที
-([src/run/flow.ts:139-148](../src/run/flow.ts), [src/loop/index.ts:223-226](../src/loop/index.ts))
+([src/run/flow.ts:139-148](../../src/run/flow.ts), [src/loop/index.ts:223-226](../../src/loop/index.ts))
 — คนต้องนั่งเฝ้าแล้วกด resume เองทุกครั้ง ซึ่งขัดกับตัวตนของ multi-agent loop
 
 เป้าหมาย: fapony จัดการความล้มเหลวชั่วคราวได้เอง — **retry + backoff** ตอนติด limit/ล่ม
@@ -20,7 +20,7 @@ credit หมด) หรือล่มชั่วคราว → fapony mark 
 ย้อนหลังว่าเจอ limit/ต้องยกเลิกบ่อยแค่ไหน ใช้ตัดสินใจ tuning รอบต่อไป
 
 > **Scope cut (2026-09-07):** ตัด circuit breaker ออกจาก plan นี้ — ดู § Scope ข้อ Don't do
-> เหตุผลอยู่ที่นั่น ดีไซน์ breaker เต็มยังอยู่ใน [SPEC-resilience.md](../spec/SPEC-resilience.md)
+> เหตุผลอยู่ที่นั่น ดีไซน์ breaker เต็มยังอยู่ใน [SPEC-resilience.md](../../spec/SPEC-resilience.md)
 > รอ PLAN-2 ถ้า retry อย่างเดียวไม่พอจริง
 
 ## 2. Scope (do / don't do)
@@ -28,7 +28,7 @@ credit หมด) หรือล่มชั่วคราว → fapony mark 
 **Do:**
 - `src/resilience.ts` pure core: classify failure (`limit|auth|timeout|crash|empty`),
   exponential backoff + full jitter, interruptible retry wrapper — ถูกใช้จริงทั้ง
-  [src/run/spawn.ts](../src/run/spawn.ts) และ [src/loop/spawn.ts](../src/loop/spawn.ts)
+  [src/run/spawn.ts](../../src/run/spawn.ts) และ [src/loop/spawn.ts](../../src/loop/spawn.ts)
   (2 consumer ⇒ ไม่ละเมิดกฎห้าม abstraction เดียว)
 - event kind ใหม่ `spawn_fail` (ทุกครั้งที่ classify เจอความล้มเหลว ก่อน retry/ก่อน stalled)
   และ `interrupted` (ทุกครั้งที่ `fapony stop`/SIGINT ตัดกลางคัน) — append-only audit ตาม
@@ -37,15 +37,15 @@ credit หมด) หรือล่มชั่วคราว → fapony mark 
   limit ชนบ่อยช่วงไหน ควรปรับ backoff เริ่มต้นเท่าไหร่)
 - **กัน retry อันตราย:** retry ได้เฉพาะเมื่อ HEAD ไม่ขยับจากก่อน spawn + `status --porcelain`
   ว่าง (pre-spawn sha snapshot) — executor ที่โดน kill หลัง commit บางก้อน = stalled เหมือนเดิม
-- **SIGINT handler ใหม่ที่ [fapony.ts](../fapony.ts)** (จุดเดียว ไม่มีอยู่ก่อนเลยตอนนี้ — เช็คแล้ว
+- **SIGINT handler ใหม่ที่ [fapony.ts](../../fapony.ts)** (จุดเดียว ไม่มีอยู่ก่อนเลยตอนนี้ — เช็คแล้ว
   `grep SIGINT src/` ว่างเปล่า): จับ SIGINT ครั้งแรก → log event `interrupted` (พร้อม
   run_id ปัจจุบันถ้ามี, `during: "backoff"|"spawn"`) → mark run `stopped` + release memory
-  (เรียก path เดียวกับ [src/stop.ts](../src/stop.ts)) → exit 130 ครั้งที่สอง (กด Ctrl-C ซ้ำ) =
+  (เรียก path เดียวกับ [src/stop.ts](../../src/stop.ts)) → exit 130 ครั้งที่สอง (กด Ctrl-C ซ้ำ) =
   force exit ทันทีไม่ต้องรอ cleanup (กันค้างถ้า cleanup เอง hang)
 - `fapony stop` จากอีก terminal ระหว่างรอ backoff → `isAborted()` เห็น status เปลี่ยนก่อน
   attempt ถัดไป/ระหว่าง sleep chunk → ออกทันที (ไม่ต้องพึ่ง signal เพราะเป็นคนละ process)
 - config `resilience` (optional — ไม่ใส่ = default conservative, `null` = ปิดทั้งชั้นคืนพฤติกรรมเดิม)
-  + getters รวมที่ [src/db/getters.ts](../src/db/getters.ts)
+  + getters รวมที่ [src/db/getters.ts](../../src/db/getters.ts)
 
 **Don't do:**
 - ❌ **circuit breaker (state machine open/half_open/closed, window, cooldown escalation)** —
@@ -104,7 +104,7 @@ credit หมด) หรือล่มชั่วคราว → fapony mark 
 4. **Executor retry + clean-tree gate** ใน run flow — verify: HEAD ขยับ/dirty → stalled ทันที
    ไม่ retry; สะอาด → retry ตาม policy
 5. **SIGINT handler + `fapony stop` abort + event `interrupted`** — handler ใหม่ใน
-   [fapony.ts](../fapony.ts) (ครั้งแรก cleanup, ครั้งสอง force exit), `isAborted()` เช็ค
+   [fapony.ts](../../fapony.ts) (ครั้งแรก cleanup, ครั้งสอง force exit), `isAborted()` เช็ค
    status ระหว่าง backoff sleep — verify: Ctrl-C ระหว่างรอ backoff → exit ทันที, status
    `stopped`, event `interrupted` มีใน db พร้อม `during`; `fapony stop` จาก terminal อื่น
    ให้ผลเดียวกัน
@@ -115,21 +115,21 @@ credit หมด) หรือล่มชั่วคราว → fapony mark 
 ## 7. Examples (make it concrete)
 
 - Config block, ตาราง policy ต่อ class, breaker state machine และลำดับเหตุการณ์เมื่อ
-  agent ติด limit → อยู่ที่ [SPEC-resilience.md](../spec/SPEC-resilience.md) ที่เดียว
+  agent ติด limit → อยู่ที่ [SPEC-resilience.md](../../spec/SPEC-resilience.md) ที่เดียว
 
 ## 8. References
 
-- [src/run/spawn.ts](../src/run/spawn.ts) — executor spawn (timeout → kill → exitCode)
-- [src/run/flow.ts](../src/run/flow.ts) — stalled path ที่ต้องกลายเป็น classify + retry
-- [src/loop/spawn.ts](../src/loop/spawn.ts) — role spawn (gate/planner/fixer) consumer ที่สอง
-- [fapony.ts](../fapony.ts) — CLI entry เดียว จุดที่ต้องเพิ่ม `process.on("SIGINT", ...)`
+- [src/run/spawn.ts](../../src/run/spawn.ts) — executor spawn (timeout → kill → exitCode)
+- [src/run/flow.ts](../../src/run/flow.ts) — stalled path ที่ต้องกลายเป็น classify + retry
+- [src/loop/spawn.ts](../../src/loop/spawn.ts) — role spawn (gate/planner/fixer) consumer ที่สอง
+- [fapony.ts](../../fapony.ts) — CLI entry เดียว จุดที่ต้องเพิ่ม `process.on("SIGINT", ...)`
   (ตอนนี้ไม่มี signal handler ใดๆ ในโค้ดเลย — `grep -rn SIGINT src/` ว่างเปล่า)
-- [src/stop.ts](../src/stop.ts) — logic mark stopped + release memory ที่ SIGINT handler
+- [src/stop.ts](../../src/stop.ts) — logic mark stopped + release memory ที่ SIGINT handler
   ต้องเรียกซ้ำ (ห้ามเขียน path ใหม่คู่ขนาน)
-- [src/db/getters.ts](../src/db/getters.ts) · [src/db/defaults.ts](../src/db/defaults.ts) — รูปแบบ getter/defaults ที่ต้องตาม
-- [src/safety.ts](../src/safety.ts) — assertSafe ต้องผ่านทุก attempt
-- [test/index.ts](../test/index.ts) — runner ที่ต้องลงทะเบียน test ใหม่
-- [spec/SPEC-resilience.md](../spec/SPEC-resilience.md) — breaker design (§ Breaker) เก็บไว้
+- [src/db/getters.ts](../../src/db/getters.ts) · [src/db/defaults.ts](../../src/db/defaults.ts) — รูปแบบ getter/defaults ที่ต้องตาม
+- [src/safety.ts](../../src/safety.ts) — assertSafe ต้องผ่านทุก attempt
+- [test/index.ts](../../test/index.ts) — runner ที่ต้องลงทะเบียน test ใหม่
+- [spec/SPEC-resilience.md](../../spec/SPEC-resilience.md) — breaker design (§ Breaker) เก็บไว้
   ใช้ตอนทำ PLAN-2 เท่านั้น ไม่ใช่ scope ของ plan นี้
-- กฎจาก [AGENTS.md](../AGENTS.md) § Rules for AI Agents ข้อ 1 (ห้าม abstraction เดียว),
+- กฎจาก [AGENTS.md](../../AGENTS.md) § Rules for AI Agents ข้อ 1 (ห้าม abstraction เดียว),
   § DB Schema (2 ตาราง), § Edge Cases แถว executor ค้าง
