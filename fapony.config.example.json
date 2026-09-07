@@ -9,24 +9,23 @@
       "timeoutMin": 45
     },
     "gate": {
-      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "cmd": ["claude", "-p", "{model}"],
       "model": "sonnet"
     },
     "planner": {
-      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "cmd": ["claude", "-p", "{model}"],
       "model": "opus"
     },
     "bigFixer": {
-      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "cmd": ["claude", "-p", "{model}"],
       "model": "opus"
     },
     "scrutinizeFix": {
-      "cmd": ["claude", "-p", "{model}", "{PROMPT}"],
+      "cmd": ["claude", "-p", "{model}"],
       "model": "haiku",
       "timeoutMin": 15
     }
   },
-  "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
   "review": {
     "bigDiff": { "files": 15, "lines": 400 },
     "maxRounds": 2,

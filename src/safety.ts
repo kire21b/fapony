@@ -15,3 +15,17 @@ export function assertSafe(argv: string[], denySources?: string[]): void {
     }
   }
 }
+
+/**
+ * Reject cmd arrays that still contain {PROMPT} — prompt must travel via
+ * stdin only, never argv.  Prevents double-injection + argv overflow.
+ */
+export function assertNoPromptInArgv(argv: string[], role: string): void {
+  for (const arg of argv) {
+    if (arg.includes("{PROMPT}")) {
+      throw new Error(
+        `role "${role}" cmd contains {PROMPT} — prompt must go via stdin only, remove {PROMPT} from cmd array`,
+      );
+    }
+  }
+}

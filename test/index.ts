@@ -8,6 +8,7 @@ import {
 } from "./archive.test.js";
 import {
   testConfigDefaults,
+  testConfigDriftWarning,
   testConfigFileOverrides,
   testCustomMarkersParse,
   testCustomSafetyDeny,
@@ -100,7 +101,7 @@ import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
 } from "./run.test.js";
-import { testAssertSafe } from "./safety.test.js";
+import { testAssertNoPromptInArgv, testAssertSafe } from "./safety.test.js";
 import {
   testBuildScrutinizePrompt,
   testResolveChangedFiles,
@@ -152,6 +153,7 @@ import { testIsAffirmative } from "./util.test.js";
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
+  testAssertNoPromptInArgv();
   testParseHandoff();
   testDbLifecycle();
   testSchemaVersionStamped();
@@ -220,6 +222,7 @@ export async function cmdTest(): Promise<void> {
   testTemplateArgsReplaceAll();
   testRenderRolePrompt();
   testSourceAndShippedRE();
+  testConfigDriftWarning();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
   testPlanHygieneOk();

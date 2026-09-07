@@ -20,7 +20,7 @@ import {
   type FailureInfo,
 } from "../resilience.js";
 import { setSigintPhase } from "../sigint.js";
-import { assertSafe } from "../safety.js";
+import { assertNoPromptInArgv, assertSafe } from "../safety.js";
 import { templateArgs } from "../util.js";
 import { renderRolePrompt } from "./prompt.js";
 import { buildScrutinizePrompt, resolveChangedFiles } from "./scrutinize.js";
@@ -46,9 +46,9 @@ async function runSpawnRaw(
   stdin: string,
 ): Promise<{ ok: true; value: SpawnAttemptResult } | { ok: false; fail: FailureInfo }> {
   const roleConfig = config.roles?.[role]!;
+  assertNoPromptInArgv(roleConfig.cmd, role);
   const cmd = templateArgs(roleConfig.cmd, {
     model: roleConfig.model ?? "",
-    PROMPT: stdin,
   });
   assertSafe(cmd, safetyDeny(config));
 
