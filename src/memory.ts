@@ -47,7 +47,7 @@ export function closeMemory(
   try {
     const cmd = templateArgs(mem.close, { id: memId, msg });
     assertSafe(cmd, safetyDeny(config));
-    execSync(cmd.join(" "), { cwd: worktree, stdio: "ignore" });
+    execSync(cmd.join(" "), { cwd: worktree, stdio: "ignore", timeout: 15_000 });
   } catch {
     // non-fatal, same as existing call sites
   }
@@ -65,6 +65,7 @@ export function claimMemory(
   execSync(cmd.join(" "), {
     cwd: worktree,
     stdio: ["pipe", "pipe", "pipe"],
+    timeout: 15_000,
   });
   return true;
 }
