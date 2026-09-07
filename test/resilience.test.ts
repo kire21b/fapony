@@ -385,7 +385,15 @@ export async function testWithRetryCanRetryGateBlocks(): Promise<void> {
       };
     },
     {
-      policy: { ...DEFAULT_RETRY_POLICY, maxAttempts: 3 },
+      // limitBaseMs/crashBaseMs zeroed: this test is about the canRetry
+      // gate, not real backoff timing — the default 60s limit backoff was
+      // making this test alone take ~49s.
+      policy: {
+        ...DEFAULT_RETRY_POLICY,
+        maxAttempts: 3,
+        limitBaseMs: 0,
+        crashBaseMs: 0,
+      },
       isAborted: async () => false,
       canRetry: async () => false, // clean-tree gate says no
     },
