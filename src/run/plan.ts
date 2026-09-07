@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Config, specMaxLines } from "../db/index.js";
-import { checkPlanHygiene } from "../planlint.js";
+import { checkPlanHygiene, checkSpecHygiene } from "../planlint.js";
 import { parseSourceSpec, readSpec } from "./spec.js";
 
 const NO_PLAN = "(no plan provided)";
@@ -40,6 +40,11 @@ export function resolvePlan(
     for (const w of checkPlanHygiene(planContent, config)) {
       console.error(`⚠ plan hygiene: ${w.detail}`);
     }
+  }
+
+  // spec name hygiene (warn only)
+  for (const w of checkSpecHygiene(worktree, config)) {
+    console.error(`⚠ spec hygiene: ${w.detail}`);
   }
 
   // spec injection

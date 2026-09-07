@@ -1,7 +1,7 @@
 # PLAN-mcp-handcheck — handcheck ผ่าน MCP โดยไม่ต้อง adopt loop
 
 > **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-07
-> **Source spec:** (สร้างใน step 1 → [spec/mcp-handcheck.md](../spec/mcp-handcheck.md))
+> **Source spec:** (สร้างใน step 1 → [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md))
 
 ---
 
@@ -56,7 +56,7 @@ fapony ผ่าน MCP 3 tools เพื่อ verify งานก่อนส�
 ## 6. ขั้นตอน (เรียงลำดับ แต่ละขั้น verify ได้)
 
 0. **ล็อก vocabulary** — reason-code enum + metric dictionary 1 หน้า (definition/source/limitation) + minimum pass evidence + ตัดสิน protocol format (canonical JSON, รับ markdown ด้วย) → verify: ตอบคำถามค้าง ROADMAP ข้อ 2/4/7 ได้เป็นลายลักษณ์อักษร
-1. **เขียน spec** (`spec/mcp-handcheck.md`) — input/output schema ของ 3 tools + example payload + conformance checklist บน vocabulary จาก step 0 → verify: อ่านแล้วรู้ว่า implement อะไรโดยไม่ต้องถาม
+1. **เขียน spec** (`spec/SPEC-mcp-handcheck.md`) — input/output schema ของ 3 tools + example payload + conformance checklist บน vocabulary จาก step 0 → verify: อ่านแล้วรู้ว่า implement อะไรโดยไม่ต้องถาม
 2. **stdio transport skeleton** — `initialize`/`tools/list`/`tools/call` + framing ผ่าน stdin/stdout → verify: inspector ต่อติด เห็นรายชื่อ 3 tools
 3. **`handoff_collect`** — รับ commit range คืน machine facts (diff stat, commits) + check results พร้อม provenance (`verified`/`unverified`) + ชี้ส่วนที่ขาด → verify: รันกับ repo จริงแล้ว facts ตรงกับ `git` เอง
 4. **`handoff_check`** — รับ handoff (JSON หรือ markdown markers เดิม) คืน conformance ทีละข้อ + เหตุผล → verify: feed handoff ดี/เสีย/ขาด แล้วผลถูกทั้ง 3 แบบ
@@ -68,7 +68,7 @@ fapony ผ่าน MCP 3 tools เพื่อ verify งานก่อนส�
 
 ## 7. ตัวอย่าง (ของจริงอยู่ใน spec)
 
-ดูตัวอย่าง request/response ของทั้ง 3 tools ใน [spec/mcp-handcheck.md](../spec/mcp-handcheck.md) (สร้างใน step 1) —
+ดูตัวอย่าง request/response ของทั้ง 3 tools ใน [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md) (สร้างใน step 1) —
 plan นี้เก็บแค่ภาพรวม ไม่แปะ schema ตรงๆ
 
 ## 8. References

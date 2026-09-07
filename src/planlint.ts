@@ -1,8 +1,16 @@
 // src/planlint.ts — cheap heuristics that catch spec content leaking into
-// plan files. Warns only, never blocks a run (same fail-safe stance as
-// handoff_missing) — a plan author still ships, they just can't miss it.
+// plan files and spec files with wrong names. Warns only, never blocks a run
+// (same fail-safe stance as handoff_missing) — a plan author still ships,
+// they just can't miss it.
 
-import { type Config, planMaxLines, sourceSpecRE } from "./db/index.js";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+import {
+  type Config,
+  planMaxLines,
+  sourceSpecRE,
+  specDir,
+} from "./db/index.js";
 
 export interface PlanHygieneWarning {
   kind: "too_long" | "spec_leak";
@@ -59,5 +67,45 @@ export function checkPlanHygiene(
     }
   }
 
+  return warnings;
+}
+
+// --- spec name hygiene ---
+
+export interface SpecHygieneWarning {
+  kind: "bad_name";
+  file: string;
+  detail: string;
+}
+
+const SPEC_NAME_RE = /^SPEC-.+\.md$/;
+
+/**
+ * Scan spec dir for .md files that don't match `SPEC-<feature>.md`.
+ * Returns warnings only — never blocks a run.
+ */
+export function checkSpecHygiene(
+  worktree: string,
+  config?: Config,
+): SpecHygieneWarning[] {
+  const warnings: SpecHygieneWarning[] = [];
+  const dir = join(worktree, specDir(config));
+  let files: string[];
+  try {
+    files = readdirSync(dir);
+  } catch {
+    // spec dir doesn't exist or unreadable — nothing to check
+    return warnings;
+  }
+  for (const f of files) {
+    if (!f.endsWith(".md")) continue;
+    if (!SPEC_NAME_RE.test(f)) {
+      warnings.push({
+        kind: "bad_name",
+        file: f,
+        detail: `spec file "${f}" should be "SPEC-<feature>.md" — rename to match convention`,
+      });
+    }
+  }
   return warnings;
 }
