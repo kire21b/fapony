@@ -75,7 +75,9 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
   const db = openDb();
 
   // --- 1b. CONCURRENCY GUARD: reject if another run is already active on this worktree ---
-  const clash = getActiveRuns(db).find((r) => r.worktree === worktreeKey);
+  const clash = getActiveRuns(db).find(
+    (r) => r.worktree === worktreeKey && r.status !== "stalled",
+  );
   if (clash) {
     return {
       runId: 0,
