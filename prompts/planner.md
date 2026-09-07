@@ -37,8 +37,8 @@ The NEXT-PROMPT must contain everything the executor needs without reading the P
 
 - **Goal** — one line: what this chunk delivers.
 - **Done already** — one line: which items shipped last round (with hashes), so the executor does not redo them.
-- **Files/areas** — exact files or modules to touch, plus findings to avoid re-treading.
-- **Completion criteria** — concrete, checkable (command runs, behavior X, tests pass).
+- **Files/areas** — exact files or modules to touch, plus findings to avoid re-treading. Name existing functions/modules the executor should reuse if you know them, so it doesn't reinvent them.
+- **Completion criteria** — concrete, checkable (command runs, behavior X, tests pass). If the chunk touches non-trivial logic, require a runnable test as part of "done" — don't let it slide to "tests pass" meaning "nothing broke".
 - **Constraints** — the banned-commands and no-push rules are already in the executor's standing prompt; only add chunk-specific constraints here.
 
 ## If the PLAN is fully complete:
