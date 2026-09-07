@@ -32,7 +32,10 @@ export function parseGateVerdict(
   const match = stdout.match(re);
   if (!match) return null;
 
-  const verdict = match[1] as "pass" | "fail";
+  // A custom markers.verdict without a (pass|fail) capture group would
+  // yield undefined here — fail safe (null) instead of propagating it.
+  const verdict = match[1];
+  if (verdict !== "pass" && verdict !== "fail") return null;
   const idx = stdout.indexOf(match[0]);
   const note = stdout.slice(idx + match[0].length).trim();
 
