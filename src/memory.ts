@@ -47,7 +47,11 @@ export function closeMemory(
   try {
     const cmd = templateArgs(mem.close, { id: memId, msg });
     assertSafe(cmd, safetyDeny(config));
-    execSync(cmd.join(" "), { cwd: worktree, stdio: "ignore", timeout: 15_000 });
+    execSync(cmd.join(" "), {
+      cwd: worktree,
+      stdio: "ignore",
+      timeout: 15_000,
+    });
   } catch {
     // non-fatal, same as existing call sites
   }
@@ -60,14 +64,18 @@ export function claimMemory(
 ): boolean {
   const mem = resolveMemoryConfig(config, worktree);
   if (!mem) return false;
-  const cmd = templateArgs(mem.claim, { id: memId });
-  assertSafe(cmd, safetyDeny(config));
-  execSync(cmd.join(" "), {
-    cwd: worktree,
-    stdio: ["pipe", "pipe", "pipe"],
-    timeout: 15_000,
-  });
-  return true;
+  try {
+    const cmd = templateArgs(mem.claim, { id: memId });
+    assertSafe(cmd, safetyDeny(config));
+    execSync(cmd.join(" "), {
+      cwd: worktree,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Runs memory.kickoff (if configured or default-wired) and returns its stdout, or null if unset/failed. */

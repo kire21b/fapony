@@ -60,7 +60,15 @@ export function gateOnce(
   setStatus(db, runId, "fixing");
   addEvent(db, runId, "gate", { verdict: "fail", note });
 
-  const updated = getRun(db, runId)!;
+  const updated = getRun(db, runId);
+  if (!updated) {
+    setStatus(db, runId, "stopped");
+    return {
+      runId,
+      status: "stopped",
+      error: `run ${runId} disappeared after update`,
+    };
+  }
 
   if (updated.round > config.review.maxRounds) {
     // Round cap reached — the plan is the problem, stop for real. Persist it

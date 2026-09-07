@@ -114,8 +114,9 @@ function currentBytesIn(db: Database, eventId: number): number {
       .get(eventId) as { data: string | null } | null;
     const parsed = JSON.parse(row?.data ?? "{}") as { bytes_in?: unknown };
     return typeof parsed.bytes_in === "number" ? parsed.bytes_in : 0;
-  } catch {
-    return 0;
+  } catch (e) {
+    if (e instanceof SyntaxError) return 0;
+    throw e;
   }
 }
 
