@@ -131,7 +131,7 @@ export function roleTimeoutMin(config: Config, role: string): number {
 /**
  * Resolve a prompt template file for a role.
  * Returns null when the role has no configured/file prompt (caller uses inline fallback).
- * Relative paths resolve against the fapony repo root (cwd at runtime).
+ * Relative paths resolve against the fapony repo root (two levels up from src/db/).
  */
 export function promptFileFor(
   config: Config,
@@ -140,7 +140,7 @@ export function promptFileFor(
   const p = config.prompts?.[role];
   if (!p) return null;
   if (p.startsWith("/")) return p;
-  return join(process.cwd(), p);
+  return join(import.meta.dir, "..", "..", p);
 }
 
 /** Returns true if resilience retry is enabled (config.resilience !== null). */
