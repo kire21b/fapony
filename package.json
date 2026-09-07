@@ -17,6 +17,7 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "bun fapony.ts test",
+    "test:fast": "SKIP_SLOW=1 bun fapony.ts test",
     "check": "bun run lint && bun run typecheck && bun fapony.ts test",
     "git:sync": "git fetch origin && git rebase origin/main",
     "git:push": "git push --force-with-lease",
