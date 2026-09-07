@@ -2,7 +2,7 @@
 // Replaces the manual cp + edit + init flow.
 
 import { execSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { initProject } from "./init.js";
@@ -35,12 +35,15 @@ function defaultDetectGitRoot(): string | null {
 }
 
 export function splitCmd(input: string): string[] {
-  return (input.match(/"[^"]*"|\S+/g) ?? []).map((s) =>
-    s.replace(/^"|"$/g, ""),
+  return (input.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((s) =>
+    s.replace(/^"(.*)"$/s, "$1").replace(/^'(.*)'$/s, "$1"),
   );
 }
 
 function defaultCheckCmd(cmd: string): boolean {
+  // Allowlist first: cmd names are hardcoded at every call site, so anything
+  // outside [word chars, dot, dash] is rejected before touching a shell.
+  if (!/^[A-Za-z0-9_.\-]+$/.test(cmd)) return false;
   try {
     execSync(`command -v ${cmd}`, { stdio: "pipe", timeout: 15_000 });
     return true;
@@ -82,7 +85,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       prefilter: null,
       autoLoop: a.autoLoop,
     },
-    memory: a.enableMemory ? undefined : null,
+    memory: null,
   };
 
   if (a.enableMemory) {
@@ -102,6 +105,12 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
 export function validateWorktreePath(worktreePath: string): string | null {
   if (!worktreePath) return "Path must not be empty.";
   if (!existsSync(worktreePath)) return `Path does not exist: ${worktreePath}`;
+  try {
+    if (!statSync(worktreePath).isDirectory())
+      return `Path is not a directory: ${worktreePath}`;
+  } catch (e) {
+    return `Cannot stat path: ${(e as Error).message}`;
+  }
   return null;
 }
 
@@ -110,10 +119,18 @@ export function shouldOverwriteConfig(answer: string): boolean {
   return isAffirmative(answer);
 }
 
-/** Executor timeout in minutes; garbage input falls back to 45. */
+/** Executor timeout in minutes; garbage input falls back to 45 (with a warning). */
 export function parseTimeoutMinutes(input: string, fallback = 45): number {
   const n = Number.parseInt(input.trim(), 10);
-  return Number.isNaN(n) || n <= 0 ? fallback : n;
+  if (Number.isNaN(n) || n <= 0) {
+    if (input.trim() !== "") {
+      console.error(
+        `⚠  Invalid timeout "${input.trim()}" — using ${fallback} minutes.`,
+      );
+    }
+    return fallback;
+  }
+  return n;
 }
 
 export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
@@ -122,6 +139,14 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   const checkCmdFn = deps.checkCmd ?? defaultCheckCmd;
   const detectGitRootFn = deps.detectGitRoot ?? defaultDetectGitRoot;
   const exitFn = deps.exit ?? ((code: number): never => process.exit(code));
+  /** Log + exit. Throws if a custom exit() ever returns instead of
+   *  terminating (production process.exit never returns; without this,
+   *  execution would fall through with git/bun missing). */
+  const fail = (msg: string): never => {
+    console.error(msg);
+    exitFn(1);
+    throw new Error("unreachable: exit() returned");
+  };
   // Real readline only exists on the default path — injected ask (tests)
   // never touches stdin.
   const rl = deps.ask
@@ -134,13 +159,13 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   try {
     // --- prerequisites ---
     if (!checkCmdFn("git")) {
-      console.error("❌ git is required but not found on PATH.");
-      exitFn(1);
+      fail("❌ git is required but not found on PATH.");
     }
     if (!checkCmdFn("bun")) {
-      console.error("❌ bun is required but not found on PATH.");
-      console.error("   Install: curl -fsSL https://bun.sh/install | bash");
-      exitFn(1);
+      fail(
+        "❌ bun is required but not found on PATH.\n" +
+          "   Install: curl -fsSL https://bun.sh/install | bash",
+      );
     }
 
     // --- worktree path ---
@@ -150,8 +175,7 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
 
     const pathError = validateWorktreePath(worktreePath);
     if (pathError) {
-      console.error(`❌ ${pathError}`);
-      exitFn(1);
+      fail(`❌ ${pathError}`);
     }
 
     // --- worktree name ---
@@ -197,6 +221,16 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
       console.log("    ✓  opencode + claude detected");
 
     // --- write config ---
+    // loadConfig() resolves to FAPONY_CONFIG or cwd/fapony.config.json, so a
+    // cwd write is consistent — but warn when cwd isn't a fapony checkout,
+    // or the config lands in a worktree where agents can see it.
+    if (!existsSync(join(process.cwd(), "fapony.ts"))) {
+      console.error(
+        "⚠  cwd doesn't look like a fapony checkout (no fapony.ts) — " +
+          "fapony.config.json will be written here. " +
+          "Run setup from the fapony repo root if that's not what you want.",
+      );
+    }
     const config = buildSetupConfig({
       worktreeName,
       worktreePath,

@@ -54,6 +54,12 @@ export function testSplitCmdEmptyQuotedString(): void {
   console.log("  ✓ splitCmd empty quoted string");
 }
 
+export function testSplitCmdSingleQuotedArg(): void {
+  const result = splitCmd("claude -p '/code-review high'");
+  assert.deepStrictEqual(result, ["claude", "-p", "/code-review high"]);
+  console.log("  ✓ splitCmd single-quoted arg");
+}
+
 export function testBuildSetupConfigNoMemory(): void {
   const config = buildSetupConfig({
     worktreeName: "myapp",
@@ -130,6 +136,15 @@ export function testValidateWorktreePath(): void {
   console.log("  ✓ validateWorktreePath");
 }
 
+export function testValidateWorktreePathRejectsFile(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-setup-test-"));
+  const file = join(dir, "not-a-dir");
+  writeFileSync(file, "x\n");
+  const err = validateWorktreePath(file);
+  assert.ok(err?.includes("not a directory"), `got: ${err}`);
+  console.log("  ✓ validateWorktreePath rejects file");
+}
+
 export function testShouldOverwriteConfig(): void {
   assert.equal(shouldOverwriteConfig("y"), true);
   assert.equal(shouldOverwriteConfig("yes"), true);
@@ -142,12 +157,19 @@ export function testShouldOverwriteConfig(): void {
 }
 
 export function testParseTimeoutMinutes(): void {
-  assert.equal(parseTimeoutMinutes("45"), 45);
-  assert.equal(parseTimeoutMinutes(" 30 "), 30);
-  assert.equal(parseTimeoutMinutes("garbage"), 45);
-  assert.equal(parseTimeoutMinutes(""), 45);
-  assert.equal(parseTimeoutMinutes("0"), 45);
-  assert.equal(parseTimeoutMinutes("-5"), 45);
+  // parseTimeoutMinutes warns on fallback — silence it for the assertions.
+  const origErr = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(parseTimeoutMinutes("45"), 45);
+    assert.equal(parseTimeoutMinutes(" 30 "), 30);
+    assert.equal(parseTimeoutMinutes("garbage"), 45);
+    assert.equal(parseTimeoutMinutes(""), 45);
+    assert.equal(parseTimeoutMinutes("0"), 45);
+    assert.equal(parseTimeoutMinutes("-5"), 45);
+  } finally {
+    console.error = origErr;
+  }
   console.log("  ✓ parseTimeoutMinutes");
 }
 
