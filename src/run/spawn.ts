@@ -28,6 +28,8 @@ export interface SpawnResult {
   stderr: string;
   exitCode: number;
   timedOut: boolean;
+  /** stderr from the last attempt — used by classifyFailure when resilience retries. */
+  lastStderr: string;
 }
 
 /**
@@ -77,6 +79,7 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
 
   let stdout = "";
   let stderr = "";
+  let lastStderr = "";
   let exitCode = 0;
   let timedOut = false;
 
@@ -116,13 +119,16 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
     stdout = buffer;
     const errText = await stderrDrain;
     stderr = errText;
+    lastStderr = errText;
     if (errText) process.stderr.write(errText);
     exitCode = await proc.exited;
   } catch (e) {
     console.error(`executor failed: ${(e as Error).message}`);
+    lastStderr = (e as Error).message;
     exitCode = 1;
   }
 
   endSpawn(db, spawnEventId, config, "executor", stdout);
-  return { stdout, stderr, exitCode, timedOut };
+  db.close();
+  return { stdout, stderr, exitCode, timedOut, lastStderr };
 }

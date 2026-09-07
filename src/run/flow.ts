@@ -139,6 +139,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
 
   let stdout = "";
   let stderr = "";
+  let lastStderr = "";
   let exitCode = 0;
   let timedOut = false;
 
@@ -158,6 +159,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
           baseSha,
           runId,
         });
+        lastStderr = result.lastStderr;
         if (result.exitCode === 0 && result.stdout.trim()) {
           return { ok: true as const, value: result.stdout };
         }
@@ -166,7 +168,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
           exitCode: result.exitCode,
           timedOut: result.timedOut,
           stdout: result.stdout,
-          stderr: result.stderr,
+          stderr: result.lastStderr,
           limitPatterns: patterns.limit,
           authPatterns: patterns.auth,
         });
@@ -241,6 +243,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     });
     stdout = result.stdout;
     stderr = result.stderr;
+    lastStderr = result.lastStderr;
     exitCode = result.exitCode;
     timedOut = result.timedOut;
   }
@@ -254,7 +257,7 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
         exitCode,
         timedOut,
         stdout,
-        stderr,
+        stderr: lastStderr,
         limitPatterns: patterns.limit,
         authPatterns: patterns.auth,
       });
