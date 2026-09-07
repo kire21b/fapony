@@ -39,8 +39,9 @@ function backoffDelayMs(
   attempt: number,                    // 1-based
   p: { baseMs: number; maxMs: number; rand?: () => number },
 ): number;
-// raw = min(maxMs, baseMs × 2^(attempt-1)) แล้ว full jitter: rand() × raw
-// rand inject ได้เพื่อเทสแบบ deterministic
+// raw = min(maxMs, baseMs × 2^(attempt-1)) แล้ว equal jitter:
+// delay = raw/2 + rand() × raw/2 (floor = raw/2 — full jitter เคยให้ 0 ได้
+// ซึ่งเท่ากับยิงซ้ำใส่ rate limit ทันที) · rand inject ได้เพื่อเทสแบบ deterministic
 
 interface RetryPolicy {
   maxAttempts: number;   // รวม attempt แรก (default 3)
@@ -61,6 +62,11 @@ async function withRetry<T>(
 ): Promise<{ ok: true; value: T } | { ok: false; fail: FailureInfo; exhausted: boolean }>;
 // วง retry: isAborted ก่อนทุก attempt + ระหว่าง backoff sleep (แบ่งช่อง ≤1s)
 // canRetry false → คืน fail ทันที (ไม่ท่อง attempt เพิ่ม)
+// onRetry(fail, nextAttempt, delayMs): terminal call (ไม่ retry ต่อ) ก็ส่ง
+// nextAttempt = n+1 เหมือน retry path — consumer ที่ log attempt = nextAttempt-1
+// จะได้เลข attempt จริง (เคยส่ง n ทำให้ attempt 0)
+// flow.ts: withRetry คืน fail แบบ !exhausted + isAborted() = true → run นี้คือ
+// abort (SIGINT/stop) ต้อง mark stopped ไม่ใช่ stalled
 ```
 
 ### Config (optional — ใส่ใน `fapony.config.json`)
@@ -70,7 +76,7 @@ async function withRetry<T>(
   "resilience": {
     "retry": { "maxAttempts": 3, "limitBaseMs": 60000, "crashBaseMs": 5000, "maxMs": 600000 },
     "patterns": {
-      "limit": ["rate\\s*limit", "\\b429\\b", "usage limit", "credit", "quota", "overloaded"],
+      "limit": ["rate\\s*limit", "429.{0,30}(too many|rate|limit|quota)|too many.{0,30}429", "usage limit", "credit.{0,30}(exceed|limit|quota|exhaust|insufficient)|insufficient.{0,30}credit", "quota", "overloaded"],
       "auth": ["unauthorized", "invalid api key", "authentication"]
     }
   }
@@ -127,9 +133,9 @@ FROM events WHERE kind = 'spawn_fail' GROUP BY cls;
 
 ```
 spawn #1 → exit 1 "rate limit exceeded"      → event spawn_fail {attempt:1, cls:"limit"}
-         → backoff 60s (แบ่งช่อง 1s, เช็ค abort ทุกช่อง)
+         → backoff ~30–60s (equal jitter ของ base 60s, แบ่งช่อง 1s, เช็ค abort ทุกช่อง)
 spawn #2 → exit 1 "rate limit exceeded"      → event spawn_fail {attempt:2}
-         → backoff 120s
+         → backoff ~60–120s
 spawn #3 → ok                                 → run ไปต่อตามปกติ (ไม่มี stalled)
 ```
 

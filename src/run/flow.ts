@@ -225,6 +225,26 @@ export async function runOnce(opts: RunOnceOpts): Promise<RunOnceResult> {
     if (retryResult.ok) {
       stdout = retryResult.value;
       exitCode = 0;
+    } else if (
+      !retryResult.exhausted &&
+      (await (isAborted ?? (async () => false))())
+    ) {
+      // Aborted during backoff (SIGINT / stopped run) — not a flaky
+      // executor, so record stopped, not stalled (stall-rate stats must
+      // not inherit user aborts).
+      setStatus(db, runId, "stopped");
+      addEvent(db, runId, "stopped", { reason: "aborted during retry backoff" });
+      console.error(`\nfapony: run ${runId} stopped (aborted)`);
+
+      if (memId) closeMemory(config, worktree, memId, `run ${runId} stopped`);
+
+      return {
+        runId,
+        status: "stopped",
+        facts: { files: 0, lines: 0, commits: [], branch: "" },
+        parsed: { missing: true },
+        isBig: false,
+      };
     } else {
       exitCode = retryResult.fail.exitCode;
       timedOut = retryResult.fail.timedOut;

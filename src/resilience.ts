@@ -21,9 +21,9 @@ export interface ClassifyInput {
 
 const DEFAULT_LIMIT_PATTERNS = [
   /rate\s*limit/i,
-  /\b429\b/,
+  /429.{0,30}(too many|rate|limit|quota)|too many.{0,30}429/i,
   /usage limit/i,
-  /credit/i,
+  /credit.{0,30}(exceed|limit|quota|exhaust|insufficient)|insufficient.{0,30}credit/i,
   /quota/i,
   /overloaded/i,
 ];
@@ -101,8 +101,10 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
 };
 
 /**
- * Compute backoff delay with exponential + full jitter.
- * raw = min(maxMs, baseMs × 2^(attempt-1)), then jitter = rand() × raw.
+ * Compute backoff delay with exponential + equal jitter.
+ * raw = min(maxMs, baseMs × 2^(attempt-1)), then
+ * delay = raw/2 + rand() × raw/2 — so the floor is raw/2, never 0.
+ * A zero delay on a rate limit would hammer the API immediately.
  * rand injectable for deterministic tests.
  */
 export function backoffDelayMs(
@@ -112,7 +114,7 @@ export function backoffDelayMs(
   rand: () => number = Math.random,
 ): number {
   const raw = Math.min(maxMs, baseMs * Math.pow(2, attempt - 1));
-  return Math.floor(rand() * raw);
+  return Math.floor(raw / 2 + (rand() * raw) / 2);
 }
 
 /** Pick the right baseMs for a failure class. */
@@ -187,7 +189,9 @@ export async function withRetry<T>(
     const isRetryable = policy.retryable.includes(fail.cls);
 
     if (isLastAttempt || !isRetryable) {
-      onRetry?.(fail, n, 0);
+      // Terminal call uses n+1 (same as the retry path) so consumers that
+      // derive attempt = nextAttempt - 1 log the real attempt number.
+      onRetry?.(fail, n + 1, 0);
       return { ok: false, fail, exhausted: true };
     }
 
