@@ -170,8 +170,8 @@ import {
   testIsUpToDate,
   testParseDirtyLines,
   testShouldProceedAfterDirty,
-  testUpdateRootIsRepoRoot,
   testUpdateReadVersionResolves,
+  testUpdateRootIsRepoRoot,
 } from "./update.test.js";
 import { testIsAffirmative } from "./util.test.js";
 
@@ -229,6 +229,8 @@ export async function cmdTest(): Promise<void> {
   await testFlakyAgentRetriesAndSucceeds();
   await testSigintHandlerMarksStopped();
   testIsSigintReceivedDefaultFalse();
+  await testSigintMarksStoppedAndLogs();
+  await testSigintSkipsTerminalRuns();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
@@ -303,6 +305,7 @@ export async function cmdTest(): Promise<void> {
   testShouldProceedAfterDirty();
   testIsUpToDate();
   testUpdateRootIsRepoRoot();
+  testUpdateReadVersionResolves();
   await testCmdUpdateNotARepo();
   await testCmdUpdateDirtyDeclined();
   await testCmdUpdateDirtyPullOk();

@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   cmdUpdate,
@@ -7,6 +7,7 @@ import {
   isUpToDate,
   parseDirtyLines,
   ROOT,
+  readVersion,
   shouldProceedAfterDirty,
   type UpdateDeps,
 } from "../src/update.js";
@@ -28,6 +29,19 @@ export function testUpdateRootIsRepoRoot(): void {
     `ROOT must not be src/ (src/package.json exists), got: ${ROOT}`,
   );
   console.log("  ✓ update ROOT is repo root");
+}
+
+// The banner "Updated <version>@<sha>" must carry the real version — proof
+// readVersion resolves ROOT/package.json (the old ROOT=src/ bug always said
+// "unknown"). Kept separate from the ROOT tripwire because it pins behavior.
+export function testUpdateReadVersionResolves(): void {
+  const v = readVersion();
+  assert.notEqual(v, "unknown", "readVersion must resolve ROOT/package.json");
+  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")) as {
+    version?: string;
+  };
+  assert.equal(v, pkg.version, `got ${v}, want ${pkg.version}`);
+  console.log("  ✓ update readVersion resolves package.json");
 }
 
 export function testParseDirtyLines(): void {

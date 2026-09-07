@@ -37,7 +37,8 @@ export interface UpdateDeps {
   exit?: (code: number) => never;
 }
 
-function readVersion(): string {
+/** Repo package.json version — exported for tests (reads the real ROOT). */
+export function readVersion(): string {
   const pkgPath = join(ROOT, "package.json");
   if (!existsSync(pkgPath)) return "unknown";
   try {
