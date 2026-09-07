@@ -1,5 +1,5 @@
 // src/update.ts — self-update via git pull.
-// Runs inside the fapony repo root (import.meta.dir).
+// ROOT must be the repo root: import.meta.dir is src/, one level below it.
 // Shows old → new version, recent commits, and warns if uncommitted changes.
 
 import { execSync } from "node:child_process";
@@ -8,7 +8,9 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { isAffirmative } from "./util.js";
 
-const ROOT = import.meta.dir;
+/** Repo root (parent of src/) — where package.json and bun.lock live.
+ *  Exported for the tripwire test in test/update.test.ts. */
+export const ROOT = join(import.meta.dir, "..");
 
 function defaultGit(args: string): string {
   return execSync(`git ${args}`, {
@@ -20,7 +22,9 @@ function defaultGit(args: string): string {
 }
 
 function defaultInstall(): void {
-  execSync("bun install", { cwd: ROOT, stdio: "pipe" });
+  // Generous cap vs the 15s git calls — bun install legitimately takes longer,
+  // but must not wedge `fapony update` forever on a hung registry.
+  execSync("bun install", { cwd: ROOT, stdio: "pipe", timeout: 300_000 });
 }
 
 /** Minimal seam for cmdUpdate — git runner (map args→result, throws on failure),

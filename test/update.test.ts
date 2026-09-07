@@ -1,12 +1,34 @@
 import assert from "node:assert";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   cmdUpdate,
   formatDirtyBlock,
   isUpToDate,
   parseDirtyLines,
+  ROOT,
   shouldProceedAfterDirty,
   type UpdateDeps,
 } from "../src/update.js";
+
+// Tripwire for the ROOT=src/ regression (scrutiny finding #1): the fake-git
+// seam never runs real execSync, so only a direct fs check catches a wrong
+// repo root — version display and the bun.lock pathspec both depend on it.
+export function testUpdateRootIsRepoRoot(): void {
+  assert.ok(
+    existsSync(join(ROOT, "package.json")),
+    `ROOT must be the repo root (has package.json), got: ${ROOT}`,
+  );
+  assert.ok(
+    existsSync(join(ROOT, "src", "update.ts")),
+    `ROOT must be the repo root (has src/update.ts), got: ${ROOT}`,
+  );
+  assert.ok(
+    !existsSync(join(ROOT, "src", "package.json")),
+    `ROOT must not be src/ (src/package.json exists), got: ${ROOT}`,
+  );
+  console.log("  ✓ update ROOT is repo root");
+}
 
 export function testParseDirtyLines(): void {
   assert.deepStrictEqual(parseDirtyLines(""), []);
