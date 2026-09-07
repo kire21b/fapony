@@ -119,7 +119,7 @@ events(
   id INTEGER PRIMARY KEY,
   run_id INTEGER NOT NULL,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,          -- spawn|commit|handoff|route|gate|stop|stalled|memory_claim|memory_claim_failed|memory_claim_closed|plan
+  kind TEXT NOT NULL,          -- spawn|spawn_fail|commit|handoff|route|gate|stop|stalled|interrupted|memory_claim|memory_claim_failed|memory_claim_closed|plan
   data TEXT                    -- json
 )
 ```
@@ -218,6 +218,8 @@ events(
 | Dirty working tree | หยุดถาม + exit 1 ไม่ใช่ล้างเอง ห้ามstash/clean |
 | fapony เขียนไฟล์ worktree | ห้ามเด็ด镩 — db อยู่ ~/.config/fapony/ เท่านั้น |
 | Executor ค้าง | timeout จาก config → status='stalled' + release claim |
+| Ctrl-C กลาง run/loop | one-way door: handler ใน [src/sigint.ts](src/sigint.ts) log `interrupted` + mark `stopped` + release memory claim แล้ว exit 130 — stopped run resume ไม่ได้ (by design = give up) · cleanup เป็น sync ทั้งหมด ไม่มี "2nd Ctrl-C" |
+| `fapony update` รันจาก src/ | ROOT = `join(import.meta.dir, "..")` — ถ้าพลาดเป็น `import.meta.dir` ตรงๆ git pathspec (`-- bun.lock`) จะ relative กับ src/ → lockfile change ตรวจจับไม่เจอ และ version อ่านจาก package.json ไม่เจอบอก "unknown" (มี tripwire test ใน update.test.ts) |
 | Crash หลัง commit ก่อน log mem | events มี commit hash แล้ว; `fapony status` เตือน run ที่มี commit แต่ไม่มี memory event |
 | ไม่มี ## HANDOFF ใน stdout | ห้าม fail ทั้ง run → mark handoff_missing แล้วใช้ git-only handoff ต่อ |
 | Base SHA | เก็บ HEAD ตอนเริ่ม run (ไม่ใช่ HEAD~1) เพราะ opencode commit หลายก้อนตาม concern |

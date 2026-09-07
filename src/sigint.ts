@@ -1,9 +1,11 @@
 // src/sigint.ts — SIGINT handler for graceful shutdown.
 //
 // Usage: call installSigintHandler() before running any long operation.
-// The handler will:
-//   - 1st Ctrl-C: log "interrupted" event, mark run as stopped, release memory, exit 130
-//   - 2nd Ctrl-C (during cleanup): force exit 130 immediately
+// Ctrl-C logs "interrupted" event, marks the run stopped, releases the memory
+// claim, then exits 130. This is a ONE-WAY door: a stopped run cannot be
+// resumed (loop resume rejects it) — by design, an interrupt means give up.
+// Cleanup is fully synchronous (execSync in closeMemory), so the handler
+// always reaches its own process.exit before any second signal can be delivered.
 //
 // This is always active (not gated by resilience config) because clean interrupt
 // is a baseline expectation, not a retry feature.
@@ -12,7 +14,7 @@ import { addEvent, getRun, loadConfig, openDb, setStatus } from "./db/index.js";
 import { closeMemory } from "./memory.js";
 
 let installed = false;
-let forceExit = false;
+let sigintReceived = false;
 let currentRunId: number | null = null;
 let currentPhase: "spawn" | "backoff" = "spawn";
 
@@ -35,7 +37,7 @@ export function setSigintPhase(phase: "spawn" | "backoff"): void {
  * Check if SIGINT has been received (for isAborted polling in retry loops).
  */
 export function isSigintReceived(): boolean {
-  return forceExit;
+  return sigintReceived;
 }
 
 /**
@@ -46,13 +48,13 @@ export function installSigintHandler(): void {
   installed = true;
 
   process.on("SIGINT", () => {
-    if (forceExit) {
-      // Second Ctrl-C: force exit immediately
+    if (sigintReceived) {
+      // Re-entrant signal before exit — bail out of cleanup immediately.
       process.exit(130);
     }
-    forceExit = true;
+    sigintReceived = true;
 
-    // First Ctrl-C: log event + mark stopped + release memory
+    // Ctrl-C: log event + mark stopped + release memory
     if (currentRunId !== null) {
       try {
         const db = openDb();
