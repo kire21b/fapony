@@ -166,3 +166,49 @@ export function testPlanMvAlreadyDatedNotDoublePrefixed(): void {
 
   console.log("  ✓ planMv already-dated filename not double-prefixed");
 }
+
+export function testPlanMvMissingFile(): void {
+  withTmpRepo((dir) => {
+    const result = planMv(join(dir, ".fapony", "plan", "PLAN-nope.md"), {
+      repoRoot: dir,
+    });
+    assert.equal(result.ok, false, "missing file must return ok:false, not throw");
+    assert(
+      result.error?.includes("cannot read"),
+      `error should mention unreadable file, got: ${result.error}`,
+    );
+  });
+
+  console.log("  ✓ planMv missing file returns error");
+}
+
+export function testPlanMvDestCollision(): void {
+  withTmpRepo((dir) => {
+    const planPath = join(dir, ".fapony", "plan", "2020-01-01-PLAN-test.md");
+    const ship = "> ✅ **shipped** (abc123)\n\n# Plan\n\nDone.\n";
+    writeFileSync(planPath, ship);
+    execSync("git add . && git commit -m 'add plan'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+
+    const first = planMv(planPath, { repoRoot: dir });
+    assert.equal(first.ok, true, "first archive should succeed");
+
+    // Recreate the same source (e.g. re-run after a partial failure) —
+    // the dated dest already exists, so this must fail gracefully.
+    writeFileSync(planPath, ship);
+    execSync("git add . && git commit -m 're-add plan'", {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const second = planMv(planPath, { repoRoot: dir });
+    assert.equal(second.ok, false, "second archive must return ok:false, not throw");
+    assert(
+      second.error?.includes("already exists"),
+      `error should mention existing destination, got: ${second.error}`,
+    );
+  });
+
+  console.log("  ✓ planMv dest collision returns error");
+}

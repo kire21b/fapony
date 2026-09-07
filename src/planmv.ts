@@ -1,6 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import {
   type Config,
   doneDirName,
@@ -14,6 +20,47 @@ export const SHIPPED_RE = /^>\s*✅\s*\*\*.*shipped.*\*\*/m;
 const LINK_RE = /\[([^\]]*)\]\(([^)]+)\)/g;
 const ABSOLUTE_LINK_RE = /^(https?:|\/)/;
 const DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}-/;
+
+/**
+ * Pure-fs inbound-link scan (replaces `grep -rln`: works on Windows, skips
+ * missing/unreadable dirs instead of failing the whole archive).
+ * Returns repoRoot-relative paths with forward slashes (grep-style).
+ */
+function findInboundLinks(
+  repoRoot: string,
+  fileName: string,
+  scanDirs: string[],
+  doneName: string,
+): string[] {
+  const hits: string[] = [];
+  const skipDirs = new Set([".git", "node_modules"]);
+  const isDonePath = (p: string): boolean => p.split(sep).includes(doneName);
+  const walk = (dir: string): void => {
+    let entries: ReturnType<typeof readdirSync>;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // missing dir — skip, don't fail the archive
+    }
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      if (isDonePath(full)) continue;
+      if (e.isDirectory()) {
+        if (!skipDirs.has(e.name)) walk(full);
+      } else if (e.isFile()) {
+        try {
+          if (readFileSync(full, "utf-8").includes(fileName)) {
+            hits.push(relative(repoRoot, full).split(sep).join("/"));
+          }
+        } catch {
+          // unreadable file — skip
+        }
+      }
+    }
+  };
+  for (const d of scanDirs) walk(resolve(repoRoot, d));
+  return hits;
+}
 
 export interface PlanMvResult {
   ok: boolean;
@@ -39,7 +86,8 @@ function datePrefix(fileName: string): string {
  * (e.g. plan/PLAN-x.md -> plan/done/PLAN-x.md).
  *
  * Steps:
- * 1. Check shipped header covers the ENTIRE file
+ * 1. Check shipped header present (anywhere in file; autoArchivePlan
+ *    always prepends it at the top)
  * 2. Normalize relative links + add ../
  * 3. Check inbound links from other files
  * 4. git mv to <dir>/done/
@@ -53,7 +101,15 @@ export function planMv(
   const doneName = config ? doneDirName(config) : "done";
 
   // --- 1. Validate shipped header ---
-  const content = readFileSync(filePath, "utf-8");
+  let content: string;
+  try {
+    content = readFileSync(filePath, "utf-8");
+  } catch (e) {
+    return {
+      ok: false,
+      error: `cannot read plan file: ${(e as Error).message}`,
+    };
+  }
   if (!shipped.test(content)) {
     return {
       ok: false,
@@ -78,42 +134,52 @@ export function planMv(
   });
 
   // --- 3. Check inbound links ---
-  const fileName = filePath.split("/").pop()!;
-  const inboundLinks: string[] = [];
+  const fileName = basename(filePath);
   const scanDirs = config
     ? linkScanDirs(config)
     : [".fapony/plan/", ".fapony/spec/", "docs/"];
-  const doneFrag = `/${doneName}/`;
-
-  try {
-    const output = execFileSync("grep", ["-rln", "--", fileName, ...scanDirs], {
-      cwd: repoRoot,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    if (output) {
-      inboundLinks.push(
-        ...output.split("\n").filter((l) => !l.includes(doneFrag)),
-      );
-    }
-  } catch {}
+  const inboundLinks = findInboundLinks(repoRoot, fileName, scanDirs, doneName);
 
   // --- 4. git mv (dest filename gets a YYYY-MM-DD- prefix) ---
   const destName = datePrefix(fileName);
   if (!dryRun) {
     const doneDir = newDir; // ponytail: bug fix — was hardcoded to .fapony/plan/done, ignoring file's own dir
+    const dest = join(doneDir, destName);
+    if (existsSync(dest)) {
+      return {
+        ok: false,
+        error: `destination already exists: ${dest} — already archived?`,
+      };
+    }
     if (!existsSync(doneDir)) mkdirSync(doneDir, { recursive: true });
 
     // Write updated content if links were normalized
     if (normalizedCount > 0) {
-      writeFileSync(filePath, newContent, "utf-8");
+      try {
+        writeFileSync(filePath, newContent, "utf-8");
+      } catch (e) {
+        return {
+          ok: false,
+          error: `cannot rewrite links in plan file: ${(e as Error).message}`,
+        };
+      }
     }
 
-    const dest = join(doneDir, destName);
-    execFileSync("git", ["mv", filePath, dest], {
-      cwd: repoRoot,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    try {
+      execFileSync("git", ["mv", filePath, dest], {
+        cwd: repoRoot,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          `git mv failed: ${(e as Error).message}` +
+          (normalizedCount > 0
+            ? " (note: relative links in the source file were already rewritten)"
+            : ""),
+      };
+    }
   }
 
   return {
@@ -155,7 +221,7 @@ export async function cmdPlanMv(args: string[]): Promise<void> {
     }
   }
 
-  const destName = result.destName ?? filePath.split("/").pop()!;
+  const destName = result.destName ?? basename(filePath);
   console.log(
     `moved to ${relative(process.cwd(), join(dirname(resolve(filePath)), doneDirName(config), destName))}`,
   );

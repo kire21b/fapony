@@ -2,7 +2,7 @@
 
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { archiveMsg, type Config, shippedRE } from "../db/index.js";
 import { type PlanMvResult, planMv } from "../planmv.js";
 
@@ -52,7 +52,7 @@ export function autoArchivePlan(
   if (!result.ok) return result;
 
   try {
-    const fileName = planRelPath.split("/").pop();
+    const fileName = basename(planRelPath);
     if (!fileName) {
       return { ok: false, error: `empty plan path: ${planRelPath}` };
     }
