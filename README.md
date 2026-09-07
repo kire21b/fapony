@@ -188,7 +188,7 @@ fapony setup                            # interactive wizard (config + scaffold)
 fapony init <path>                       # scaffold .fapony/ into a worktree
 fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]
                                          # inside a worktree: key optional; pending single plan → --plan optional
-                                         # `fapony run 2` = plan #2 from ps · `fapony run PLAN-al` = name prefix
+                                         # `fapony run PLAN-al` = name prefix (a bare digit means run ID, not plan index)
                                          # `fapony run <run-id>` = resume run (single round)
                                          # `fapony run <run-id> --loop` = resume + loop until done
 fapony kickoff <key>                     # auto-detect the single pending plan (key optional inside a worktree)

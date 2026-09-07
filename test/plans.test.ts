@@ -4,7 +4,7 @@ import assert from "node:assert";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "../src/db/index.js";
+import { loadConfig, newRun, openDb, setStatus } from "../src/db/index.js";
 import { pendingPlans, resolvePlanArg, worktreeFromCwd } from "../src/plans.js";
 import { resolveRunArgs } from "../src/run/cli.js";
 import { renderPendingPlans } from "../src/status.js";
@@ -62,7 +62,7 @@ export function testWorktreeFromCwd(): void {
 export function testPendingPlansFilteredAndSorted(): void {
   const wt = fixtureTwo();
   try {
-    // sorted alphabetically (stable index for `fapony run <n>`),
+    // sorted alphabetically (stable numbering for the `fapony ps` display),
     // shipped header excluded, done/ excluded
     assert.deepEqual(pendingPlans(cfg(wt), wt), ["PLAN-a.md", "PLAN-b.md"]);
   } finally {
@@ -81,20 +81,10 @@ export function testPendingPlansMissingDir(): void {
   console.log("  ✓ pendingPlans (missing plan dir → empty)");
 }
 
-export function testResolvePlanArgIndexAndPrefix(): void {
+export function testResolvePlanArgExactAndPrefix(): void {
   const wt = fixtureTwo();
   try {
     const config = cfg(wt);
-    assert.deepEqual(resolvePlanArg(config, "vela", "1"), {
-      ok: true,
-      worktreeKey: "vela",
-      planPath: ".fapony/plan/PLAN-a.md",
-    });
-    assert.deepEqual(resolvePlanArg(config, "vela", "2"), {
-      ok: true,
-      worktreeKey: "vela",
-      planPath: ".fapony/plan/PLAN-b.md",
-    });
     assert.deepEqual(
       resolvePlanArg(config, "vela", "PLAN-b.md"),
       { ok: true, worktreeKey: "vela", planPath: ".fapony/plan/PLAN-b.md" },
@@ -105,10 +95,15 @@ export function testResolvePlanArgIndexAndPrefix(): void {
       { ok: true, worktreeKey: "vela", planPath: ".fapony/plan/PLAN-b.md" },
       "case-insensitive prefix",
     );
+    // A digit is never a plan index anymore — resolveRunArgs treats it as a
+    // run ID before resolvePlanArg is even called, but resolvePlanArg itself
+    // still just does a plain (non-matching) prefix lookup for one.
+    const digit = resolvePlanArg(config, "vela", "1");
+    assert.equal(digit.ok, false, "digit is not a plan index");
   } finally {
     rmSync(wt, { recursive: true, force: true });
   }
-  console.log("  ✓ resolvePlanArg (index, exact, prefix)");
+  console.log("  ✓ resolvePlanArg (exact, prefix, digit is not an index)");
 }
 
 export function testResolvePlanArgErrors(): void {
@@ -119,16 +114,12 @@ export function testResolvePlanArgErrors(): void {
     assert.equal(ambiguous.ok, false, "prefix matching 2 plans → ambiguous");
     if (!ambiguous.ok) assert(ambiguous.error.includes("PLAN-a.md"));
 
-    const oob = resolvePlanArg(config, "vela", "9");
-    assert.equal(oob.ok, false, "index out of range");
-    if (!oob.ok) assert(oob.error.includes("out of range"));
-
     const nomatch = resolvePlanArg(config, "vela", "zzz");
     assert.equal(nomatch.ok, false, "no match");
   } finally {
     rmSync(wt, { recursive: true, force: true });
   }
-  console.log("  ✓ resolvePlanArg (ambiguous, out of range, no match)");
+  console.log("  ✓ resolvePlanArg (ambiguous, no match)");
 }
 
 export function testResolveRunArgsFullForm(): void {
@@ -168,9 +159,13 @@ export function testResolveRunArgsShortForms(): void {
   const wt = fixtureTwo();
   try {
     const config = cfg(wt);
-    const byIndex = resolveRunArgs(config, ["2"], wt);
+    const byPrefix = resolveRunArgs(config, ["plan-a"], wt);
+    if (!byPrefix.ok) throw new Error(byPrefix.error);
+    assert.equal(byPrefix.planPath, ".fapony/plan/PLAN-a.md");
+
+    const byKeyAndPrefix = resolveRunArgs(config, ["vela", "plan-b"], wt);
     assert.deepEqual(
-      byIndex,
+      byKeyAndPrefix,
       {
         ok: true,
         worktreeKey: "vela",
@@ -179,26 +174,8 @@ export function testResolveRunArgsShortForms(): void {
         allowDirty: false,
         loop: false,
       },
-      "fapony run 2 (cwd infers key)",
+      "fapony run vela plan-b",
     );
-
-    const byKeyAndIndex = resolveRunArgs(config, ["vela", "1"], wt);
-    assert.deepEqual(
-      byKeyAndIndex,
-      {
-        ok: true,
-        worktreeKey: "vela",
-        planPath: ".fapony/plan/PLAN-a.md",
-        memId: null,
-        allowDirty: false,
-        loop: false,
-      },
-      "fapony run vela 1",
-    );
-
-    const byPrefix = resolveRunArgs(config, ["plan-a"], wt);
-    if (!byPrefix.ok) throw new Error(byPrefix.error);
-    assert.equal(byPrefix.planPath, ".fapony/plan/PLAN-a.md");
 
     const ambiguous = resolveRunArgs(config, [], wt);
     assert.equal(ambiguous.ok, false, "2 pending + no ref → ambiguous");
@@ -207,7 +184,7 @@ export function testResolveRunArgsShortForms(): void {
     rmSync(wt, { recursive: true, force: true });
   }
   console.log(
-    "  ✓ resolveRunArgs (run <n>, run <key> <n>, run <prefix>, ambiguous)",
+    "  ✓ resolveRunArgs (run <prefix>, run <key> <prefix>, ambiguous)",
   );
 }
 
@@ -249,7 +226,8 @@ export function testRenderPendingPlansSection(): void {
     const section = renderPendingPlans(cfg(wt), "vela");
     assert(section.includes("pending plans (vela)"), "header with key");
     assert(section.includes("#1 PLAN-a.md"), "numbered entries");
-    assert(section.includes("fapony run <n>"), "run hint");
+    assert(section.includes("fapony run <plan-prefix>"), "run hint");
+    assert(section.includes("fapony run PLAN-a.md"), "run example");
 
     const empty = mkdtempSync(join(tmpdir(), "fapony-plans-none-"));
     try {
@@ -289,21 +267,105 @@ export function testResolveRunArgsLoopFlag(): void {
   console.log("  ✓ resolveRunArgs (--loop flag)");
 }
 
-export function testResolveRunArgsRunIdHint(): void {
+export function testResolveRunArgsDigitNotFound(): void {
   const wt = fixtureTwo();
   try {
     const config = cfg(wt);
-    // Out of range plan index should suggest run ID hint
-    const oob = resolveRunArgs(config, ["99"], wt);
-    assert.equal(oob.ok, false, "out of range index");
-    if (!oob.ok) {
-      assert(oob.error.includes("out of range"), "mentions out of range");
-      // Note: no run ID hint because run 99 doesn't exist in DB
-    }
+    // A bare digit is always treated as a run ID — never falls back to
+    // plan-index guessing, even when a plan with that "index" exists.
+    const missing = resolveRunArgs(config, ["99"], wt);
+    assert.equal(missing.ok, false, "no run 99 in DB");
+    if (!missing.ok) assert(missing.error.includes("not found"));
+  } finally {
+    rmSync(wt, { recursive: true, force: true });
+  }
+  console.log("  ✓ resolveRunArgs (digit with no matching run → not found)");
+}
+
+function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-run-resume-"));
+  const orig = process.env.FAPONY_STATE_DIR;
+  process.env.FAPONY_STATE_DIR = dir;
+  try {
+    const db = openDb();
+    const result = fn(db);
+    db.close();
+    return result;
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testResolveRunArgsResumeRunId(): void {
+  const wt = fixtureTwo();
+  try {
+    const config = cfg(wt);
+
+    withTmpDb((db) => {
+      // fixtureTwo has 2 pending plans (indices 1,2). newRun returns IDs starting at 1.
+      // Create 2 dummy runs first to push the real run IDs past the plan range.
+      newRun(db, "vela", null, null, "x1");
+      newRun(db, "vela", null, null, "x2");
+
+      // Run in awaiting_review — ID will be 3, past plan range (only 2 plans)
+      const runId = newRun(
+        db,
+        "vela",
+        ".fapony/plan/PLAN-a.md",
+        "mem-1",
+        "abc",
+      );
+      setStatus(db, runId, "awaiting_review");
+
+      const res = resolveRunArgs(config, [String(runId)], wt);
+      assert.equal(res.ok, true, "awaiting_review run resumes via run ID");
+      if (res.ok) {
+        assert.equal(res.runId, runId, "runId returned");
+        assert.equal(res.planPath, ".fapony/plan/PLAN-a.md", "plan preserved");
+        assert.equal(res.memId, "mem-1", "mem_id preserved");
+      }
+
+      // Run in fixing
+      const runId2 = newRun(db, "vela", ".fapony/plan/PLAN-b.md", null, "def");
+      setStatus(db, runId2, "fixing");
+
+      const res2 = resolveRunArgs(config, [String(runId2)], wt);
+      assert.equal(res2.ok, true, "fixing run resumes via run ID");
+      if (res2.ok) {
+        assert.equal(res2.runId, runId2);
+      }
+
+      // Run in passed — NOT resumable
+      const runId3 = newRun(db, "vela", null, null, "aaa");
+      setStatus(db, runId3, "passed");
+
+      const res3 = resolveRunArgs(config, [String(runId3)], wt);
+      assert.equal(res3.ok, false, "passed run does not resume");
+      if (!res3.ok) {
+        assert(res3.error.includes("passed"), "mentions passed status");
+      }
+    });
+
+    // With --loop flag: loop should be carried through
+    withTmpDb((db) => {
+      newRun(db, "vela", null, null, "x1");
+      newRun(db, "vela", null, null, "x2");
+      const runId = newRun(db, "vela", ".fapony/plan/PLAN-a.md", null, "abc");
+      setStatus(db, runId, "fixing");
+
+      const res = resolveRunArgs(config, [String(runId), "--loop"], wt);
+      assert.equal(res.ok, true, "fixing + --loop resumes");
+      if (res.ok) {
+        assert.equal(res.loop, true, "loop flag preserved");
+        assert.equal(res.runId, runId);
+      }
+    });
   } finally {
     rmSync(wt, { recursive: true, force: true });
   }
   console.log(
-    "  ✓ resolveRunArgs (out of range → no hint when run doesn't exist)",
+    "  ✓ resolveRunArgs (run ID resume: awaiting_review, fixing, passed skip, --loop)",
   );
 }

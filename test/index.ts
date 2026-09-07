@@ -137,12 +137,13 @@ import {
   testPendingPlansMissingDir,
   testRenderPendingPlansSection,
   testResolvePlanArgErrors,
-  testResolvePlanArgIndexAndPrefix,
+  testResolvePlanArgExactAndPrefix,
   testResolveRunArgsAutoSingle,
+  testResolveRunArgsDigitNotFound,
   testResolveRunArgsErrors,
   testResolveRunArgsFullForm,
   testResolveRunArgsLoopFlag,
-  testResolveRunArgsRunIdHint,
+  testResolveRunArgsResumeRunId,
   testResolveRunArgsShortForms,
   testWorktreeFromCwd,
 } from "./plans.test.js";
@@ -303,14 +304,15 @@ export async function cmdTest(): Promise<void> {
   testWorktreeFromCwd();
   testPendingPlansFilteredAndSorted();
   testPendingPlansMissingDir();
-  testResolvePlanArgIndexAndPrefix();
+  testResolvePlanArgExactAndPrefix();
   testResolvePlanArgErrors();
   testResolveRunArgsFullForm();
   testResolveRunArgsShortForms();
   testResolveRunArgsAutoSingle();
   testResolveRunArgsErrors();
   testResolveRunArgsLoopFlag();
-  testResolveRunArgsRunIdHint();
+  testResolveRunArgsDigitNotFound();
+  testResolveRunArgsResumeRunId();
   testRenderPendingPlansSection();
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();

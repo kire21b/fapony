@@ -3,11 +3,14 @@
 // Full form:     fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]
 // Short forms (cwd inside a configured worktree, plans listed by `fapony ps`):
 //   fapony run                          → auto-pick when exactly 1 pending plan
-//   fapony run <n>                      → nth pending plan (index from ps)
 //   fapony run <plan-prefix>            → e.g. fapony run PLAN-al
-//   fapony run <key> <n|plan-prefix>    → same, with explicit worktree key
+//   fapony run <key> <plan-prefix>      → same, with explicit worktree key
 //   fapony run <run-id>                 → resume existing run (single round)
 //   fapony run <run-id> --loop          → resume existing run (loop until done)
+//
+// A bare digit is always a run ID, never a plan index — the two namespaces
+// used to collide (a digit would silently resolve as a plan index before
+// ever being tried as a run ID).
 
 import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -27,7 +30,7 @@ import { pendingPlans, resolvePlanArg, worktreeFromCwd } from "../plans.js";
 import { runOnce } from "./flow.js";
 
 const USAGE =
-  "usage: fapony run [<worktree-key>] [<n>|<plan-prefix>] --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]";
+  "usage: fapony run [<worktree-key>] [<plan-prefix>|<run-id>] --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]";
 
 type ParsedArgs = {
   positional: string[];
@@ -122,30 +125,38 @@ export function resolveRunArgs(
   }
 
   if (planRef) {
+    // A bare digit is always a run ID, never a plan index — no more
+    // guessing between the two namespaces.
+    if (/^\d+$/.test(planRef)) {
+      const runId = Number.parseInt(planRef, 10);
+      const db = openDb(config);
+      const run = getRun(db, runId);
+      db.close();
+      if (!run) {
+        return { ok: false, error: `run ${runId} not found` };
+      }
+      if (run.status === "awaiting_review" || run.status === "fixing") {
+        return {
+          ok: true,
+          worktreeKey: key,
+          planPath: run.plan,
+          memId: run.mem_id,
+          allowDirty,
+          loop,
+          runId,
+        };
+      }
+      return { ok: false, error: `#${runId} is a run ID (${run.status})` };
+    }
+
     if (planRef.includes("/") || isAbsolute(planRef)) {
       return {
         ok: false,
-        error: `plan ref must be an index or filename prefix — for a path use: fapony run ${key} --plan ${planRef}`,
+        error: `plan ref must be a filename prefix — for a path use: fapony run ${key} --plan ${planRef}`,
       };
     }
     const res = resolvePlanArg(config, key, planRef);
     if (!res.ok) {
-      // Check if it looks like a run ID — give a clean message instead of plan error
-      if (/^\d+$/.test(planRef)) {
-        const runId = Number.parseInt(planRef, 10);
-        const db = openDb(config);
-        const run = getRun(db, runId);
-        db.close();
-        if (run) {
-          const msg =
-            run.status === "awaiting_review"
-              ? `#${runId} is a run ID (awaiting_review)\n→ fapony gate ${runId} pass|fail [note]`
-              : run.status === "fixing"
-                ? `#${runId} is a run ID (fixing)\n→ fapony run ${runId} --loop to resume`
-                : `#${runId} is a run ID (${run.status})`;
-          return { ok: false, error: msg };
-        }
-      }
       return { ok: false, error: res.error };
     }
     return {
@@ -171,7 +182,7 @@ export function resolveRunArgs(
       error: [
         `ambiguous: ${pending.length} pending plans in ${key}:`,
         ...pending.map((n, i) => `  #${i + 1} ${n}`),
-        `pick one: fapony run <n>  ·  or: fapony run ${key} --plan ${planDir(config)}/<name>`,
+        `pick one: fapony run <plan-prefix>  ·  or: fapony run ${key} --plan ${planDir(config)}/<name>`,
       ].join("\n"),
     };
   }

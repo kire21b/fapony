@@ -313,9 +313,9 @@ executor ทุกครั้ง — เตือน (ไม่ block) เม�
 ## CLI Commands
 
 ```bash
-fapony run [<key>] [<n>|<plan-prefix>] [--plan <path>] [--mem-id <id>] [--allow-dirty] [--loop]
+fapony run [<key>] [<plan-prefix>|<run-id>] [--plan <path>] [--mem-id <id>] [--allow-dirty] [--loop]
                                  # cwd อยู่ใน worktree → key ตกได้; pending เดียว → --plan ตกได้
-                                 # `fapony run 2` = plan #2 จาก ps · `fapony run PLAN-al` = ชื่อ prefix
+                                 # `fapony run PLAN-al` = ชื่อ prefix (เลขล้วนๆ = run ID เสมอ ไม่ใช่ plan index)
                                  # `fapony run <run-id>` = resume run เดิม (1 รอบ)
                                  # `fapony run <run-id> --loop` = resume + loop จนจบ
 fapony ps | status               # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
