@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  type Dirent,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -36,7 +37,7 @@ function findInboundLinks(
   const skipDirs = new Set([".git", "node_modules"]);
   const isDonePath = (p: string): boolean => p.split(sep).includes(doneName);
   const walk = (dir: string): void => {
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
