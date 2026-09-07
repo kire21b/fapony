@@ -54,9 +54,8 @@ import {
   testKickoffShippedFiltered,
   testKickoffSinglePending,
 } from "./kickoff.test.js";
+// MCP handcheck tests (split into test/mcp/)
 import {
-  testEndToEndPipeline,
-  testErrorResult,
   testExtractMultiFieldEmptyLineEndsField,
   testExtractMultiFieldMultiLine,
   testExtractMultiFieldNone,
@@ -72,19 +71,29 @@ import {
   testHandoffCheckUncertainFails,
   testHandoffCheckWithFactsCrossRef,
   testHandoffCheckWithoutFacts,
+} from "./mcp/check.test.js";
+import {
   testHandoffCollectAutoDetectRange,
   testHandoffCollectExplicitRange,
   testHandoffCollectGitError,
   testHandoffCollectMissingArgs,
   testHandoffCollectValidRepo,
+} from "./mcp/collect.test.js";
+import {
+  testEndToEndPipeline,
+  testErrorResult,
   testJsonResult,
+  testParseToolResult,
+  testReasonCodesAreLocked,
+} from "./mcp/helpers.test.js";
+import {
   testMcpInitialize,
   testMcpNotificationsIgnored,
   testMcpToolsCallUnknownTool,
   testMcpToolsList,
   testMcpUnknownMethod,
-  testParseToolResult,
-  testReasonCodesAreLocked,
+} from "./mcp/transport.test.js";
+import {
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
   testVerdictSubmitInvalidVerdict,
@@ -92,7 +101,7 @@ import {
   testVerdictSubmitRunNotFound,
   testVerdictSubmitStoresMcpSource,
   testVerdictSubmitSuccess,
-} from "./mcp.test.js";
+} from "./mcp/verdict.test.js";
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
@@ -281,7 +290,10 @@ export async function cmdTest(): Promise<void> {
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
   testClaimMemoryFailGracefully();
-  testClaimMemoryTimeout();
+  // ponytail: real ~15s execSync timeout regression test — skip in the fast
+  // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).
+  if (!process.env.SKIP_SLOW) testClaimMemoryTimeout();
+  else console.log("  ⏭ claimMemory timeout prevents hang (SKIP_SLOW)");
   testShouldScrutinizeFix();
   testBuildScrutinizePrompt();
   testResolveChangedFiles();

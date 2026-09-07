@@ -9,7 +9,7 @@ import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdKickoff } from "./src/kickoff.js";
 import { cmdLoop } from "./src/loop/index.js";
-import { cmdMcp } from "./src/mcp.js";
+import { cmdMcp } from "./src/mcp/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
 import { cmdRun } from "./src/run/index.js";
 import { cmdSetup } from "./src/setup.js";

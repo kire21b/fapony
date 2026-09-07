@@ -1,0 +1,125 @@
+// test/mcp/helpers.test.ts — tests for utility functions + e2e pipeline
+
+import assert from "node:assert";
+import { execSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { toolHandoffCheck } from "../../src/mcp/tools/check.js";
+import { toolHandoffCollect } from "../../src/mcp/tools/collect.js";
+import { toolVerdictSubmit } from "../../src/mcp/tools/verdict.js";
+import {
+  errorResult,
+  jsonResult,
+  parseToolResult,
+  REASON_CODES,
+} from "../../src/mcp/types.js";
+import { withTempRepo } from "./helpers.js";
+
+// --- Utility function tests ---
+
+export function testJsonResult(): void {
+  const r = jsonResult({ foo: 1 });
+  assert.equal(r.content.length, 1);
+  assert.equal(r.content[0].type, "text");
+  assert.equal(JSON.parse(r.content[0].text).foo, 1);
+  console.log("  ✓ jsonResult wraps data in content");
+}
+
+export function testErrorResult(): void {
+  const r = errorResult("oops");
+  assert.equal(r.isError, true);
+  assert.equal(JSON.parse(r.content[0].text).error, "oops");
+  console.log("  ✓ errorResult marks isError");
+}
+
+export function testParseToolResult(): void {
+  const r = jsonResult({ a: 1 });
+  assert.deepEqual(parseToolResult(r), { a: 1 });
+  console.log("  ✓ parseToolResult round-trips");
+}
+
+export function testReasonCodesAreLocked(): void {
+  assert.equal(REASON_CODES.length, 5);
+  assert.ok(REASON_CODES.includes("missing_test"));
+  assert.ok(REASON_CODES.includes("scope_mismatch"));
+  assert.ok(REASON_CODES.includes("unsafe_command"));
+  assert.ok(REASON_CODES.includes("spec_gap"));
+  assert.ok(REASON_CODES.includes("other"));
+  console.log("  ✓ REASON_CODES has 5 values (locked)");
+}
+
+// --- End-to-end pipeline test ---
+
+export function testEndToEndPipeline(): void {
+  const oldEnv = process.env.FAPONY_STATE_DIR;
+  const tmpDir = mkdtempSync(join(tmpdir(), "fapony-mcp-e2e-"));
+  process.env.FAPONY_STATE_DIR = tmpDir;
+  try {
+    withTempRepo((dir) => {
+      // Make a commit
+      writeFileSync(join(dir, "feature.ts"), "export const x = 1;\n");
+      execSync("git add .", { cwd: dir, stdio: "ignore" });
+      execSync("git commit -m 'add feature'", { cwd: dir, stdio: "ignore" });
+
+      const baseSha = execSync("git rev-parse HEAD~1", {
+        cwd: dir,
+        encoding: "utf-8",
+      }).trim();
+      const headSha = execSync("git rev-parse HEAD", {
+        cwd: dir,
+        encoding: "utf-8",
+      }).trim();
+
+      // Step 1: collect
+      const collectResult = toolHandoffCollect({
+        base_sha: baseSha,
+        head_sha: headSha,
+        worktree: dir,
+      });
+      const collectData = parseToolResult(collectResult) as {
+        facts: { commits: string[] };
+      };
+
+      // Step 2: check (agent reports uncertain/not_done/checks)
+      const handoff = [
+        "## HANDOFF",
+        `claimed: ${headSha}`,
+        `commits: ${headSha}`,
+        "checks: typecheck pass",
+        "uncertain: none",
+        "not_done: none",
+      ].join("\n");
+      const checkResult = toolHandoffCheck({
+        handoff,
+        facts: { commits: collectData.facts.commits },
+        uncertain: "none",
+        not_done: "none",
+        checks: "typecheck pass",
+      });
+      const checkData = parseToolResult(checkResult) as {
+        summary: { failed: number };
+      };
+      assert.equal(checkData.summary.failed, 0);
+
+      // Step 3: submit (auto-creates run)
+      const verdictResult = toolVerdictSubmit({
+        verdict: "pass",
+        reason_code: "missing_test",
+      });
+      const verdictData = parseToolResult(verdictResult) as {
+        stored: boolean;
+        run_id: number;
+      };
+      assert.equal(verdictData.stored, true);
+      assert.ok(verdictData.run_id > 0);
+    });
+  } finally {
+    if (oldEnv !== undefined) {
+      process.env.FAPONY_STATE_DIR = oldEnv;
+    } else {
+      delete process.env.FAPONY_STATE_DIR;
+    }
+  }
+  console.log("  ✓ end-to-end pipeline: collect → check → submit");
+}
