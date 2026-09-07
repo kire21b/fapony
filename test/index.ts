@@ -78,6 +78,7 @@ import {
   testPlanMvAlreadyDatedNotDoublePrefixed,
   testPlanMvDestCollision,
   testPlanMvDryRun,
+  testPlanMvInboundLinks,
   testPlanMvMissingFile,
   testPlanMvNoHeader,
   testPlanMvNormalizeLinks,
@@ -114,6 +115,7 @@ import {
 import {
   testBuildExecutorPrompt,
   testExecutorCmdRolePreference,
+  testRunOnceAbortedMarksStopped,
 } from "./run.test.js";
 import { testAssertNoPromptInArgv, testAssertSafe } from "./safety.test.js";
 import {
@@ -147,6 +149,10 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
+  testSigintMarksStoppedAndLogs,
+  testSigintSkipsTerminalRuns,
+} from "./sigint.test.js";
+import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
@@ -165,6 +171,7 @@ import {
   testParseDirtyLines,
   testShouldProceedAfterDirty,
   testUpdateRootIsRepoRoot,
+  testUpdateReadVersionResolves,
 } from "./update.test.js";
 import { testIsAffirmative } from "./util.test.js";
 
@@ -194,6 +201,7 @@ export async function cmdTest(): Promise<void> {
   testPlanMvDryRun();
   testPlanMvMissingFile();
   testPlanMvDestCollision();
+  testPlanMvInboundLinks();
   testPlanMvAlreadyDatedNotDoublePrefixed();
   testClassifyAuth();
   testClassifyTimeout();
@@ -253,6 +261,7 @@ export async function cmdTest(): Promise<void> {
   testConfigDriftWarning();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
+  await testRunOnceAbortedMarksStopped();
   testPlanHygieneOk();
   testPlanHygieneTooLong();
   testPlanHygieneSpecLeak();
