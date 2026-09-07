@@ -52,9 +52,18 @@ export function testAssertNoPromptInArgv(): void {
     /role "planner" cmd contains \{PROMPT\}/,
   );
 
+  // {PROMPT} embedded in a longer string — regression guard
+  assert.throws(
+    () => assertNoPromptInArgv(["echo-{PROMPT}-done"], "bigFixer"),
+    /role "bigFixer" cmd contains \{PROMPT\}/,
+  );
+
   // no false positive on similar patterns
   assertNoPromptInArgv(["echo", "PROMPT"], "test");
   assertNoPromptInArgv(["echo", "{prompt}"], "test"); // case-sensitive
+
+  // empty argv — nothing to check
+  assertNoPromptInArgv([], "gate");
 
   console.log("  ✓ assertNoPromptInArgv");
 }

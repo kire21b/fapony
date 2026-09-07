@@ -112,6 +112,7 @@ import {
   testBuildScrutinizePrompt,
   testResolveChangedFiles,
   testShouldScrutinizeFix,
+  testSpawnRejectsPromptPlaceholder,
   testSpawnScrutinizeFix,
   testSpawnScrutinizeFixRejectsDangerousCmd,
 } from "./scrutinize.test.js";
@@ -153,6 +154,7 @@ import {
   testIsUpToDate,
   testParseDirtyLines,
   testShouldProceedAfterDirty,
+  testUpdateRootIsRepoRoot,
 } from "./update.test.js";
 import { testIsAffirmative } from "./util.test.js";
 
@@ -220,6 +222,7 @@ export async function cmdTest(): Promise<void> {
   testResolveChangedFiles();
   await testSpawnScrutinizeFix();
   await testSpawnScrutinizeFixRejectsDangerousCmd();
+  await testSpawnRejectsPromptPlaceholder();
   testAutoArchivePlanSynthesizesHeader();
   testAutoArchivePlanKeepsExistingHeader();
   testAutoArchivePlanNormalizesLinks();
@@ -270,6 +273,7 @@ export async function cmdTest(): Promise<void> {
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
   testIsUpToDate();
+  testUpdateRootIsRepoRoot();
   await testCmdUpdateNotARepo();
   await testCmdUpdateDirtyDeclined();
   await testCmdUpdateDirtyPullOk();

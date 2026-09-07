@@ -320,6 +320,28 @@ export function testConfigDriftWarning(): void {
     } finally {
       console.error = origError;
     }
+
+    // Config with only executor (legacy, no roles) — no warning
+    writeFileSync(
+      file,
+      JSON.stringify({
+        executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
+      }),
+    );
+    captured = "";
+    console.error = (...args: unknown[]) => {
+      captured += args.join(" ");
+    };
+    try {
+      loadConfig(file);
+      assert.equal(
+        captured,
+        "",
+        "should not warn when only executor exists (legacy fallback)",
+      );
+    } finally {
+      console.error = origError;
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
