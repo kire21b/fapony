@@ -94,33 +94,39 @@ export async function spawnExecutor(input: SpawnInput): Promise<SpawnResult> {
     proc.stdin.write(prompt);
     proc.stdin.end();
 
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+    const drain = (
+      readable: ReadableStream<Uint8Array>,
+      write: (chunk: string) => void,
+    ) => {
+      const reader = readable.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      return (async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          write(chunk);
+        }
+        return buffer;
+      })();
+    };
 
-    const stderrDrain = new Response(proc.stderr).text();
-
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const timeout = setTimeout(() => {
       timedOut = true;
       proc.kill();
     }, timeoutMs);
-    timer = timeout;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-      process.stdout.write(chunk);
-    }
+    const [outBuffer, errBuffer] = await Promise.all([
+      drain(proc.stdout, (chunk) => process.stdout.write(chunk)),
+      drain(proc.stderr, (chunk) => process.stderr.write(chunk)),
+    ]);
 
-    if (timer) clearTimeout(timer);
-    stdout = buffer;
-    const errText = await stderrDrain;
-    stderr = errText;
-    lastStderr = errText;
-    if (errText) process.stderr.write(errText);
+    clearTimeout(timeout);
+    stdout = outBuffer;
+    stderr = errBuffer;
+    lastStderr = errBuffer;
     exitCode = await proc.exited;
   } catch (e) {
     console.error(`executor failed: ${(e as Error).message}`);
