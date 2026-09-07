@@ -1,6 +1,6 @@
 // src/mcp/tools/verdict.ts — verdict_submit tool
 
-import { addEvent, getRun, newRun, openDb } from "../../db/index.js";
+import { addEvent, getRun, newRun, openDb, setStatus } from "../../db/index.js";
 import {
   errorResult,
   jsonResult,
@@ -49,6 +49,7 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   };
 
   const eventId = addEvent(db, resolvedRunId, "gate", eventData);
+  setStatus(db, resolvedRunId, verdict === "pass" ? "passed" : "fixing");
 
   return jsonResult({
     stored: true,
