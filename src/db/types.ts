@@ -51,7 +51,16 @@ export interface Config {
   // opt-in only — omit or leave null to keep everything local. See TELEMETRY.md
   // for the exact payload shape (KPI numbers + event kind/timestamp, no
   // plan/commit/gate-note content, ever).
-  telemetry?: { enabled: boolean; endpoint: string } | null;
+  telemetry?: {
+    enabled: boolean;
+    endpoint: string;
+    /** Self-reported metadata — advisory, not machine-observed. */
+    metadata?: {
+      task_category?: string;
+      stack?: string;
+      notes?: string;
+    };
+  } | null;
   // --- Flexible paths / markers / limits (all optional, defaults = old hardcodes) ---
   prompts?: {
     executor?: string | null;

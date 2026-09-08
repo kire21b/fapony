@@ -1,6 +1,6 @@
 # PLAN-verification-report — รายงาน verify และ measurement อัตโนมัติ
 
-> **Status:** 🔧 P0–P3 done · **Owner:** delamind · **Created:** 2026-09-08
+> **Status:** 🔧 P0–P5 done · **Owner:** delamind · **Created:** 2026-09-08
 > **Source spec:** [spec/SPEC-verification-report.md](../spec/SPEC-verification-report.md) ✅
 
 ---

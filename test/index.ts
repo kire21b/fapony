@@ -280,6 +280,16 @@ import {
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
 import {
+  testTelemetryAggregatesFromRuns,
+  testTelemetryEmptyDb,
+  testTelemetryNoContentFields,
+  testTelemetryPayloadShape,
+  testTelemetrySchemaVersion,
+  testTelemetrySelfReportedFromConfig,
+  testTelemetrySentAtIso,
+  testTelemetryWorktreeRedacted,
+} from "./telemetry.test.js";
+import {
   testCmdUpdateAlreadyUpToDate,
   testCmdUpdateDirtyDeclined,
   testCmdUpdateDirtyPullOk,
@@ -543,5 +553,14 @@ export async function cmdTest(): Promise<void> {
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
   testStatsModelFromExecutorSpawn();
+  // Telemetry tests
+  testTelemetrySchemaVersion();
+  testTelemetryPayloadShape();
+  testTelemetryNoContentFields();
+  testTelemetryEmptyDb();
+  testTelemetryAggregatesFromRuns();
+  testTelemetryWorktreeRedacted();
+  testTelemetrySelfReportedFromConfig();
+  testTelemetrySentAtIso();
   console.log("\nall tests passed ✓");
 }
