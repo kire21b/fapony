@@ -1,7 +1,9 @@
+> ✅ **shipped** (c298fef)
+
 # PLAN-verdict-protocol — verdict แยก pass ออกจาก quality + vocabulary ล็อกเป็น benchmark scale
 
 > **Status:** 🚧 draft · **Owner:** delamind · **Created:** 2026-09-08
-> **Source spec:** [spec/SPEC-verdict-protocol.md](../spec/SPEC-verdict-protocol.md)
+> **Source spec:** [spec/SPEC-verdict-protocol.md](../../spec/SPEC-verdict-protocol.md)
 
 ---
 
@@ -63,7 +65,7 @@
 ## 6. ขั้นตอน (เรียงลำดับ แต่ละขั้น verify ได้)
 
 0. **ล็อก vocabulary** — grade enum 6 ตัว + evidence ต่อ grade + qualityScore mapping
-   → verify: **[spec](../spec/SPEC-verdict-protocol.md)** มีตารางครบทั้ง 6 พร้อม evidence, กฎ additive-only เขียนไว้
+   → verify: **[spec](../../spec/SPEC-verdict-protocol.md)** มีตารางครบทั้ง 6 พร้อม evidence, กฎ additive-only เขียนไว้
 1. **parse layer** — `DEFAULT_VERDICT_RE` (alternation ยาวสุดนำหน้า) + `VerdictGrade` type +
    `parseGateVerdict` validate ด้วย set → verify: golden test — 6 grade ผ่านหมด / trailing text → null /
    legacy `pass`,`fail` ผ่าน / custom legacy regex คู่กับ set ใหม่ สลับกันยัง parse ออก
@@ -75,7 +77,7 @@
 3. **loop doc touch** — hint text `pass|fail` ใน manual-review path ของ loop เปลี่ยนเป็นชื่อ grade
    → verify: hint ว่า `fapony gate <id> <grade> [note]` — ข้อความล้วน ไม่แตะ logic (loop drive ด้วย status)
 4. **config example + AGENTS.md** — grade vocabulary + evidence contract ใน `fapony.config.example.json`
-   + sync config schema snippet ใน [AGENTS.md](../AGENTS.md)
+   + sync config schema snippet ใน [AGENTS.md](../../AGENTS.md)
    → verify: example config parse ได้ด้วย loadConfig + doc snippet ตรง regex จริงใน defaults
 5. **dogfood 1 run จริง** — รัน gate บน wt-fapony ด้วย grade ใหม่ 1 อย่าง (เช่น pass-good)
    → verify: events เห็น gate event verdict ดิบ + `fapony handoff <id>` ไม่พัง
@@ -85,15 +87,15 @@
 ## 7. ตัวอย่าง (อยู่ใน spec)
 
 ตาราง grade/evidence/mapping และตัวอย่าง CLI + event data อยู่ใน
-[spec/SPEC-verdict-protocol.md](../spec/SPEC-verdict-protocol.md) (step 0 ผลิต) — plan เก็บแค่ order
+[spec/SPEC-verdict-protocol.md](../../spec/SPEC-verdict-protocol.md) (step 0 ผลิต) — plan เก็บแค่ order
 
 ## 8. References
 
-- [spec/SPEC-verdict-protocol.md](../spec/SPEC-verdict-protocol.md) (step 0 ผลิต — grade grammar/evidence/mapping)
-- [ROADMAP.md](../ROADMAP.md) P0 "กำหนด verdict/failure reason ที่แยก pass ออกจาก quality" + §6.4 (evidence) + §6.2 (enum กัน typo กระจาย — free text เสริมเป็น note แยก)
-- [src/parse.ts](../src/parse.ts) `GateVerdict` + `parseGateVerdict` (จุด validate วันนี้เช็คแค่ pass/fail — ล็อก set ที่นี่)
-- [src/gate.ts](../src/gate.ts) `gateOnce`/`cmdGate` + round-cap stop path (ทรงที่ uncertain เลียนแบบ)
-- [src/db/defaults.ts](../src/db/defaults.ts) `DEFAULT_VERDICT_RE` (จุดล็อก vocabulary)
-- [src/loop/index.ts](../src/loop/index.ts) auto-gate drive ด้วย `gateOutcome.status` — uncertain ไหลผ่านถูกต้องโดยไม่ต้องแกะ loop
-- [src/cost.ts](../src/cost.ts) bytes/USD ต่อ spawn (machine facts ฐานของ benchmark มีอยู่แล้ว — นิยามใน metric dictionary ผูกกับ grade)
-- [plan/done/2026-09-06-PLAN-cost-routing.md](done/2026-09-06-PLAN-cost-routing.md) (ต้นทางตัดสิน "bytes เป็น declared proxy")
+- [spec/SPEC-verdict-protocol.md](../../spec/SPEC-verdict-protocol.md) (step 0 ผลิต — grade grammar/evidence/mapping)
+- [ROADMAP.md](../../ROADMAP.md) P0 "กำหนด verdict/failure reason ที่แยก pass ออกจาก quality" + §6.4 (evidence) + §6.2 (enum กัน typo กระจาย — free text เสริมเป็น note แยก)
+- [src/parse.ts](../../src/parse.ts) `GateVerdict` + `parseGateVerdict` (จุด validate วันนี้เช็คแค่ pass/fail — ล็อก set ที่นี่)
+- [src/gate.ts](../../src/gate.ts) `gateOnce`/`cmdGate` + round-cap stop path (ทรงที่ uncertain เลียนแบบ)
+- [src/db/defaults.ts](../../src/db/defaults.ts) `DEFAULT_VERDICT_RE` (จุดล็อก vocabulary)
+- [src/loop/index.ts](../../src/loop/index.ts) auto-gate drive ด้วย `gateOutcome.status` — uncertain ไหลผ่านถูกต้องโดยไม่ต้องแกะ loop
+- [src/cost.ts](../../src/cost.ts) bytes/USD ต่อ spawn (machine facts ฐานของ benchmark มีอยู่แล้ว — นิยามใน metric dictionary ผูกกับ grade)
+- [plan/done/2026-09-06-PLAN-cost-routing.md](2026-09-06-PLAN-cost-routing.md) (ต้นทางตัดสิน "bytes เป็น declared proxy")
