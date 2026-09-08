@@ -1,7 +1,7 @@
 # PLAN-mcp-handcheck — handcheck ผ่าน MCP โดยไม่ต้อง adopt loop
 
-> **Status:** ✅ shipped (G1 trial passed) · **Owner:** delamind · **Created:** 2026-09-07
-> **Source spec:** [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md)
+> ✅ **shipped** (G1 trial passed) · **Owner:** delamind · **Created:** 2026-09-07
+> **Source spec:** [spec/SPEC-mcp-handcheck.md](../../spec/SPEC-mcp-handcheck.md)
 
 ---
 
@@ -68,14 +68,14 @@ fapony ผ่าน MCP 3 tools เพื่อ verify งานก่อนส�
 
 ## 7. ตัวอย่าง (ของจริงอยู่ใน spec)
 
-ดูตัวอย่าง request/response ของทั้ง 3 tools ใน [spec/SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md) (สร้างใน step 1) —
+ดูตัวอย่าง request/response ของทั้ง 3 tools ใน [spec/SPEC-mcp-handcheck.md](../../spec/SPEC-mcp-handcheck.md) (สร้างใน step 1) —
 plan นี้เก็บแค่ภาพรวม ไม่แปะ schema ตรงๆ
 
 ## 8. References
 
-- [PHASE.md](../PHASE.md) Phase 1 (Handoff Protocol v1 + หลัก hand-check 5 ข้อ) และ G1 gate
-- [ROADMAP.md](../ROADMAP.md) P0 (safety/measurement contract) + คำถามค้างข้อ 2/4/7 ที่ step 0 ต้องตอบ
-- [src/handoff.ts](../src/handoff.ts) (gitFacts + parseHandoff — ของเดิมที่ tools จะ reuse)
-- [src/parse.ts](../src/parse.ts) + [src/db/defaults.ts](../src/db/defaults.ts) (verdict ปัจจุบันเป็น free-text — enum จะล็อกใน step 0)
-- [src/safety.ts](../src/safety.ts) (`assertSafe()` ที่ทุก tool ต้องผ่าน)
-- [templates/SPEC.md](../templates/SPEC.md) (template ของ spec ที่ step 1 จะใช้)
+- [PHASE.md](../../PHASE.md) Phase 1 (Handoff Protocol v1 + หลัก hand-check 5 ข้อ) และ G1 gate
+- [ROADMAP.md](../../ROADMAP.md) P0 (safety/measurement contract) + คำถามค้างข้อ 2/4/7 ที่ step 0 ต้องตอบ
+- [src/handoff.ts](../../src/handoff.ts) (gitFacts + parseHandoff — ของเดิมที่ tools จะ reuse)
+- [src/parse.ts](../../src/parse.ts) + [src/db/defaults.ts](../../src/db/defaults.ts) (verdict ปัจจุบันเป็น free-text — enum จะล็อกใน step 0)
+- [src/safety.ts](../../src/safety.ts) (`assertSafe()` ที่ทุก tool ต้องผ่าน)
+- [templates/SPEC.md](../../templates/SPEC.md) (template ของ spec ที่ step 1 จะใช้)
