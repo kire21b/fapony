@@ -1,6 +1,7 @@
 // src/run/prompt.ts — executor prompt builder + command resolver
 
 import type { Config } from "../db/index.js";
+import { assertNoPromptInArgv } from "../safety.js";
 import { templateArgs } from "../util.js";
 
 /**
@@ -28,5 +29,6 @@ export function buildExecutorPrompt(
 export function executorCmd(config: Config, memId: string | null): string[] {
   const role = config.roles?.executor;
   const cmd = role?.cmd ?? config.executor.cmd;
+  assertNoPromptInArgv(cmd, "executor");
   return templateArgs(cmd, { id: memId ?? "none", model: role?.model ?? "" });
 }
