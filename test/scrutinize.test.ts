@@ -1,7 +1,6 @@
 import assert from "node:assert";
 import { execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "../src/db/index.js";
 import {
@@ -11,21 +10,14 @@ import {
   spawnScrutinizeFix,
 } from "../src/loop/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
+import { baseConfig, withTmpDbAsync } from "./helpers.js";
 
 function makeConfig(withRole: boolean): Config {
   return {
-    worktrees: { test: "/tmp/test" },
-    executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
+    ...baseConfig(),
     roles: withRole
       ? { scrutinizeFix: { cmd: ["bun", "stub"], timeoutMin: 15 } }
       : { executor: { cmd: ["bun", "stub"] } },
-    review: {
-      bigDiff: { files: 15, lines: 400 },
-      maxRounds: 2,
-      gate: ["claude", "-p", "/code-review high"],
-      prefilter: null,
-    },
-    memory: null,
   };
 }
 
@@ -126,28 +118,10 @@ export function testResolveChangedFiles(): void {
   console.log("  ✓ resolveChangedFiles");
 }
 
-// spawnScrutinizeFix opens the db internally (no run row → unknown-files
-// fallback), so isolate its location like the gate/db tests do.
-// ponytail: bug fix — Bun caches os.homedir() at process start, so setting
-// process.env.HOME here never redirected openDb(); this was silently writing
-// into the real ~/.config/fapony/state.db on every test run.
-async function withTmpHome<T>(fn: () => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = dir;
-  try {
-    return await fn();
-  } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 export async function testSpawnScrutinizeFix(): Promise<void> {
   const repo = createTestRepo();
   try {
-    await withTmpHome(async () => {
+    await withTmpDbAsync(async () => {
       const fixture = join(import.meta.dir, "fixtures", "scrutinize-fix.ts");
       const config = makeConfig(true);
       config.roles!.scrutinizeFix = { cmd: ["bun", fixture], timeoutMin: 1 };
@@ -196,7 +170,7 @@ export async function testSpawnScrutinizeFix(): Promise<void> {
 export async function testSpawnScrutinizeFixRejectsDangerousCmd(): Promise<void> {
   const repo = createTestRepo();
   try {
-    await withTmpHome(async () => {
+    await withTmpDbAsync(async () => {
       const config = makeConfig(true);
       config.roles!.scrutinizeFix = {
         cmd: ["git", "reset", "--hard"],
@@ -231,7 +205,7 @@ export async function testSpawnScrutinizeFixRejectsDangerousCmd(): Promise<void>
 export async function testSpawnRejectsPromptPlaceholder(): Promise<void> {
   const repo = createTestRepo();
   try {
-    await withTmpHome(async () => {
+    await withTmpDbAsync(async () => {
       const config = makeConfig(true);
       config.roles!.scrutinizeFix = {
         cmd: ["claude", "-p", "{model}", "{PROMPT}"],

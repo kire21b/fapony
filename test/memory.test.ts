@@ -8,18 +8,7 @@ import {
   DEFAULT_MEMORY,
   resolveMemoryConfig,
 } from "../src/memory.js";
-
-const BASE_CONFIG: Config = {
-  worktrees: { test: "/tmp/test" },
-  executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
-  review: {
-    bigDiff: { files: 15, lines: 400 },
-    maxRounds: 2,
-    gate: ["claude", "-p", "/code-review high"],
-    prefilter: null,
-  },
-  memory: null,
-};
+import { baseConfig } from "./helpers.js";
 
 export function testMemoryDefaultWiringWithFile(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
@@ -28,7 +17,7 @@ export function testMemoryDefaultWiringWithFile(): void {
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, "mem.ts"), "// stub");
 
-    const result = resolveMemoryConfig(BASE_CONFIG, dir);
+    const result = resolveMemoryConfig(baseConfig(), dir);
     assert.deepEqual(result, DEFAULT_MEMORY);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -40,7 +29,7 @@ export function testMemoryDefaultWiringWithFile(): void {
 export function testMemoryDefaultWiringNoFile(): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-mem-"));
   try {
-    const result = resolveMemoryConfig(BASE_CONFIG, dir);
+    const result = resolveMemoryConfig(baseConfig(), dir);
     assert.equal(result, null);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -57,7 +46,7 @@ export function testMemoryExplicitConfigWins(): void {
     writeFileSync(join(memDir, "mem.ts"), "// stub");
 
     const explicitConfig: Config = {
-      ...BASE_CONFIG,
+      ...baseConfig(),
       memory: {
         claim: ["custom", "claim", "{id}"],
         close: ["custom", "close", "{id}", "{msg}"],
@@ -78,7 +67,7 @@ export function testMemoryExplicitConfigWins(): void {
 export function testClaimMemoryFailGracefully(): void {
   // Config with a claim command that always fails ("false" exits 1)
   const failingConfig: Config = {
-    ...BASE_CONFIG,
+    ...baseConfig(),
     memory: {
       claim: ["false"],
       close: ["true"],
@@ -90,7 +79,7 @@ export function testClaimMemoryFailGracefully(): void {
   assert.equal(result, false, "should return false when shell command fails");
 
   // No memory config → returns false
-  const noMemResult = claimMemory(BASE_CONFIG, "/tmp", "test-id");
+  const noMemResult = claimMemory(baseConfig(), "/tmp", "test-id");
   assert.equal(noMemResult, false, "should return false when memory is null");
 
   console.log("  ✓ claimMemory fails gracefully");
@@ -100,7 +89,7 @@ export function testClaimMemoryFailGracefully(): void {
 // "sleep 999" should complete in ~15s (timeout), not 999s (the sleep duration).
 export function testClaimMemoryTimeout(): void {
   const hangingConfig: Config = {
-    ...BASE_CONFIG,
+    ...baseConfig(),
     memory: {
       claim: ["sleep", "999"],
       close: ["true"],

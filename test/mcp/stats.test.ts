@@ -73,7 +73,6 @@ export function testStatsToolJsonMode(): void {
 export function testStatsToolTextMode(): void {
   withTempDb(() => {
     const db = openDb();
-    const config = baseConfig();
     const runId = newRun(db, "wt1", null, null, "abc");
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
     setStatus(db, runId, "passed");
@@ -131,7 +130,6 @@ export function testStatsTextMatchesCli(): void {
 export function testStatsToolByGradeSeparation(): void {
   withTempDb(() => {
     const db = openDb();
-    const config = baseConfig();
     const r1 = newRun(db, "wt1", null, null, "abc");
     const r2 = newRun(db, "wt1", null, null, "abc");
     addEvent(db, r1, "gate", { verdict: "pass-good", note: "", round: 0 });

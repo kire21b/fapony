@@ -1,9 +1,6 @@
 // test/resilience.test.ts — unit tests for src/resilience.ts pure core + src/sigint.ts
 
 import assert from "node:assert";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   backoffDelayMs,
   classifyFailure,
@@ -18,6 +15,7 @@ import {
   setSigintPhase,
   setSigintRunId,
 } from "../src/sigint.js";
+import { withTmpDbAsync } from "./helpers.js";
 
 // --- classifyFailure ---
 
@@ -436,21 +434,8 @@ export async function testFlakyAgentRetriesAndSucceeds(): Promise<void> {
 
 // --- SIGINT handler (isolated db) ---
 
-async function withTmpHome<T>(fn: () => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  process.env.FAPONY_STATE_DIR = dir;
-  try {
-    return await fn();
-  } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 export async function testSigintHandlerMarksStopped(): Promise<void> {
-  await withTmpHome(async () => {
+  await withTmpDbAsync(async () => {
     installSigintHandler();
     setSigintRunId(42);
 

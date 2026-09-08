@@ -1,12 +1,10 @@
-// test/mcp/helpers.ts — shared test helpers for MCP tests
+// test/mcp/helpers.ts — re-export shared helpers for MCP tests
+// (defines the same module boundary as the handcheck tests expect)
 
-import { createTestRepo } from "../fixtures/repo.js";
-
-export function withTempRepo(fn: (dir: string) => void): void {
-  const repo = createTestRepo();
-  try {
-    fn(repo.dir);
-  } finally {
-    repo.cleanup();
-  }
-}
+export {
+  baseConfig,
+  silentErrors,
+  withTempRepo,
+  withTmpDb,
+  withTmpDbAsync,
+} from "../helpers.js";

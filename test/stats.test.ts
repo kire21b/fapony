@@ -1,41 +1,13 @@
 // test/stats.test.ts — tests for getStatsData enrichment
 
 import assert from "node:assert";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { beginSpawn, endSpawn } from "../src/cost.js";
-import {
-  addEvent,
-  type Config,
-  loadConfig,
-  newRun,
-  openDb,
-  setStatus,
-} from "../src/db/index.js";
+import { addEvent, type Config, newRun, setStatus } from "../src/db/index.js";
 import { getStatsData } from "../src/stats.js";
-
-function withTempDb(fn: () => void): void {
-  const oldEnv = process.env.FAPONY_STATE_DIR;
-  const tmpDir = mkdtempSync(join(tmpdir(), "fapony-stats-test-"));
-  process.env.FAPONY_STATE_DIR = tmpDir;
-  try {
-    fn();
-  } finally {
-    if (oldEnv !== undefined) {
-      process.env.FAPONY_STATE_DIR = oldEnv;
-    } else {
-      delete process.env.FAPONY_STATE_DIR;
-    }
-  }
-}
-
-function baseConfig(): Config {
-  return loadConfig("/nonexistent-path/fapony.config.json");
-}
+import { baseConfig, withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
-  withTempDb(() => {
+  withTmpDb(() => {
     const data = getStatsData();
     assert.equal(data.runs.total, 0);
     assert.deepEqual(data.byModel, []);
@@ -46,8 +18,7 @@ export function testStatsEmptyDb(): void {
 }
 
 export function testStatsNoPricingValueIsNull(): void {
-  withTempDb(() => {
-    const db = openDb();
+  withTmpDb((db) => {
     const config = baseConfig();
     const runId = newRun(db, "wt1", null, null, "abc");
 
@@ -72,8 +43,7 @@ export function testStatsNoPricingValueIsNull(): void {
 }
 
 export function testStatsZeroCostValueIsNull(): void {
-  withTempDb(() => {
-    const db = openDb();
+  withTmpDb((db) => {
     const config: Config = {
       ...baseConfig(),
       pricing: { executor: { inputPer1k: 1, outputPer1k: 1 } },
@@ -96,8 +66,7 @@ export function testStatsZeroCostValueIsNull(): void {
 }
 
 export function testStatsMultiRoundSeparateGates(): void {
-  withTempDb(() => {
-    const db = openDb();
+  withTmpDb((db) => {
     const config: Config = {
       ...baseConfig(),
       pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
@@ -142,8 +111,7 @@ export function testStatsMultiRoundSeparateGates(): void {
 }
 
 export function testStatsGateWithoutSpawnsInWindow(): void {
-  withTempDb(() => {
-    const db = openDb();
+  withTmpDb((db) => {
     const config: Config = {
       ...baseConfig(),
       pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
@@ -175,9 +143,7 @@ export function testStatsGateWithoutSpawnsInWindow(): void {
 }
 
 export function testStatsLegacyPassMergedWithPassAdequate(): void {
-  withTempDb(() => {
-    const db = openDb();
-    const config = baseConfig();
+  withTmpDb((db) => {
     const runId1 = newRun(db, "wt1", null, null, "abc");
     const runId2 = newRun(db, "wt1", null, null, "abc");
 
@@ -206,9 +172,7 @@ export function testStatsLegacyPassMergedWithPassAdequate(): void {
 }
 
 export function testStatsByWorktree(): void {
-  withTempDb(() => {
-    const db = openDb();
-    const config = baseConfig();
+  withTmpDb((db) => {
     const r1 = newRun(db, "wt-a", null, null, "abc");
     const r2 = newRun(db, "wt-a", null, null, "abc");
     const r3 = newRun(db, "wt-b", null, null, "abc");
@@ -232,8 +196,7 @@ export function testStatsByWorktree(): void {
 }
 
 export function testStatsModelFromExecutorSpawn(): void {
-  withTempDb(() => {
-    const db = openDb();
+  withTmpDb((db) => {
     const config: Config = {
       ...baseConfig(),
       roles: { executor: { cmd: ["x"], model: "mimo-v2" } },

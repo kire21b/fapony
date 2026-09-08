@@ -13,25 +13,7 @@ import {
   SCHEMA_VERSION,
   setStatus,
 } from "../src/db/index.js";
-
-function withTmpDb<T>(fn: (db: ReturnType<typeof openDb>) => T): T {
-  const dir = mkdtempSync(join(tmpdir(), "fapony-test-"));
-  const orig = process.env.FAPONY_STATE_DIR;
-  // ponytail: bug fix — Bun caches os.homedir() at process start, so setting
-  // process.env.HOME here never redirected openDb(); every "isolated" test db
-  // was silently writing into the real ~/.config/fapony/state.db.
-  process.env.FAPONY_STATE_DIR = dir;
-  try {
-    const db = openDb();
-    const result = fn(db);
-    db.close();
-    return result;
-  } finally {
-    if (orig === undefined) delete process.env.FAPONY_STATE_DIR;
-    else process.env.FAPONY_STATE_DIR = orig;
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
+import { withTmpDb } from "./helpers.js";
 
 export function testDbLifecycle(): void {
   withTmpDb((db) => {

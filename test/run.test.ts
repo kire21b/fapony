@@ -2,9 +2,10 @@ import assert from "node:assert";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Config, loadConfig } from "../src/db/index.js";
+import type { Config } from "../src/db/index.js";
 import { buildExecutorPrompt, executorCmd, runOnce } from "../src/run/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
+import { baseConfig, silentErrors } from "./helpers.js";
 
 export function testBuildExecutorPrompt(): void {
   const template =
@@ -46,7 +47,7 @@ export function testBuildExecutorPrompt(): void {
 }
 
 export function testExecutorCmdRolePreference(): void {
-  const base = loadConfig("/nonexistent-path/fapony.config.json");
+  const base = baseConfig();
 
   // no roles.executor → plain executor.cmd, {model} absent → no residue
   assert.deepEqual(executorCmd(base, "m-1"), ["opencode", "run"]);
@@ -96,17 +97,17 @@ export async function testRunOnceAbortedMarksStopped(): Promise<void> {
   const savedState = process.env.FAPONY_STATE_DIR;
   process.env.FAPONY_CONFIG = configPath;
   process.env.FAPONY_STATE_DIR = stateDir;
-  const origErr = console.error;
-  console.error = () => {};
   try {
-    const result = await runOnce({
-      worktreeKey: "t",
-      planPath: null,
-      planContent: "# test plan\n",
-      memId: null,
-      allowDirty: true,
-      isAborted: async () => true,
-    });
+    const result = await silentErrors(() =>
+      runOnce({
+        worktreeKey: "t",
+        planPath: null,
+        planContent: "# test plan\n",
+        memId: null,
+        allowDirty: true,
+        isAborted: async () => true,
+      }),
+    );
     assert.equal(
       result.status,
       "stopped",
@@ -114,7 +115,6 @@ export async function testRunOnceAbortedMarksStopped(): Promise<void> {
     );
     assert.ok(result.runId > 0, "run row must exist");
   } finally {
-    console.error = origErr;
     if (savedConfig === undefined) delete process.env.FAPONY_CONFIG;
     else process.env.FAPONY_CONFIG = savedConfig;
     if (savedState === undefined) delete process.env.FAPONY_STATE_DIR;

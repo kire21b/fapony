@@ -16,6 +16,7 @@ import {
   splitCmd,
   validateWorktreePath,
 } from "../src/setup.js";
+import { silentErrors } from "./helpers.js";
 
 export function testSplitCmdSimpleArgs(): void {
   const result = splitCmd("opencode run");
@@ -158,18 +159,14 @@ export function testShouldOverwriteConfig(): void {
 
 export function testParseTimeoutMinutes(): void {
   // parseTimeoutMinutes warns on fallback — silence it for the assertions.
-  const origErr = console.error;
-  console.error = () => {};
-  try {
+  silentErrors(() => {
     assert.equal(parseTimeoutMinutes("45"), 45);
     assert.equal(parseTimeoutMinutes(" 30 "), 30);
     assert.equal(parseTimeoutMinutes("garbage"), 45);
     assert.equal(parseTimeoutMinutes(""), 45);
     assert.equal(parseTimeoutMinutes("0"), 45);
     assert.equal(parseTimeoutMinutes("-5"), 45);
-  } finally {
-    console.error = origErr;
-  }
+  });
   console.log("  ✓ parseTimeoutMinutes");
 }
 
