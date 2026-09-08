@@ -19,6 +19,7 @@ export {
   toolHandoffCheck,
   toolHandoffCollect,
   toolVerdictSubmit,
+  toolVerificationReport,
 } from "./tools/index.js";
 export { cmdMcp, dispatch } from "./transport.js";
 export type { ReasonCode, ToolResult } from "./types.js";

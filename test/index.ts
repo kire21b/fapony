@@ -84,6 +84,16 @@ import {
   testHandoffCollectValidRepo,
 } from "./mcp/collect.test.js";
 import {
+  testCollectEvidenceAgentCommands,
+  testCollectEvidenceAgentDuplicatesAllowlist,
+  testCollectEvidenceFailingCommand,
+  testCollectEvidenceNoConfig,
+  testCollectEvidencePassingCommand,
+  testReadEvidenceConfigInvalid,
+  testReadEvidenceConfigMissing,
+  testReadEvidenceConfigValid,
+} from "./mcp/evidence.test.js";
+import {
   testEndToEndPipeline,
   testErrorResult,
   testJsonResult,
@@ -101,6 +111,13 @@ import {
   testRenderReportTextWithHandoffChecks,
   testRenderReportTextWithPassedVerdict,
 } from "./mcp/primitives.test.js";
+import {
+  testVerificationReportJsonFormat,
+  testVerificationReportMissingArgs,
+  testVerificationReportRunNotFound,
+  testVerificationReportTextFormat,
+  testVerificationReportToolCount,
+} from "./mcp/report.test.js";
 import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
@@ -488,6 +505,21 @@ export async function cmdTest(): Promise<void> {
   testRenderReportTextWithHandoffChecks();
   testRenderReportTextWithCost();
   testRenderReportTextGitError();
+  // Evidence collector tests
+  testReadEvidenceConfigMissing();
+  testReadEvidenceConfigInvalid();
+  testReadEvidenceConfigValid();
+  testCollectEvidenceNoConfig();
+  testCollectEvidencePassingCommand();
+  testCollectEvidenceFailingCommand();
+  testCollectEvidenceAgentCommands();
+  testCollectEvidenceAgentDuplicatesAllowlist();
+  // Verification report tool tests
+  testVerificationReportMissingArgs();
+  testVerificationReportRunNotFound();
+  testVerificationReportTextFormat();
+  testVerificationReportJsonFormat();
+  testVerificationReportToolCount();
   // Stats enrichment tests
   testStatsEmptyDb();
   testStatsNoPricingValueIsNull();

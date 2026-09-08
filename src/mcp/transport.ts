@@ -7,6 +7,7 @@ import {
   toolHandoffCheck,
   toolHandoffCollect,
   toolVerdictSubmit,
+  toolVerificationReport,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
 
@@ -59,6 +60,8 @@ function dispatchToolCall(params: {
       return toolVerdictSubmit(args);
     case "fapony_stats":
       return toolFaponyStats(args);
+    case "verification_report":
+      return toolVerificationReport(args);
     default:
       return errorResult(`unknown tool: ${params.name}`);
   }

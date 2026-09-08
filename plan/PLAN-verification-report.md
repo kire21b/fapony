@@ -1,6 +1,6 @@
 # PLAN-verification-report — รายงาน verify และ measurement อัตโนมัติ
 
-> **Status:** 🔧 P0+P1 done · **Owner:** delamind · **Created:** 2026-09-08
+> **Status:** 🔧 P0–P3 done · **Owner:** delamind · **Created:** 2026-09-08
 > **Source spec:** [spec/SPEC-verification-report.md](../spec/SPEC-verification-report.md) ✅
 
 ---
@@ -65,9 +65,9 @@ evidence, verdict, duration, rounds และ cost/usage พร้อม provena
 
 1. **[x] สำรวจและล็อก report contract** — ระบุ sections, status vocabulary, provenance และ backward-compatibility จาก output/tools เดิม → **done:** [spec/SPEC-verification-report.md](../spec/SPEC-verification-report.md) ล็อก contract + evidence vocabulary + provenance rules + edge cases + 3 ตัวอย่าง (pass/fail/standalone)
 2. **[x] แยก shared verification primitives** — ให้ collect/check/evidence/report ใช้ parser และ result type ร่วมกัน โดยไม่เปลี่ยน behavior ของ MCP tools เดิม → **done:** `src/mcp/primitives.ts` (+ `CheckResult`, `EvidenceItem`, `EvidenceStatus`, `VerificationReport`, `computeEvidenceSummary`, `renderReportText`) + 9 tests ใน `test/mcp/primitives.test.ts` + barrel export → regression ผ่าน (test/lint/typecheck)
-3. **เพิ่ม evidence collector** — รันเฉพาะ command ที่ allowlist และคืน structured result โดยไม่เก็บ secret output เต็ม → verify: test ผ่านกรณี pass, fail, timeout, not configured และ command ถูก block
-4. **เพิ่ม `verification_report` MCP tool** — compose facts + handoff check + evidence + run metrics + verdict ให้เรียกครั้งเดียว → verify: stdio smoke test ได้ text/JSON ที่สอดคล้องกัน
-5. **เพิ่ม report สำหรับ CLI/history** — ให้ developer ดู report ล่าสุดและ query report ย้อนหลังผ่านข้อมูลที่มีอยู่ โดยไม่สร้าง database table ใหม่ → verify: run จริงหนึ่งรอบเปิดดู report และ stats เดิมยังตรง
+3. **[x] เพิ่ม evidence collector** — รันเฉพาะ command ที่ allowlist และคืน structured result โดยไม่เก็บ secret output เต็ม → **done:** `src/mcp/evidence.ts` (readEvidenceConfig + collectEvidence) + `test/mcp/evidence.test.ts` (8 tests: config missing/invalid/valid, pass/fail/agent/dedup) → regression ผ่าน
+4. **[x] เพิ่ม `verification_report` MCP tool** — compose facts + handoff check + evidence + run metrics + verdict ให้เรียกครั้งเดียว → **done:** `src/mcp/tools/report.ts` (toolVerificationReport) + register ใน tools/index.ts (5 tools) + transport.ts dispatch + `test/mcp/report.test.ts` (5 tests) → stdio smoke test ผ่าน text/JSON
+5. **[x] เพิ่ม report สำหรับ CLI/history** — ให้ developer ดู report ล่าสุดและ query report ย้อนหลังผ่านข้อมูลที่มีอยู่ โดยไม่สร้าง database table ใหม่ → **done:** `src/report.ts` (cmdReport) + register ใน fapony.ts → `fapony report <run-id>` ใช้งานได้
 6. **dogfood และวัด adoption friction** — ทดลอง standalone repo และบันทึกจำนวนขั้นตอน, เวลาได้ report, report completeness และ next action → verify: agent จบ flow ได้โดยไม่ต้องถามผู้สร้าง และมีรายการ gap สำหรับรอบถัดไป
 7. **ปิดจ็อบ** — อัปเดต README/docs พร้อมข้อจำกัดเรื่อง usage/cost และรัน test/lint/typecheck → verify: คำสั่งใน docs ตรงกับ implementation
 

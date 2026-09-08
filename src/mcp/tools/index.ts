@@ -5,6 +5,7 @@ import { REASON_CODES } from "../types.js";
 
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
+export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
@@ -134,6 +135,54 @@ export const TOOLS = [
           type: "boolean",
           description:
             "If true, return raw JSON StatsData. If false (default), return human-readable text.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "verification_report",
+    description:
+      "Generate a complete verification report: git facts, handoff conformance, " +
+      "evidence (test/typecheck/lint), verdict, duration, rounds, and cost. " +
+      "Call once after working to get a full picture. " +
+      "Supports text (human-readable) and JSON (machine-readable) formats.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        run_id: {
+          type: "number",
+          description:
+            "Run ID from fapony. Resolves worktree, events, and verdict automatically.",
+        },
+        worktree: {
+          type: "string",
+          description:
+            "Absolute path to git worktree. Used when run_id is not available.",
+        },
+        base_sha: {
+          type: "string",
+          description: "Git base SHA for diff range. Defaults to HEAD~1.",
+        },
+        head_sha: {
+          type: "string",
+          description: "Git head SHA for diff range. Defaults to HEAD.",
+        },
+        handoff: {
+          type: "string",
+          description:
+            "Agent's handoff text. If omitted with run_id, reads from events.",
+        },
+        evidence_commands: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Additional commands to check (agent-proposed, gets unverified provenance).",
+        },
+        format: {
+          type: "string",
+          enum: ["text", "json"],
+          description: "Output format. Default: text.",
         },
       },
       required: [],
