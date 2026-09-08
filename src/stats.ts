@@ -2,6 +2,7 @@ import { sumSpawnCost } from "./cost.js";
 import { type Event, openDb, type Run } from "./db/index.js";
 import { enrichGateWindows } from "./gates.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
+import { type PassiveUsageResult, readPassiveUsage } from "./session.js";
 
 function minutesBetween(a: string, b: string): number {
   const t0 = new Date(`${a.replace(" ", "T")}Z`).getTime();
@@ -106,6 +107,7 @@ export interface StatsData {
     passed: number;
     stalled: number;
   }>;
+  usage: PassiveUsageResult;
 }
 
 export function getStatsData(): StatsData {
@@ -222,6 +224,8 @@ export function getStatsData(): StatsData {
       .map(([worktree, b]) => ({ worktree, ...b }))
       .sort((a, b) => b.runs - a.runs);
 
+    const usage = readPassiveUsage();
+
     return {
       runs: {
         total: runs.length,
@@ -239,6 +243,7 @@ export function getStatsData(): StatsData {
       byModel,
       byGrade,
       byWorktree,
+      usage,
     };
   } finally {
     // The MCP server is a long-lived stdio process — polling tools must not
@@ -321,6 +326,21 @@ export function formatStatsText(data: StatsData): string {
       lines.push(
         `  ${w.worktree.padEnd(8)} | ${String(w.runs).padStart(4)} | ${String(w.passed).padStart(6)} | ${String(w.stalled).padStart(7)}`,
       );
+    }
+  }
+
+  if (data.usage.session_count > 0) {
+    lines.push("\nusage:");
+    lines.push(
+      `  total: ${data.usage.total_tokens_input} input / ${data.usage.total_tokens_output} output / ${data.usage.total_tokens_reasoning} reasoning tokens over ${data.usage.session_count} sessions ($${data.usage.total_cost.toFixed(4)})`,
+    );
+    if (data.usage.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of data.usage.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out ($${m.cost.toFixed(4)})`,
+        );
+      }
     }
   }
 

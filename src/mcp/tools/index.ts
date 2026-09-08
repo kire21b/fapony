@@ -7,6 +7,7 @@ export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
 export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
+export { toolPassiveUsage } from "./usage.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
@@ -135,6 +136,37 @@ export const TOOLS = [
           type: "boolean",
           description:
             "If true, return raw JSON StatsData. If false (default), return human-readable text.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "fapony_usage",
+    description:
+      "Query passive usage from opencode sessions: token counts, cost, " +
+      "and breakdown by model. Filter by worktree and time range.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description: "Filter by worktree path (absolute)",
+        },
+        since: {
+          type: "number",
+          description:
+            "Unix timestamp — include sessions created at or after this time",
+        },
+        until: {
+          type: "number",
+          description:
+            "Unix timestamp — include sessions created at or before this time",
+        },
+        json: {
+          type: "boolean",
+          description:
+            "If true, return raw JSON PassiveUsageResult. If false (default), return human-readable text.",
         },
       },
       required: [],
