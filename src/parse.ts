@@ -31,6 +31,23 @@ export function isPassFamily(v: string): v is VerdictGrade {
   return v.startsWith("pass");
 }
 
+/**
+ * Locked qualityScore mapping — read-time only (never written to events).
+ * Values from SPEC-verdict-protocol §qualityScore (additive-only, never change).
+ */
+const SCORE_MAP: Record<VerdictGrade, number> = {
+  "pass-excellent": 5,
+  "pass-good": 4,
+  "pass-adequate": 3,
+  pass: 3,
+  fail: 0,
+  uncertain: 1,
+};
+
+export function qualityScore(grade: VerdictGrade): number {
+  return SCORE_MAP[grade] ?? 0;
+}
+
 export interface GateVerdict {
   verdict: VerdictGrade;
   note: string;

@@ -91,6 +91,13 @@ import {
   testReasonCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testStatsTextMatchesCli,
+  testStatsToolByGradeSeparation,
+  testStatsToolEmptyDb,
+  testStatsToolJsonMode,
+  testStatsToolTextMode,
+} from "./mcp/stats.test.js";
+import {
   testMcpInitialize,
   testMcpNotificationsIgnored,
   testMcpToolsCallUnknownTool,
@@ -98,6 +105,7 @@ import {
   testMcpUnknownMethod,
 } from "./mcp/transport.test.js";
 import {
+  testVerdictSubmitAllGrades,
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
   testVerdictSubmitInvalidVerdict,
@@ -117,6 +125,7 @@ import {
   testFixtureGuard,
   testParseGateVerdict,
   testParsePlanUpdate,
+  testQualityScore,
 } from "./parse.test.js";
 import {
   testPlanHygieneEnglishNoneNoLeak,
@@ -220,6 +229,16 @@ import {
   testSigintSkipsTerminalRuns,
 } from "./sigint.test.js";
 import {
+  testStatsByWorktree,
+  testStatsEmptyDb,
+  testStatsGateWithoutSpawnsInWindow,
+  testStatsLegacyPassMergedWithPassAdequate,
+  testStatsModelFromExecutorSpawn,
+  testStatsMultiRoundSeparateGates,
+  testStatsNoPricingValueIsNull,
+  testStatsZeroCostValueIsNull,
+} from "./stats.test.js";
+import {
   testStatusTableShowsNothingWhenEmpty,
   testStatusTableShowsPlanAndMemId,
   testStatusTableTruncatesLongMemId,
@@ -257,6 +276,7 @@ export async function cmdTest(): Promise<void> {
   await testParseGateVerdict();
   testParsePlanUpdate();
   testFixtureGuard();
+  testQualityScore();
   testGetLastPlanUpdate();
   testGateOncePass();
   testGateOnceFail();
@@ -407,6 +427,11 @@ export async function cmdTest(): Promise<void> {
   testMcpNotificationsIgnored();
   testMcpUnknownMethod();
   testMcpToolsCallUnknownTool();
+  testStatsToolEmptyDb();
+  testStatsToolJsonMode();
+  testStatsToolTextMode();
+  testStatsTextMatchesCli();
+  testStatsToolByGradeSeparation();
   testHandoffCollectMissingArgs();
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();
@@ -429,6 +454,7 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitSuccess();
   testVerdictSubmitStoresMcpSource();
   testVerdictSubmitAutoCreatesRun();
+  testVerdictSubmitAllGrades();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
@@ -439,5 +465,14 @@ export async function cmdTest(): Promise<void> {
   testErrorResult();
   testParseToolResult();
   testReasonCodesAreLocked();
+  // Stats enrichment tests
+  testStatsEmptyDb();
+  testStatsNoPricingValueIsNull();
+  testStatsZeroCostValueIsNull();
+  testStatsMultiRoundSeparateGates();
+  testStatsGateWithoutSpawnsInWindow();
+  testStatsLegacyPassMergedWithPassAdequate();
+  testStatsByWorktree();
+  testStatsModelFromExecutorSpawn();
   console.log("\nall tests passed ✓");
 }

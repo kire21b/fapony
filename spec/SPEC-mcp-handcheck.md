@@ -1,4 +1,4 @@
-# SPEC-mcp-handcheck.md — MCP handcheck (3 tools)
+# SPEC-mcp-handcheck.md — MCP handcheck (4 tools)
 
 > **Used by:** [PLAN-mcp-handcheck.md](../plan/PLAN-mcp-handcheck.md)
 
@@ -18,6 +18,7 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
 | `handoff_collect` | Collect machine facts from git | `base_sha`, `head_sha`, `worktree` | facts + checks |
 | `handoff_check` | Verify handoff conformance | `handoff` (text), `facts` (from collect) | conformance results |
 | `verdict_submit` | Record verdict + reason | `run_id`, `verdict`, `reason_code`, `note?` | stored event |
+| `fapony_stats` | Query accumulated run stats (read-time) | `json?` | StatsData JSON หรือ CLI text — shape อยู่ที่ [SPEC-verdict-stats.md](SPEC-verdict-stats.md) |
 
 ### `handoff_collect` — input
 
@@ -118,7 +119,7 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
 ```jsonc
 {
   "run_id": 42,                    // optional — if omitted, a new run is auto-created
-  "verdict": "pass",               // required — "pass" | "fail"
+  "verdict": "pass-good",          // required — see grade enum below (6 grades)
   "reason_code": "missing_test",   // required — from ReasonCode enum
   "note": "needs integration test" // optional — required when reason_code = "other"
 }
@@ -131,9 +132,16 @@ from stdin, writes newline-delimited JSON to stdout. No HTTP/SSE, no auth.
   "stored": true,
   "event_id": 15,
   "run_id": 42,
-  "verdict": "pass",
+  "verdict": "pass-good",
   "reason_code": "missing_test"
 }
+```
+
+### `verdict` grade enum (6 values — locked, additive-only)
+
+```
+pass-excellent | pass-good | pass-adequate | pass | fail | uncertain
+```
 ```
 
 ### `reason_code` (enum)
@@ -261,7 +269,7 @@ allowlist คำสั่งที่ user ประกาศไว้ — ไ�
     "name": "verdict_submit",
     "arguments": {
       "run_id": 42,
-      "verdict": "pass",
+      "verdict": "pass-good",
       "reason_code": "missing_test",
       "note": "integration test needed for auth flow"
     }
@@ -275,7 +283,7 @@ allowlist คำสั่งที่ user ประกาศไว้ — ไ�
   "content": [
     {
       "type": "text",
-      "text": "{\"stored\":true,\"event_id\":15,\"run_id\":42,\"verdict\":\"pass\",\"reason_code\":\"missing_test\"}"
+      "text": "{\"stored\":true,\"event_id\":15,\"run_id\":42,\"verdict\":\"pass-good\",\"reason_code\":\"missing_test\"}"
     }
   ]
 }

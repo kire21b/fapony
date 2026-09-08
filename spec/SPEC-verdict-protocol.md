@@ -35,17 +35,15 @@ grade โดยไม่มี evidence ครบตามตาราง = ไ�
 | `fail` | ต้องแก้ — note = สิ่งที่ gate เจอ เอาไปเป็น fixer input | สิ่งที่ fail ระบุชัดต่อรอบถัดไป | `fixing` (round cap เดิม) |
 | `uncertain` | ตัดสิน quality ไม่ได้ (evidence ขาด / handoff ขาด) | reviewer ระบุใน note ว่าอะไรขาด | `stopped` |
 
-## qualityScore mapping — doc ล้วน (metric dictionary)
-
-**ห้ามมีในโค้ด** — ใช้ตอนมี sample จริงเท่านั้น:
+## qualityScore mapping — code at `src/parse.ts` (read-time only)
 
 ```
 pass-excellent = 5 · pass-good = 4 · pass-adequate = 3 · pass = 3 · fail = 0 · uncertain = 1
 ```
 
 - นี่คือสเกล benchmark ที่ล็อกไว้ล่วงหน้า — reviewer ต่างเจ้าก็แปลงด้วยตารางเดียวกัน
-- ความประณีตระดับรายละเอียดไปที่ `note` เสมอ (ตามหลักเดิม ROADMAP §6.2: enum กัน typo, free text แยกเป็น note)
-- **value engine ไม่มี** — trigger: multi-model usage จริง + sample พอ จึงสร้างตาม ROADMAP P1 gate
+- ความประณีตระดับรายละเอียดไปที่ `note` เเสมอ (ตามหลักเดิม ROADMAP §6.2: enum กัน typo, free text แยกเป็น note)
+- **qualityScore คำนวณตอนอ่านเท่านั้น** — ห้ามเขียน score กลับลง event; grade นอก set → คืน 0 (defensive)
 
 ## Gate event data shape (ลง `events.data`, kind=`gate`)
 

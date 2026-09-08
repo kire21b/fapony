@@ -3,6 +3,7 @@
 import { createInterface } from "node:readline";
 import {
   TOOLS,
+  toolFaponyStats,
   toolHandoffCheck,
   toolHandoffCollect,
   toolVerdictSubmit,
@@ -56,6 +57,8 @@ function dispatchToolCall(params: {
       return toolHandoffCheck(args);
     case "verdict_submit":
       return toolVerdictSubmit(args);
+    case "fapony_stats":
+      return toolFaponyStats(args);
     default:
       return errorResult(`unknown tool: ${params.name}`);
   }

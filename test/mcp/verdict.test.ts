@@ -24,15 +24,37 @@ function withTempDb(fn: () => void): void {
 }
 
 export function testVerdictSubmitInvalidVerdict(): void {
-  const result = toolVerdictSubmit({
-    verdict: "maybe",
-    reason_code: "missing_test",
-  });
-  assert.ok(result.isError);
-  assert.ok(
-    (parseToolResult(result) as { error: string }).error.includes("verdict"),
-  );
-  console.log("  ✓ verdict_submit rejects invalid verdict");
+  // PLAN-verdict-stats done-criterion: reject non-grades with an error that
+  // lists all 6 valid grades — including type-junk that used to slip past the
+  // old loose equality check.
+  for (const bad of [
+    "ok",
+    "maybe",
+    "PASS",
+    "",
+    "pass-good ",
+    42,
+    null,
+    undefined,
+  ]) {
+    const result = toolVerdictSubmit({
+      verdict: bad,
+      reason_code: "missing_test",
+    });
+    assert.ok(result.isError, `${JSON.stringify(bad)} should be rejected`);
+    const msg = (parseToolResult(result) as { error: string }).error;
+    for (const grade of [
+      "pass-excellent",
+      "pass-good",
+      "pass-adequate",
+      "pass",
+      "fail",
+      "uncertain",
+    ]) {
+      assert.ok(msg.includes(grade), `error should list grade '${grade}'`);
+    }
+  }
+  console.log("  ✓ verdict_submit rejects invalid verdict with grade list");
 }
 
 export function testVerdictSubmitInvalidReasonCode(): void {
@@ -149,4 +171,34 @@ export function testVerdictSubmitStoresMcpSource(): void {
     assert.equal(parsed.verdict, "pass");
   });
   console.log("  ✓ verdict_submit marks event with source=mcp");
+}
+
+export function testVerdictSubmitAllGrades(): void {
+  const grades = [
+    "pass-excellent",
+    "pass-good",
+    "pass-adequate",
+    "pass",
+    "fail",
+    "uncertain",
+  ] as const;
+  for (const grade of grades) {
+    withTempDb(() => {
+      const db = openDb();
+      const runId = newRun(db, "/tmp/test", null, null, "abc123");
+      const result = toolVerdictSubmit({
+        run_id: runId,
+        verdict: grade,
+        reason_code: "missing_test",
+      });
+      assert.equal(result.isError, undefined, `${grade} should be accepted`);
+      const data = parseToolResult(result) as {
+        stored: boolean;
+        verdict: string;
+      };
+      assert.equal(data.stored, true, `${grade} should store`);
+      assert.equal(data.verdict, grade, `${grade} should round-trip`);
+    });
+  }
+  console.log("  ✓ verdict_submit accepts all 6 grades");
 }

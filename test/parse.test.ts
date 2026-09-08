@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   parseGateVerdict,
   parsePlanUpdate,
+  qualityScore,
   VERDICT_GRADES,
 } from "../src/parse.js";
 
@@ -155,4 +156,36 @@ export function testFixtureGuard(): void {
   } catch {
     console.log("  ✓ fixture guard (no fixtures yet, skipped)");
   }
+}
+
+export function testQualityScore(): void {
+  // Locked values from SPEC-verdict-protocol — additive-only, never change
+  const cases: Array<
+    [
+      (
+        | "pass-excellent"
+        | "pass-good"
+        | "pass-adequate"
+        | "pass"
+        | "fail"
+        | "uncertain"
+      ),
+      number,
+    ]
+  > = [
+    ["pass-excellent", 5],
+    ["pass-good", 4],
+    ["pass-adequate", 3],
+    ["pass", 3], // legacy, same score as pass-adequate
+    ["fail", 0],
+    ["uncertain", 1],
+  ];
+  for (const [grade, expected] of cases) {
+    assert.equal(
+      qualityScore(grade),
+      expected,
+      `qualityScore("${grade}") should be ${expected}`,
+    );
+  }
+  console.log("  ✓ qualityScore returns correct values for all 6 grades");
 }

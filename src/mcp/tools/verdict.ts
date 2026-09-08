@@ -2,6 +2,7 @@
 
 import { getRun, newRun, openDb, patchLastGateEvent } from "../../db/index.js";
 import { gateOnce } from "../../gate.js";
+import { VERDICT_GRADES, type VerdictGrade } from "../../parse.js";
 import {
   errorResult,
   jsonResult,
@@ -15,9 +16,12 @@ import {
 export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   const { run_id, verdict, reason_code, note } = args;
 
-  if (verdict !== "pass" && verdict !== "fail") {
-    return errorResult("verdict must be 'pass' or 'fail'");
+  if (typeof verdict !== "string" || !VERDICT_GRADES.has(verdict)) {
+    return errorResult(
+      `verdict must be one of: ${[...VERDICT_GRADES].join(", ")}`,
+    );
   }
+  const grade = verdict as VerdictGrade;
   if (!REASON_CODES.includes(reason_code as ReasonCode)) {
     return errorResult(
       `reason_code must be one of: ${REASON_CODES.join(", ")}`,
@@ -47,7 +51,7 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     typeof note === "string" && note
       ? `[${reason_code}] ${note}`
       : `[${reason_code}]`;
-  const result = gateOnce(resolvedRunId, verdict, mcpNote);
+  const result = gateOnce(resolvedRunId, grade, mcpNote);
 
   if (result.error) {
     return jsonResult({ stored: false, error: result.error });
@@ -59,7 +63,7 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   return jsonResult({
     stored: true,
     run_id: resolvedRunId,
-    verdict,
+    verdict: grade,
     reason_code,
     status: result.status,
   });

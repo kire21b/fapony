@@ -1,9 +1,11 @@
 // src/mcp/tools/index.ts — barrel + TOOLS array
 
+import { VERDICT_GRADES } from "../../parse.js";
 import { REASON_CODES } from "../types.js";
 
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
+export { toolFaponyStats } from "./stats.js";
 export { toolVerdictSubmit } from "./verdict.js";
 
 // --- Tool definitions ---
@@ -92,7 +94,7 @@ export const TOOLS = [
   {
     name: "verdict_submit",
     description:
-      "Record a pass/fail verdict with reason code into the event log. " +
+      "Record a verdict with reason code into the event log. " +
       "Creates a new run entry if run_id is not provided.",
     inputSchema: {
       type: "object" as const,
@@ -104,8 +106,8 @@ export const TOOLS = [
         },
         verdict: {
           type: "string",
-          enum: ["pass", "fail"],
-          description: "Verdict: pass or fail",
+          enum: [...VERDICT_GRADES],
+          description: "Verdict grade",
         },
         reason_code: {
           type: "string",
@@ -118,6 +120,23 @@ export const TOOLS = [
         },
       },
       required: ["verdict", "reason_code"],
+    },
+  },
+  {
+    name: "fapony_stats",
+    description:
+      "Query accumulated run statistics: pass/stall rates, cost, quality scores, " +
+      "breakdown by model/grade/worktree. Returns StatsData shape.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        json: {
+          type: "boolean",
+          description:
+            "If true, return raw JSON StatsData. If false (default), return human-readable text.",
+        },
+      },
+      required: [],
     },
   },
 ];
