@@ -1,6 +1,7 @@
 // src/mcp/tools/verdict.ts — verdict_submit tool
 
-import { addEvent, getRun, newRun, openDb, setStatus } from "../../db/index.js";
+import { getRun, newRun, openDb, patchLastGateEvent } from "../../db/index.js";
+import { gateOnce } from "../../gate.js";
 import {
   errorResult,
   jsonResult,
@@ -41,21 +42,25 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     resolvedRunId = newRun(db, "mcp-external", null, null, "mcp");
   }
 
-  const eventData = {
-    verdict,
-    reason_code,
-    ...(typeof note === "string" && note ? { note } : {}),
-    source: "mcp",
-  };
+  // Route through gateOnce for consistent status/round/memory handling.
+  const mcpNote =
+    typeof note === "string" && note
+      ? `[${reason_code}] ${note}`
+      : `[${reason_code}]`;
+  const result = gateOnce(resolvedRunId, verdict, mcpNote);
 
-  const eventId = addEvent(db, resolvedRunId, "gate", eventData);
-  setStatus(db, resolvedRunId, verdict === "pass" ? "passed" : "fixing");
+  if (result.error) {
+    return jsonResult({ stored: false, error: result.error });
+  }
+
+  // Patch the gate event with MCP-specific fields (reason_code, source).
+  patchLastGateEvent(db, resolvedRunId, { reason_code, source: "mcp" });
 
   return jsonResult({
     stored: true,
-    event_id: eventId,
     run_id: resolvedRunId,
     verdict,
     reason_code,
+    status: result.status,
   });
 }

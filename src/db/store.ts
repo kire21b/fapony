@@ -249,3 +249,34 @@ export function getLastPlanUpdate(
   } catch {}
   return null;
 }
+
+/**
+ * Merge extra fields into the most recent gate event's data JSON.
+ * Used by MCP verdict_submit to add reason_code / source after gateOnce
+ * has already written the gate event with {verdict, note, round}.
+ */
+export function patchLastGateEvent(
+  db: Database,
+  runId: number,
+  extra: Record<string, unknown>,
+): void {
+  const event = db
+    .prepare(
+      `SELECT id, data FROM events WHERE run_id = ? AND kind = 'gate' ORDER BY id DESC LIMIT 1`,
+    )
+    .get(runId) as { id: number; data: string | null } | null;
+  if (!event) return;
+
+  let existing: Record<string, unknown> = {};
+  if (event.data) {
+    try {
+      existing = JSON.parse(event.data);
+    } catch {
+      existing = {};
+    }
+  }
+  db.prepare(`UPDATE events SET data = ? WHERE id = ?`).run(
+    JSON.stringify({ ...existing, ...extra }),
+    event.id,
+  );
+}

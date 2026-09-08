@@ -49,6 +49,7 @@ export function gateOnce(
   // --- pass family (4 grades) ---
   if (isPassFamily(verdict)) {
     setStatus(db, runId, "passed");
+    // round = run's current round at review time (pre-increment for fail).
     addEvent(db, runId, "gate", { verdict, note, round: run.round });
 
     if (run.mem_id && config.memory) {

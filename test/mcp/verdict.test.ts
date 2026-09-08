@@ -88,15 +88,16 @@ export function testVerdictSubmitSuccess(): void {
     assert.equal(result.isError, undefined);
     const data = parseToolResult(result) as {
       stored: boolean;
-      event_id: number;
       run_id: number;
       verdict: string;
       reason_code: string;
+      status: string;
     };
     assert.equal(data.stored, true);
     assert.equal(data.run_id, runId);
     assert.equal(data.verdict, "fail");
     assert.equal(data.reason_code, "missing_test");
+    assert.equal(data.status, "fixing");
   });
   console.log("  ✓ verdict_submit stores event successfully");
 }
