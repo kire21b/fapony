@@ -1,5 +1,6 @@
 import { sumSpawnCost } from "./cost.js";
 import { type Event, openDb, type Run } from "./db/index.js";
+import { enrichGateWindows } from "./gates.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
 
 function minutesBetween(a: string, b: string): number {
@@ -44,70 +45,26 @@ interface EnrichedGate {
   valueScore: number | null;
 }
 
-function parseEventData(data: string | null): Record<string, unknown> {
-  if (!data) return {};
-  try {
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-}
-
 /**
  * Read-time join (SPEC-verdict-stats): per gate, cost/model come only from
  * kind='spawn' events in (prevGateId, gateId) of the same run — per-round,
- * never cumulative. Events arrive sorted (run_id, id), so one bucketing pass
- * plus a forward spawn pointer over the disjoint windows is O(events) total.
+ * never cumulative. Delegates windowing to enrichGateWindows (src/gates.ts)
+ * and adds the value score on top.
  */
 function enrichGates(events: Event[]): EnrichedGate[] {
-  const byRun = new Map<number, { gates: Event[]; spawns: Event[] }>();
-  for (const e of events) {
-    let b = byRun.get(e.run_id);
-    if (!b) {
-      b = { gates: [], spawns: [] };
-      byRun.set(e.run_id, b);
+  return enrichGateWindows(events).map((w) => {
+    let valueScore: number | null = null;
+    if (w.costUSD !== null && w.costUSD > 0 && w.quality !== null) {
+      valueScore = w.quality / w.costUSD;
     }
-    if (e.kind === "gate") b.gates.push(e);
-    else if (e.kind === "spawn") b.spawns.push(e);
-  }
-
-  const out: EnrichedGate[] = [];
-  for (const [runId, b] of byRun) {
-    let sp = 0;
-    for (const g of b.gates) {
-      // Pointer only moves forward; everything unconsumed below g.id belongs
-      // to this gate's window (prevGateId is implicitly the last consumed id).
-      const window: Event[] = [];
-      while (sp < b.spawns.length && b.spawns[sp].id < g.id) {
-        window.push(b.spawns[sp]);
-        sp++;
-      }
-      const d = parseEventData(g.data);
-      const verdict = typeof d.verdict === "string" ? d.verdict : "";
-      const costUSD = window.length ? sumSpawnCost(window).usd_estimate : null;
-
-      let model: string | null = null;
-      for (const s of window) {
-        const sd = parseEventData(s.data);
-        if (
-          sd.role === "executor" &&
-          typeof sd.model === "string" &&
-          sd.model
-        ) {
-          model = sd.model;
-        }
-      }
-
-      let valueScore: number | null = null;
-      const grade = verdict as VerdictGrade;
-      if (costUSD !== null && costUSD > 0 && VERDICT_GRADES.has(grade)) {
-        valueScore = qualityScore(grade) / costUSD;
-      }
-
-      out.push({ runId, verdict, costUSD, model, valueScore });
-    }
-  }
-  return out;
+    return {
+      runId: w.runId,
+      verdict: w.verdict,
+      costUSD: w.costUSD,
+      model: w.model,
+      valueScore,
+    };
+  });
 }
 
 // --- StatsData shape (SPEC-verdict-stats §StatsData) ---

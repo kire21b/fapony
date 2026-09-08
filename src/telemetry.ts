@@ -6,10 +6,12 @@
 //
 // §0 rule: every field in the payload is either a structural fact (run count,
 // status distribution) or a computed aggregate (avg rounds, pass rate).
-// Free-text content is never serialized.
+// No event/worktree content is ever serialized — the only free text on the
+// wire is user-configured telemetry.metadata (self-reported, advisory).
 
 import { sumSpawnCost } from "./cost.js";
 import { type Event, loadConfig, openDb, type Run } from "./db/index.js";
+import { enrichGateWindows } from "./gates.js";
 
 // ─── Schema version ────────────────────────────────────────────────────
 
@@ -145,7 +147,8 @@ function parseEventData(data: string | null): Record<string, unknown> {
 
 /**
  * Build the aggregate telemetry payload from the local SQLite database.
- * No raw rows, no content fields, no free-text — only computed aggregates.
+ * No raw rows, no event/worktree content — only computed aggregates plus
+ * optional user-configured self-reported metadata.
  */
 export function buildPayload(): TelemetryPayload {
   const db = openDb();
@@ -181,58 +184,25 @@ export function buildPayload(): TelemetryPayload {
     // --- Cost ---
     const cost = sumSpawnCost(events);
 
-    // --- By model (executor spawns only, paired with gate events) ---
-    const spawnEvents = events.filter((e) => e.kind === "spawn");
-    const gateEvents = events.filter((e) => e.kind === "gate");
-
+    // --- By model (executor spawns only, per-round gate windows) ---
+    // Windowing comes from enrichGateWindows (src/gates.ts) — the same
+    // disjoint (prevGateId, gateId) windows stats.ts uses, never cumulative.
     const modelBuckets: Record<
       string,
       { gateCount: number; qualities: number[]; costs: number[] }
     > = {};
 
-    // qualityScore mapping (same as parse.ts, duplicated to avoid circular import)
-    const scores: Record<string, number> = {
-      "pass-excellent": 5,
-      "pass-good": 4,
-      "pass-adequate": 3,
-      pass: 2,
-      uncertain: 1,
-      fail: 0,
-    };
-
-    for (const g of gateEvents) {
-      const gd = parseEventData(g.data);
-      const verdict = typeof gd.verdict === "string" ? gd.verdict : "";
-      const quality = scores[verdict];
-
-      // Find executor model from spawns preceding this gate in the same run
-      const precedingSpawns = spawnEvents.filter(
-        (se) => se.run_id === g.run_id && se.id < g.id,
-      );
-      let model = "(unknown)";
-      for (const se of precedingSpawns) {
-        const sd = parseEventData(se.data);
-        if (
-          sd.role === "executor" &&
-          typeof sd.model === "string" &&
-          sd.model
-        ) {
-          model = sd.model;
-        }
-      }
-
+    for (const w of enrichGateWindows(events)) {
+      const model = w.model ?? "(unknown)";
       if (!modelBuckets[model]) {
         modelBuckets[model] = { gateCount: 0, qualities: [], costs: [] };
       }
       modelBuckets[model].gateCount++;
-      if (quality !== undefined) {
-        modelBuckets[model].qualities.push(quality);
+      if (w.quality !== null) {
+        modelBuckets[model].qualities.push(w.quality);
       }
-
-      // Cost from spawns in this gate's window
-      const windowCost = sumSpawnCost(precedingSpawns);
-      if (windowCost.usd_estimate !== null) {
-        modelBuckets[model].costs.push(windowCost.usd_estimate);
+      if (w.costUSD !== null) {
+        modelBuckets[model].costs.push(w.costUSD);
       }
     }
     const byModel = Object.entries(modelBuckets)

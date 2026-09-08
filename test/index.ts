@@ -196,6 +196,12 @@ import {
   testWorktreeFromCwd,
 } from "./plans.test.js";
 import {
+  testReportHtmlCanonicalQuality,
+  testReportHtmlEscapesContent,
+  testReportHtmlFiltersAndMethodology,
+  testReportHtmlTotalCostCountsEachSpawnOnce,
+} from "./report-html.test.js";
+import {
   testBackoffCappedAtMax,
   testBackoffExponential,
   testBackoffJitterRange,
@@ -284,8 +290,10 @@ import {
   testTelemetryEmptyDb,
   testTelemetryNoContentFields,
   testTelemetryPayloadShape,
+  testTelemetryPerRoundCostMultiRound,
   testTelemetrySchemaVersion,
   testTelemetrySelfReportedFromConfig,
+  testTelemetrySelfReportedRoundTrip,
   testTelemetrySentAtIso,
   testTelemetryWorktreeRedacted,
 } from "./telemetry.test.js";
@@ -562,5 +570,11 @@ export async function cmdTest(): Promise<void> {
   testTelemetryWorktreeRedacted();
   testTelemetrySelfReportedFromConfig();
   testTelemetrySentAtIso();
+  testTelemetryPerRoundCostMultiRound();
+  testTelemetrySelfReportedRoundTrip();
+  testReportHtmlTotalCostCountsEachSpawnOnce();
+  testReportHtmlCanonicalQuality();
+  testReportHtmlFiltersAndMethodology();
+  testReportHtmlEscapesContent();
   console.log("\nall tests passed ✓");
 }

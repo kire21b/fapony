@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import { rmSync, writeFileSync } from "node:fs";
 import { beginSpawn, endSpawn } from "../src/cost.js";
 import {
   addEvent,
@@ -213,4 +214,66 @@ export function testTelemetrySentAtIso(): void {
   );
 
   console.log("  ✓ telemetry sent_at is ISO-8601");
+}
+
+export function testTelemetryPerRoundCostMultiRound(): void {
+  // Regression: gate windows must be per-round (disjoint), never cumulative.
+  // Two $8 rounds must average to $8 — not avg(8, 8+8) = $12.
+  withTestDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      roles: { executor: { cmd: ["x"], model: "m" } },
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const run = newRun(db, "/Users/test/project", null, null, "abc");
+    const s1 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
+    endSpawn(db, s1, config, "executor", "b".repeat(4000));
+    addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 1 });
+    const s2 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
+    endSpawn(db, s2, config, "executor", "b".repeat(4000));
+    addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 2 });
+    setStatus(db, run, "passed");
+
+    const payload = buildPayload();
+    assert.equal(payload.machine.cost.usd_estimate, 16);
+    const m = payload.machine.by_model.find((x) => x.model === "m");
+    assert.ok(m, "model m found");
+    assert.equal(m.gate_count, 2);
+    assert.equal(m.avg_cost_usd, 8);
+    assert.equal(m.avg_quality, 4);
+  });
+
+  console.log(
+    "  ✓ telemetry per-round (not cumulative) cost on multi-round runs",
+  );
+}
+
+export function testTelemetrySelfReportedRoundTrip(): void {
+  // Metadata set in fapony.config.json must arrive verbatim in the payload.
+  withTestDb((_db) => {
+    const prevConfig = process.env.FAPONY_CONFIG;
+    const cfgPath = `/tmp/fapony-telemetry-cfg-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`;
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        telemetry: {
+          metadata: { task_category: "bugfix", stack: "bun" },
+        },
+      }),
+    );
+    process.env.FAPONY_CONFIG = cfgPath;
+    try {
+      const payload = buildPayload();
+      assert.deepEqual(payload.self_reported, {
+        task_category: "bugfix",
+        stack: "bun",
+      });
+    } finally {
+      if (prevConfig === undefined) delete process.env.FAPONY_CONFIG;
+      else process.env.FAPONY_CONFIG = prevConfig;
+      rmSync(cfgPath, { force: true });
+    }
+  });
+
+  console.log("  ✓ telemetry self-reported metadata round-trips from config");
 }
