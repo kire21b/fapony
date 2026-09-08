@@ -91,6 +91,17 @@ import {
   testReasonCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testComputeEvidenceSummaryEmpty,
+  testComputeEvidenceSummaryMixed,
+  testEvidenceStatusesAreLocked,
+  testRenderReportTextGitError,
+  testRenderReportTextMinimal,
+  testRenderReportTextWithCost,
+  testRenderReportTextWithFailingEvidence,
+  testRenderReportTextWithHandoffChecks,
+  testRenderReportTextWithPassedVerdict,
+} from "./mcp/primitives.test.js";
+import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
   testStatsToolEmptyDb,
@@ -190,6 +201,7 @@ import {
 } from "./resilience.test.js";
 import {
   testBuildExecutorPrompt,
+  testExecutorCmdRejectsPromptPlaceholder,
   testExecutorCmdRolePreference,
   testRunOnceAbortedMarksStopped,
 } from "./run.test.js";
@@ -370,6 +382,7 @@ export async function cmdTest(): Promise<void> {
   testConfigDriftWarning();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
+  testExecutorCmdRejectsPromptPlaceholder();
   await testRunOnceAbortedMarksStopped();
   testPlanHygieneOk();
   testPlanHygieneTooLong();
@@ -465,6 +478,16 @@ export async function cmdTest(): Promise<void> {
   testErrorResult();
   testParseToolResult();
   testReasonCodesAreLocked();
+  // Verification primitives tests
+  testEvidenceStatusesAreLocked();
+  testComputeEvidenceSummaryEmpty();
+  testComputeEvidenceSummaryMixed();
+  testRenderReportTextMinimal();
+  testRenderReportTextWithPassedVerdict();
+  testRenderReportTextWithFailingEvidence();
+  testRenderReportTextWithHandoffChecks();
+  testRenderReportTextWithCost();
+  testRenderReportTextGitError();
   // Stats enrichment tests
   testStatsEmptyDb();
   testStatsNoPricingValueIsNull();

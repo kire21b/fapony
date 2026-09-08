@@ -1,5 +1,18 @@
 // src/mcp/index.ts — barrel re-export
 
+export type {
+  CheckResult,
+  EvidenceItem,
+  EvidenceProvenance,
+  EvidenceStatus,
+  EvidenceSummary,
+  VerificationReport,
+} from "./primitives.js";
+export {
+  computeEvidenceSummary,
+  EVIDENCE_STATUSES,
+  renderReportText,
+} from "./primitives.js";
 export {
   extractMultiField,
   TOOLS,
