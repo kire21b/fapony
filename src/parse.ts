@@ -8,8 +8,31 @@ import {
   verdictRE,
 } from "./db/index.js";
 
+/** Locked grade vocabulary — additive-only (append, never rename/remove). */
+export type VerdictGrade =
+  | "pass-excellent"
+  | "pass-good"
+  | "pass-adequate"
+  | "pass"
+  | "fail"
+  | "uncertain";
+
+export const VERDICT_GRADES: ReadonlySet<string> = new Set<VerdictGrade>([
+  "pass-excellent",
+  "pass-good",
+  "pass-adequate",
+  "pass",
+  "fail",
+  "uncertain",
+]);
+
+/** True when verdict belongs to the pass family (any pass-* variant). */
+export function isPassFamily(v: string): v is VerdictGrade {
+  return v.startsWith("pass");
+}
+
 export interface GateVerdict {
-  verdict: "pass" | "fail";
+  verdict: VerdictGrade;
   note: string;
 }
 
@@ -20,9 +43,10 @@ export interface PlanUpdate {
 
 /**
  * Parse gate verdict from reviewer stdout.
- * Looks for `VERDICT: pass` or `VERDICT: fail` as a standalone line.
- * Everything after the verdict line is captured as `note` (trimmed).
- * §0.4: if no VERDICT marker found → returns null (caller must not guess)
+ * Looks for `VERDICT: <grade>` as a standalone line where <grade> is one of
+ * the 6 locked grades.  Everything after the verdict line is captured as
+ * `note` (trimmed).  §0.4: if no VERDICT marker found → returns null.
+ * Custom regex without a matching capture group also yields null (fail-safe).
  */
 export function parseGateVerdict(
   stdout: string,
@@ -32,14 +56,14 @@ export function parseGateVerdict(
   const match = stdout.match(re);
   if (!match) return null;
 
-  // A custom markers.verdict without a (pass|fail) capture group would
-  // yield undefined here — fail safe (null) instead of propagating it.
-  const verdict = match[1];
-  if (verdict !== "pass" && verdict !== "fail") return null;
+  const raw = match[1];
+  // Validate against locked set — reject custom regex returning garbage.
+  if (!raw || !VERDICT_GRADES.has(raw)) return null;
+
   const idx = stdout.indexOf(match[0]);
   const note = stdout.slice(idx + match[0].length).trim();
 
-  return { verdict, note };
+  return { verdict: raw as VerdictGrade, note };
 }
 
 /**

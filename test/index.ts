@@ -36,6 +36,10 @@ import {
   testGateOnceFail,
   testGateOnceMaxRounds,
   testGateOncePass,
+  testGateOncePassAdequate,
+  testGateOncePassExcellent,
+  testGateOncePassGood,
+  testGateOnceUncertain,
 } from "./gate.test.js";
 import {
   testParseHandoff,
@@ -258,6 +262,10 @@ export async function cmdTest(): Promise<void> {
   testGateOnceFail();
   testGateOnceAlreadyPassed();
   testGateOnceMaxRounds();
+  testGateOncePassExcellent();
+  testGateOncePassGood();
+  testGateOncePassAdequate();
+  testGateOnceUncertain();
   testPlanMvNoHeader();
   testPlanMvWithHeader();
   testPlanMvNormalizeLinks();

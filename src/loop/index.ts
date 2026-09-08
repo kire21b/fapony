@@ -121,16 +121,15 @@ export async function runLoop(opts: RunLoopOpts): Promise<void> {
           console.log(
             `\nrun ${runId} awaiting review — stopping loop (no planner)`,
           );
-          console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+          console.log(`Review: fapony gate ${runId} <grade> [note]`);
           break;
         }
         console.log(`\nrun ${runId} awaiting review`);
-        console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+        console.log(`Review: fapony gate ${runId} <grade> [note]`);
         console.log(`Resume loop: fapony run ${runId} --loop`);
         break;
       }
     }
-
     // --- After gate pass: spawn planner ---
     const afterGate = runId ? getRun(db, runId) : null;
     if (afterGate?.status === "passed" && hasPlanner) {
@@ -289,7 +288,7 @@ export async function runLoop(opts: RunLoopOpts): Promise<void> {
     if (result.status === "awaiting_review") {
       console.log(`\nrun ${runId} awaiting review`);
       if (!autoLoop || !hasGate) {
-        console.log(`Review: fapony gate ${runId} pass|fail [note]`);
+        console.log(`Review: fapony gate ${runId} <grade> [note]`);
         console.log(`Resume loop: fapony run ${runId} --loop`);
         break;
       }

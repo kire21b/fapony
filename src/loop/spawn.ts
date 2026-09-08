@@ -13,7 +13,11 @@ import {
   roleTimeoutMin,
   safetyDeny,
 } from "../db/index.js";
-import { parseGateVerdict, parsePlanUpdate } from "../parse.js";
+import {
+  type GateVerdict,
+  parseGateVerdict,
+  parsePlanUpdate,
+} from "../parse.js";
 import { classifyFailure, type FailureInfo, withRetry } from "../resilience.js";
 import { assertNoPromptInArgv, assertSafe } from "../safety.js";
 import { setSigintPhase } from "../sigint.js";
@@ -210,7 +214,7 @@ export async function spawnGate(
   worktree: string,
   run: { id: number; mem_id: string | null; worktree: string },
   isAborted?: () => Promise<boolean>,
-): Promise<{ verdict: "pass" | "fail"; note: string } | null> {
+): Promise<GateVerdict | null> {
   const stdin = renderRolePrompt(
     config,
     "gate",

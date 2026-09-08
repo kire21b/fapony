@@ -239,7 +239,7 @@ export async function cmdRun(args: string[]): Promise<void> {
       );
       console.log(`\n${handoff}`);
       console.log(`\nrun ${resolved.runId} awaiting review`);
-      console.log(`Review: fapony gate ${resolved.runId} pass|fail [note]`);
+      console.log(`Review: fapony gate ${resolved.runId} <grade> [note]`);
       if (resolved.loop) {
         console.log(`Resume loop: fapony run ${resolved.runId} --loop`);
       }

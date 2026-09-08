@@ -68,7 +68,7 @@ export interface Config {
   } | null;
   markers?: {
     handoff?: string;
-    // regex sources for the gate verdict line; group 1 = pass|fail.
+    // regex sources for the gate verdict line; group 1 = pass-excellent|pass-good|pass-adequate|pass|fail|uncertain.
     verdict?: string;
     nextPrompt?: string;
     fileDone?: string;

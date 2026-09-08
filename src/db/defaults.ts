@@ -4,7 +4,8 @@ export const DEFAULT_SPEC_MAX_LINES = 200;
 export const DEFAULT_PLAN_MAX_LINES = 200;
 export const DEFAULT_SOURCE_MARKER = "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$";
 export const DEFAULT_HANDOFF_MARKER = "## HANDOFF";
-export const DEFAULT_VERDICT_RE = "^VERDICT:\\s*(pass|fail)\\s*$";
+export const DEFAULT_VERDICT_RE =
+  "^VERDICT:\\s*(pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)\\s*$";
 export const DEFAULT_NEXT_PROMPT_MARKER = "## NEXT-PROMPT";
 export const DEFAULT_FILE_DONE_MARKER = "## FILE_DONE";
 export const DEFAULT_SHIPPED_RE = "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*";

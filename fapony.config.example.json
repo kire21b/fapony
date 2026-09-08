@@ -55,7 +55,7 @@
   },
   "markers": {
     "handoff": "## HANDOFF",
-    "verdict": "^VERDICT:\\s*(pass|fail)\\s*$",
+    "verdict": "^VERDICT:\\s*(pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)\\s*$",
     "nextPrompt": "## NEXT-PROMPT",
     "fileDone": "## FILE_DONE",
     "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*"

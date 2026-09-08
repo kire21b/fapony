@@ -165,7 +165,7 @@ events(
 {
   "prompts": { "executor": "prompts/execute.md", "gate": null, "planner": null, "bigFixer": null, "scrutinizeFix": "prompts/scrutinize-fix.md" },
   "spec": { "maxLines": 200, "sourceMarker": "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$" },
-  "markers": { "handoff": "## HANDOFF", "verdict": "^VERDICT:\\s*(pass|fail)\\s*$", "nextPrompt": "## NEXT-PROMPT", "fileDone": "## FILE_DONE", "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*" },
+  "markers": { "handoff": "## HANDOFF", "verdict": "^VERDICT:\\s*(pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)\\s*$", "nextPrompt": "## NEXT-PROMPT", "fileDone": "## FILE_DONE", "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*" },
   "paths": { "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts", "doneDir": "done", "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"] },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
   "plan": { "extensions": [".md"], "maxLines": 200 },
@@ -323,7 +323,7 @@ fapony stats                     # KPI ข้าม run ทั้งหมด �
 fapony telemetry show|send       # opt-in เท่านั้น (default off) — ดู TELEMETRY.md ว่าส่งอะไรบ้าง
 fapony handoff <run-id>          # reprint handoff ล่าสุด
 fapony stop <run-id> [reason]    # stop run + release memory
-fapony gate <run-id> pass|fail [note]  # review verdict + memory close
+fapony gate <run-id> <grade> [note]  # review verdict + memory close (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
 fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
 fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
 fapony kickoff [<worktree-key>]  # auto-detect pending plan + run (key ตกได้เมื่อ cwd อยู่ใน worktree)

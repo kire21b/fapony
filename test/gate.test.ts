@@ -40,10 +40,10 @@ export function testGateOncePass(): void {
       .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
       .all(runId) as { data: string }[];
     assert.equal(events.length, 1);
-    assert.deepEqual(JSON.parse(events[0].data), {
-      verdict: "pass",
-      note: "looks good",
-    });
+    const data = JSON.parse(events[0].data);
+    assert.equal(data.verdict, "pass");
+    assert.equal(data.note, "looks good");
+    assert.equal(data.round, 0);
   });
 
   console.log("  ✓ gateOnce pass");
@@ -109,4 +109,110 @@ export function testGateOnceMaxRounds(): void {
   });
 
   console.log("  ✓ gateOnce max rounds");
+}
+
+export function testGateOncePassExcellent(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+    setStatus(db, runId, "awaiting_review");
+
+    const result = gateOnce(runId, "pass-excellent", "edge cases verified");
+    assert.equal(result.status, "passed");
+
+    const events = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
+      .all(runId) as { data: string }[];
+    assert.equal(events.length, 1);
+    assert.deepEqual(JSON.parse(events[0].data), {
+      verdict: "pass-excellent",
+      note: "edge cases verified",
+      round: 0,
+    });
+  });
+
+  console.log("  ✓ gateOnce pass-excellent");
+}
+
+export function testGateOncePassGood(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+    setStatus(db, runId, "awaiting_review");
+
+    const result = gateOnce(runId, "pass-good", "minor risks noted");
+    assert.equal(result.status, "passed");
+
+    const events = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
+      .all(runId) as { data: string }[];
+    assert.equal(events.length, 1);
+    assert.deepEqual(JSON.parse(events[0].data), {
+      verdict: "pass-good",
+      note: "minor risks noted",
+      round: 0,
+    });
+  });
+
+  console.log("  ✓ gateOnce pass-good");
+}
+
+export function testGateOncePassAdequate(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+    setStatus(db, runId, "awaiting_review");
+
+    const result = gateOnce(runId, "pass-adequate", "residual risk documented");
+    assert.equal(result.status, "passed");
+
+    const events = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
+      .all(runId) as { data: string }[];
+    assert.equal(events.length, 1);
+    assert.deepEqual(JSON.parse(events[0].data), {
+      verdict: "pass-adequate",
+      note: "residual risk documented",
+      round: 0,
+    });
+  });
+
+  console.log("  ✓ gateOnce pass-adequate");
+}
+
+export function testGateOnceUncertain(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+    setStatus(db, runId, "awaiting_review");
+
+    const result = gateOnce(
+      runId,
+      "uncertain",
+      "handoff missing checks section",
+    );
+    assert.equal(result.status, "stopped");
+    assert.equal(result.error, undefined);
+
+    const run = getRun(db, runId);
+    assert.equal(run?.status, "stopped");
+
+    // gate event stores raw verdict + round
+    const gates = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'gate'")
+      .all(runId) as { data: string }[];
+    assert.equal(gates.length, 1);
+    assert.deepEqual(JSON.parse(gates[0].data), {
+      verdict: "uncertain",
+      note: "handoff missing checks section",
+      round: 0,
+    });
+
+    // stop event with reason=verdict_uncertain
+    const stops = db
+      .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'stop'")
+      .all(runId) as { data: string }[];
+    assert.equal(stops.length, 1);
+    assert.deepEqual(JSON.parse(stops[0].data), {
+      reason: "verdict_uncertain",
+    });
+  });
+
+  console.log("  ✓ gateOnce uncertain");
 }
