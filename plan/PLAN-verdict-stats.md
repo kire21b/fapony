@@ -1,6 +1,8 @@
+> ✅ **shipped** (9d2c4d3)
+
 # PLAN-verdict-stats.md — MCP grade parity + fapony_stats (verify + measure + accumulate)
 
-> **Status:** 🚧 draft · **Owner:** delamind · **Created:** 2026-09-08
+> **Status:** shipped · **Owner:** delamind · **Created:** 2026-09-08
 > **Source spec:** [SPEC-verdict-stats.md](../spec/SPEC-verdict-stats.md)
 
 ---
