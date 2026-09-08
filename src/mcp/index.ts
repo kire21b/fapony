@@ -18,6 +18,7 @@ export {
   TOOLS,
   toolHandoffCheck,
   toolHandoffCollect,
+  toolPassiveUsage,
   toolVerdictSubmit,
   toolVerificationReport,
 } from "./tools/index.js";
