@@ -84,12 +84,46 @@ import {
   testHandoffCollectValidRepo,
 } from "./mcp/collect.test.js";
 import {
+  testCollectEvidenceAgentCommands,
+  testCollectEvidenceAgentDuplicatesAllowlist,
+  testCollectEvidenceFailingCommand,
+  testCollectEvidenceInvalidEntry,
+  testCollectEvidenceNoConfig,
+  testCollectEvidencePassingCommand,
+  testCollectEvidenceRefusesDangerousCommand,
+  testCollectEvidenceTimeout,
+  testReadEvidenceConfigInvalid,
+  testReadEvidenceConfigMissing,
+  testReadEvidenceConfigValid,
+} from "./mcp/evidence.test.js";
+import {
   testEndToEndPipeline,
   testErrorResult,
   testJsonResult,
   testParseToolResult,
   testReasonCodesAreLocked,
 } from "./mcp/helpers.test.js";
+import {
+  testComputeEvidenceSummaryEmpty,
+  testComputeEvidenceSummaryMixed,
+  testEvidenceStatusesAreLocked,
+  testRenderReportTextGitError,
+  testRenderReportTextMinimal,
+  testRenderReportTextWithCost,
+  testRenderReportTextWithFailingEvidence,
+  testRenderReportTextWithHandoffChecks,
+  testRenderReportTextWithPassedVerdict,
+} from "./mcp/primitives.test.js";
+import {
+  testVerificationReportCheckParity,
+  testVerificationReportJsonFormat,
+  testVerificationReportMissingArgs,
+  testVerificationReportRunNotFound,
+  testVerificationReportSurfacesCollectError,
+  testVerificationReportTextFormat,
+  testVerificationReportToolCount,
+  testVerificationReportVerdictFromGateEvent,
+} from "./mcp/report.test.js";
 import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
@@ -123,6 +157,7 @@ import {
 } from "./memory.test.js";
 import {
   testFixtureGuard,
+  testParseGateEventData,
   testParseGateVerdict,
   testParsePlanUpdate,
   testQualityScore,
@@ -161,6 +196,12 @@ import {
   testWorktreeFromCwd,
 } from "./plans.test.js";
 import {
+  testReportHtmlCanonicalQuality,
+  testReportHtmlEscapesContent,
+  testReportHtmlFiltersAndMethodology,
+  testReportHtmlTotalCostCountsEachSpawnOnce,
+} from "./report-html.test.js";
+import {
   testBackoffCappedAtMax,
   testBackoffExponential,
   testBackoffJitterRange,
@@ -190,6 +231,7 @@ import {
 } from "./resilience.test.js";
 import {
   testBuildExecutorPrompt,
+  testExecutorCmdRejectsPromptPlaceholder,
   testExecutorCmdRolePreference,
   testRunOnceAbortedMarksStopped,
 } from "./run.test.js";
@@ -244,6 +286,18 @@ import {
   testStatusTableTruncatesLongMemId,
 } from "./status.test.js";
 import {
+  testTelemetryAggregatesFromRuns,
+  testTelemetryEmptyDb,
+  testTelemetryNoContentFields,
+  testTelemetryPayloadShape,
+  testTelemetryPerRoundCostMultiRound,
+  testTelemetrySchemaVersion,
+  testTelemetrySelfReportedFromConfig,
+  testTelemetrySelfReportedRoundTrip,
+  testTelemetrySentAtIso,
+  testTelemetryWorktreeRedacted,
+} from "./telemetry.test.js";
+import {
   testCmdUpdateAlreadyUpToDate,
   testCmdUpdateDirtyDeclined,
   testCmdUpdateDirtyPullOk,
@@ -274,6 +328,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHandoff();
   testRenderHandoffGitError();
   await testParseGateVerdict();
+  testParseGateEventData();
   testParsePlanUpdate();
   testFixtureGuard();
   testQualityScore();
@@ -370,6 +425,7 @@ export async function cmdTest(): Promise<void> {
   testConfigDriftWarning();
   testBuildExecutorPrompt();
   testExecutorCmdRolePreference();
+  testExecutorCmdRejectsPromptPlaceholder();
   await testRunOnceAbortedMarksStopped();
   testPlanHygieneOk();
   testPlanHygieneTooLong();
@@ -465,6 +521,37 @@ export async function cmdTest(): Promise<void> {
   testErrorResult();
   testParseToolResult();
   testReasonCodesAreLocked();
+  // Verification primitives tests
+  testEvidenceStatusesAreLocked();
+  testComputeEvidenceSummaryEmpty();
+  testComputeEvidenceSummaryMixed();
+  testRenderReportTextMinimal();
+  testRenderReportTextWithPassedVerdict();
+  testRenderReportTextWithFailingEvidence();
+  testRenderReportTextWithHandoffChecks();
+  testRenderReportTextWithCost();
+  testRenderReportTextGitError();
+  // Evidence collector tests
+  testReadEvidenceConfigMissing();
+  testReadEvidenceConfigInvalid();
+  testReadEvidenceConfigValid();
+  testCollectEvidenceNoConfig();
+  testCollectEvidencePassingCommand();
+  testCollectEvidenceFailingCommand();
+  testCollectEvidenceAgentCommands();
+  testCollectEvidenceAgentDuplicatesAllowlist();
+  testCollectEvidenceTimeout();
+  testCollectEvidenceRefusesDangerousCommand();
+  testCollectEvidenceInvalidEntry();
+  // Verification report tool tests
+  testVerificationReportMissingArgs();
+  testVerificationReportRunNotFound();
+  testVerificationReportTextFormat();
+  testVerificationReportJsonFormat();
+  testVerificationReportToolCount();
+  testVerificationReportVerdictFromGateEvent();
+  testVerificationReportCheckParity();
+  testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
   testStatsNoPricingValueIsNull();
@@ -474,5 +561,20 @@ export async function cmdTest(): Promise<void> {
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
   testStatsModelFromExecutorSpawn();
+  // Telemetry tests
+  testTelemetrySchemaVersion();
+  testTelemetryPayloadShape();
+  testTelemetryNoContentFields();
+  testTelemetryEmptyDb();
+  testTelemetryAggregatesFromRuns();
+  testTelemetryWorktreeRedacted();
+  testTelemetrySelfReportedFromConfig();
+  testTelemetrySentAtIso();
+  testTelemetryPerRoundCostMultiRound();
+  testTelemetrySelfReportedRoundTrip();
+  testReportHtmlTotalCostCountsEachSpawnOnce();
+  testReportHtmlCanonicalQuality();
+  testReportHtmlFiltersAndMethodology();
+  testReportHtmlEscapesContent();
   console.log("\nall tests passed ✓");
 }

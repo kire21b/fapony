@@ -12,26 +12,20 @@ git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 
-# 2. Run the interactive wizard (creates config + scaffolds .fapony/ in one step)
-fapony setup
+# 2. Scaffold .fapony/ (plan/, spec/, .memory/) into your project worktree
+fapony init /path/to/your-worktree
 
-# 3. Write a plan — use the template, or draft one with your agent
+# 3. Point fapony at your worktree and your agents
+#    (fapony.config.json in the fapony checkout — see "Config" below)
+
+# 4. Write a plan — use the template, or draft one with your agent
 cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
 
-# 4. Run
+# 5. Run
 fapony kickoff <worktree-key>     # auto-detects the single pending plan
-fapony ps                         # what's running + pending plans (when inside a worktree)
-fapony gate <run-id> pass         # or: fail "missing error handling on X"
+fapony status                     # what's running, what awaits review
+fapony gate <run-id> pass-good    # or: fail "missing error handling on X"
 fapony stats                      # pass/stall rate, avg rounds, timing KPIs
-```
-
-### Manual setup (alternative)
-
-If you prefer to configure by hand instead of the wizard:
-
-```bash
-fapony init /path/to/your-worktree       # scaffold .fapony/ only
-cp fapony.config.example.json fapony.config.json  # then edit to match your setup
 ```
 
 After a run you get a **handoff**: verifiable git facts first (files, lines, commits, branch), then the executor's own report (what it was unsure about, what it didn't finish). You — or a review agent — judge from that, not from a chat transcript.
@@ -55,15 +49,15 @@ fapony run <worktree> --plan <path>
         ▼
   review gate (a reviewer agent, or you)
         │
-        ├─ pass → done
-        └─ fix needed → fapony run <run-id> --loop (round +1, cap 2)
+        ├─ pass → done (loop continues to the next chunk if you use `fapony loop`)
+        └─ fix needed → run again (round +1, cap 2)
              │
              └─ round 3? → STOP. The plan has a problem, not the code.
 ```
 
 Small diffs get a cheap pre-pass (`scrutinize-fix` prompt: review + fix in one round) *before* the expensive review gate — small bugs die young instead of burning tokens at the gate.
 
-## Three ways to use it
+## Four ways to use it
 
 ### Case 1 — Claude Code user who wants a reviewer
 
@@ -133,6 +127,29 @@ Then reference the spec from the plan header:
 
 fapony reads `.fapony/spec/my-feature.md` inside the worktree and appends it to the executor prompt (truncated at `spec.maxLines`, default 200). Missing spec file → `(no spec)`, never a crash.
 
+### Case 4 — MCP agent (any agent, no loop needed)
+
+Any agent that speaks MCP can verify work without adopting fapony's loop. Start the server and call 5 tools:
+
+```
+handoff_collect  →  handoff_check  →  verdict_submit
+     ↓                    ↓                 ↓
+  git facts         conformance         store verdict
+
+fapony_stats  →  query KPIs (by-model, by-grade, by-value)
+verification_report  →  full report (facts + checks + evidence + verdict + cost)
+```
+
+```bash
+# Start the MCP server (stdio JSON-RPC)
+fapony mcp
+
+# Or add to your MCP client config (e.g., Claude Desktop):
+# { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
+```
+
+5 tools available: `handoff_collect` (git facts), `handoff_check` (conformance), `verdict_submit` (store verdict), `fapony_stats` (query KPIs), `verification_report` (full report). See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
+
 ## Why handoff must be a template with git facts first
 
 The `## HANDOFF` block the executor outputs is a **template**, not a chat transcript. Git facts (files changed, commits, branch) come first because they are verifiable. The executor's self-reported items (uncertain, not_done) come second and are labeled as such. "Typecheck passed" only proves the code compiles — not that the flow or permissions are right. The template forces a structured summary a reviewer can actually consume, and `fapony handoff <run-id>` reprints it later from the audit trail.
@@ -140,6 +157,19 @@ The `## HANDOFF` block the executor outputs is a **template**, not a chat transc
 ## Why cap at 2 rounds
 
 Round 1: executor writes code, reviewer checks it. Round 2: executor fixes what the reviewer found. Round 3 means the **plan** has a problem, not the code — stop and go back to the human. More rounds just burn tokens fixing symptoms; fapony stops the run and says so.
+
+## Verdict grades
+
+Reviews produce a quality grade, not just pass/fail. Each grade maps to a qualityScore (documented in CLAUDE.md):
+
+| Grade | Meaning |
+|-------|---------|
+| `pass-excellent` | Ship-quality, no issues |
+| `pass-good` | Minor nits, safe to ship |
+| `pass-adequate` | Works, but could be better |
+| `pass` | Meets minimum bar |
+| `fail` | Needs fixes |
+| `uncertain` | Reviewer can't judge — plan may have a problem |
 
 ## Skills
 
@@ -184,21 +214,19 @@ cat prompts/plan-with-me.md | <your-agent>  # anything that reads stdin
 ## CLI
 
 ```bash
-fapony setup                            # interactive wizard (config + scaffold)
 fapony init <path>                       # scaffold .fapony/ into a worktree
+fapony setup                             # interactive wizard: config + scaffold in one step
+fapony update                            # self-update via git pull
 fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]
-                                         # inside a worktree: key optional; pending single plan → --plan optional
-                                         # `fapony run PLAN-al` = name prefix (a bare digit means run ID, not plan index)
-                                         # `fapony run <run-id>` = resume run (single round)
-                                         # `fapony run <run-id> --loop` = resume + loop until done
-fapony kickoff <key>                     # auto-detect the single pending plan (key optional inside a worktree)
-fapony ps | status                       # active runs + pending plans (plans when inside a worktree)
+fapony run <run-id> --loop               # resume a run and loop until done
+fapony kickoff <key>                     # auto-detect the single pending plan
+fapony status                            # active runs table
 fapony stats                             # pass/stall rate, avg rounds, exec/review timing
 fapony handoff <run-id>                  # reprint a run's handoff
-fapony gate <run-id> pass|fail [note]    # review verdict (note: or pipe via stdin)
-fapony stop <run-id> [reason]            # stop run + release memory claim
+fapony gate <run-id> <grade> [note]      # review verdict (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
+fapony stop <run-id> [reason]            # stop run + release memory
 fapony plan-mv <file>                    # archive a shipped PLAN
-fapony init-mem <key>                    # scaffold .fapony/.memory/ only (legacy path)
+fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
 fapony test                              # self-check
 ```
@@ -216,11 +244,23 @@ fapony test                              # self-check
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 
+## MCP
+
+fapony ships an MCP server (`fapony mcp`) for agents that speak JSON-RPC over stdio — no loop setup required. See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for the full protocol, adapter examples (bash, Python), and safety rules.
+
+| Tool | Purpose |
+|------|---------|
+| `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
+| `handoff_check` | Verify handoff conformance against facts |
+| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
+| `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
+
 ## Scope
 
 **Supported:**
 - Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 - Git worktree coordination (guard, handoff, routing, auto-archive on ship)
+- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)

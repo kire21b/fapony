@@ -29,17 +29,40 @@ fapony/
     move-to-done.md             # archive PLAN หลัง ship
     plan-with-me.md             # draft plan + spec จาก conversation
   src/
-    db.ts             # SQLite schema + loadConfig() + CRUD (222 บรรทัด)
-    run.ts            # flow หลัก: guard → claim → spawn → facts → route + spec injection
-    gate.ts           # gate CLI: pass/fail verdict + memory close (67 บรรทัด)
-    handoff.ts        # gitFacts() + parseHandoff() + renderHandoff() (159 บรรทัด)
-    parse.ts          # parseGateVerdict() + parsePlanUpdate() (67 บรรทัด)
-    plans.ts          # worktreeFromCwd() + pendingPlans() + resolvePlanArg() — ใช้ร่วมกันโดย status/run/kickoff
-    memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY (70 บรรทัด)
-    safety.ts         # assertSafe() deny-list (19 บรรทัด)
-    status.ts         # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
-    stop.ts           # stop run + release memory claim (47 บรรทัด)
+    db/               # SQLite + config (แยกจาก monolith db.ts เดิม)
+      store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
+      load.ts         # loadConfig() + B2 drift warning (executor.cmd vs roles.executor.cmd)
+      getters.ts      # getters รวมศูนย์ (specMaxLines, roleTimeoutMin, …) — ห้าม hardcode ที่ call site
+      types.ts        # Config / Row types
+      defaults.ts     # DEFAULT_* constants (safety deny, markers, …)
+      index.ts        # re-export
+    run/              # flow หลัก: guard → claim → spawn → facts → route + spec injection
+      cli.ts          # arg parsing (run-id / plan-prefix / --loop)
+      guard.ts        # git guard (assertSafe + dirty check)
+      plan.ts         # resolve plan file
+      spec.ts         # Source spec injection (truncated)
+      prompt.ts       # buildExecutorPrompt + executorCmd() — choke point ของ assertNoPromptInArgv
+      spawn.ts        # spawn executor agent (stdin, timeout, cost tracking)
+      flow.ts         # run flow orchestration
+      index.ts        # cmdRun entry
+      types.ts        # SpawnInput/SpawnResult
     loop/             # loop driver: run → review → planner → repeat (pausable)
+      index.ts        # driver + review.autoLoop
+      spawn.ts        # role spawn (gate/planner/bigFixer/scrutinizeFix) + assertNoPromptInArgv + retry
+      prompt.ts       # renderRolePrompt
+      scrutinize.ts   # scrutinize-fix pre-pass (small diff lane)
+      archive.ts      # auto plan-mv on ship
+    cost.ts           # beginSpawn/endSpawn — role/model/bytes_in/out/usd_estimate ต่อ spawn
+    resilience.ts     # withRetry + classifyFailure (limit/auth/crash/empty) + retryPolicy
+    sigint.ts         # Ctrl-C: mark stopped + release claim (one-way door, sync cleanup)
+    gate.ts           # gate CLI: verdict + memory close
+    handoff.ts        # gitFacts() + parseHandoff() + renderHandoff()
+    parse.ts          # parseGateVerdict() + parsePlanUpdate() + qualityScore()
+    plans.ts          # worktreeFromCwd() + pendingPlans() + resolvePlanArg() — ใช้ร่วมกันโดย status/run/kickoff
+    memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
+    safety.ts         # assertSafe() deny-list + assertNoPromptInArgv (stdin-only rule)
+    status.ts         # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
+    stop.ts           # stop run + release memory claim
     planmv.ts         # archive shipped PLAN → .fapony/plan/done/ (validate + normalize links + git mv)
     init.ts           # fapony init — scaffold .fapony/{plan,spec,.memory}
     kickoff.ts        # fapony kickoff — auto-detect pending plan + run
@@ -47,7 +70,19 @@ fapony/
     planlint.ts       # checkPlanHygiene() — warn เมื่อ spec content หลุดเข้า plan
     stats.ts          # fapony stats — KPI + cost total ข้าม run
     telemetry.ts      # opt-in payload (runs/events/cost allowlist เท่านั้น)
-    test.ts           # self-check 36 ตัว
+    setup.ts          # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
+    update.ts         # fapony update — self-update via git pull (tripwire test คุม ROOT)
+    util.ts           # templateArgs / fillPrompt / isAffirmative
+    mcp/              # MCP server — stdio JSON-RPC, 5 tools
+      index.ts        # MCP entry point + tool registration
+      transport.ts    # JSON-RPC framing (stdin/stdout)
+      types.ts        # MCP type definitions
+      tools/
+        collect.ts    # handoff_collect — git facts
+        check.ts      # handoff_check — conformance
+        verdict.ts    # verdict_submit — 6-grade verdict storage
+        stats.ts      # fapony_stats — KPI query
+    test.ts           # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     fixtures/
       executor.ts     # stub executor — commit + HANDOFF (no network)
@@ -120,7 +155,7 @@ events(
   id INTEGER PRIMARY KEY,
   run_id INTEGER NOT NULL,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,          -- spawn|spawn_fail|commit|handoff|route|gate|stop|stalled|interrupted|memory_claim|memory_claim_failed|memory_claim_closed|plan
+  kind TEXT NOT NULL,          -- spawn|spawn_fail|commit|handoff|route|gate|stop|stopped|stalled|interrupted|memory_claim|memory_claim_failed|memory_claim_closed|plan|plan_archived
   data TEXT                    -- json
 )
 ```
@@ -326,11 +361,28 @@ fapony stop <run-id> [reason]    # stop run + release memory
 fapony gate <run-id> <grade> [note]  # review verdict + memory close (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
 fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
 fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
+fapony setup                   # interactive wizard: config + scaffold ในขั้นเดียว
+fapony update                  # self-update via git pull
 fapony kickoff [<worktree-key>]  # auto-detect pending plan + run (key ตกได้เมื่อ cwd อยู่ใน worktree)
-fapony test                      # self-check ตัวเอง
+fapony mcp                     # MCP server — stdio JSON-RPC, 5 tools
+fapony test                    # self-check ตัวเอง
 ```
 
 <!-- code-review-graph MCP tools -->
+## MCP Tools: fapony
+
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 5 tools:
+
+| Tool | Purpose |
+|------|---------|
+| `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
+| `handoff_check` | Verify handoff conformance against facts |
+| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
+| `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
+| `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
+
+See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
+
 ## MCP Tools: code-review-graph
 
 **This project has a knowledge graph. Start with the code-review-graph

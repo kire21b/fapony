@@ -1,86 +1,76 @@
-# PLAN-readme-launch — README ใหม่ vendor-neutral + 3 use-case จริง
+# PLAN-readme-launch — README ใหม่ vendor-neutral + MCP-first
 
-> **Status:** ✅ done (pending gate) · **Owner:** delamind · **Created:** 2026-09-05
-> **Source spec:** ไม่มี (ต่อยอดจาก [ROADMAP.md](../ROADMAP.md) § เดือนที่ 3)
+> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-05 · **Updated:** 2026-09-08
+> **Source spec:** ไม่มี
 
 ---
 
 ## 1. เป้าหมาย (ทำไม)
 
-README ปัจจุบันอธิบาย fapony เป็น "CLI orchestrator สำหรับ opencode" — เขียนจากมุม
-implementation ไม่ใช่มุมคนอ่านครั้งแรก ทำให้พลาด pitch จริง: fapony ทำให้ coding agent
-ตัวไหนก็ได้ (Claude Code / OpenCode / Codex) กลายเป็น multi-agent workflow ได้โดยไม่ต้อง
-ผูกกับ vendor เดียว งานนี้เขียน README ใหม่ + ตัวอย่างจริง 3 case ตาม 3 agent ให้คนอ่านเห็น
-ภาพว่าใช้กับเครื่องมือของตัวเองยังไงโดยไม่ต้องอ่านโค้ดก่อน
+README ปัจจุบัน (dev branch) ล้าหลัง — เขียนก่อน MCP server สร้างเสร็จ ตอนนี้ fapony มี
+2 วิธีให้ agent ทำงาน: **CLI loop** (เดิม) และ **MCP server** (ใหม่, agent-agnostic) + verdict
+6 grade + `fapony_stats` MCP tool. README ต้องสะท้อนความจริงนี้ ให้คนอ่านเห็นภาพว่าใช้กับ
+เครื่องมือของตัวเองยังไงโดยไม่ต้องอ่านโค้ดก่อน
 
 ## 2. ขอบเขต (ทำอะไรไม่ทำอะไร)
 
 **ทำ:**
-- เขียน README.md ใหม่ ย่อหน้าแรกเป็น pitch เดียว ("fapony ทำให้ทุก coding agent เป็น
-  multi-agent workflow ได้") ไม่ใช่ architecture summary
-- 3 case study ตาม ROADMAP เดือนที่ 3 พอดี: Claude Code (`fapony kickoff` + reviewer gate),
-  OpenCode (fapony + mem.ts memory), Codex (fapony + spec/ เป็น contract)
-- แต่ละ case มีคำสั่งรันจริงที่ copy-paste ได้ (ไม่ pseudo-code)
-- ลิงก์จาก README ไปยัง examples/, prompts/plan-with-me.md ที่มีอยู่แล้ว (จาก
-  [PLAN-plan-with-me.md](done/2026-09-05-PLAN-plan-with-me.md))
+- เขียน README.md ใหม่ — pitch vendor-neutral + MCP-first (ไม่ผูก opencode)
+- เพิ่ม MCP section: `fapony mcp` quick start + 4 tools (handoff_collect, handoff_check, verdict_submit, fapony_stats)
+- เพิ่ม Case 4 — MCP agent (Claude Code / OpenCode ที่เรียกผ่าน MCP แทน stdin)
+- อัปเดต CLI section: ตัด `setup`/`ps`, เพิ่ม `mcp`, อัปเดต `gate` grade 6 ตัว
+- อัปเดต verdict references: pass-excellent/pass-good/pass-adequate/pass/fail/uncertain
+- เพิ่ม `fapony_stats` ใน CLI + stats section
+- Link `docs/mcp-handcheck.md` จาก README
+- Sync CLAUDE.md — เพิ่ม MCP architecture, verdict 6-grade, stats, plan template อัปเดต
 
 **ไม่ทำ:**
-- ไม่เขียน landing page หรือเว็บไซต์แยก — README เดียวพอสำหรับเปิดตัว ไม่ใช่ product launch
-  เต็มรูปแบบ (ยังไม่มี user ภายนอกจริง)
-- ไม่ทดสอบ fapony กับ Codex จริง (ไม่มี Codex ในมือตอนนี้) — เขียน case จากสิ่งที่
-  spec injection ทำได้จริงแล้ว (verified ใน PLAN-init-scaffold) ไม่ใช่ demo สด
+- ไม่เขียน landing page หรือเว็บไซต์แยก
 - ไม่รื้อ CLAUDE.md — คนละ audience (README = คนอ่านครั้งแรก, CLAUDE.md = agent ที่ทำงานต่อ)
 
 ## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
 
 - README.md ย่อหน้าแรกพูดถึง "ทุก coding agent" ไม่ผูก opencode อย่างเดียว
-- มี 3 case study ครบทั้ง Claude Code / OpenCode / Codex พร้อมคำสั่งรันจริง
-- ทุกลิงก์ใน README เปิดได้จริง (ไม่ 404) — เช็คด้วย script เดียวกับที่ใช้ตอน plan-mv
-- อ่าน README จบแล้วตอบได้ว่า "ต้องรันคำสั่งอะไรก่อน" โดยไม่ต้องเปิด CLAUDE.md
+- README มี MCP section พร้อม quick start + 4 tools
+- CLI section ตรงกับ fapony.ts จริง (ไม่มี setup/ps, มี mcp, gate 6 grade)
+- verdict references ใช้ 6-grade enum ทุกจุด
+- CLAUDE.md sync กับ main — มี MCP architecture + verdict + stats
+- ทุกลิงก์ใน README เปิดได้จริง
 
-## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
+## 4. ข้อจำกัด / กฎเหล็ก
 
-- ห้ามอ้างว่า test กับ Codex จริงถ้าไม่ได้ทำ — เขียนให้ชัดว่าเป็น "ตัวอย่างท่าที่รองรับ"
-  ไม่ใช่ "ทดสอบแล้ว" (กันโกหกผู้ใช้)
-- ห้าม duplicate เนื้อหากับ CLAUDE.md — README ลิงก์กลับไป CLAUDE.md สำหรับรายละเอียด
-  ไม่ copy schema/flow มาซ้ำ
-- คำสั่งทุกอันใน case study ต้องตรงกับ CLI จริงใน `fapony.ts` ตอนเขียน (เช็คคู่กับ
-  `fapony test` ก่อน commit)
+- ห้าม duplicate เนื้อกับ CLAUDE.md — README ลิงก์กลับไป CLAUDE.md สำหรับรายละเอียด
+- คำสั่งทุกอันต้องตรงกับ fapony.ts จริง (เช็คก่อน commit)
+- MCP docs อยู่ที่ `docs/mcp-handcheck.md` — README link ไป ไม่ใช่ copy มา
 
-## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
+## 5. ความเสี่ยง & ทางหนี
 
 | เสี่ยง | โอกาส | ผลกระทบ | ทางหนี |
 |---|---|---|---|
-| Case study Codex เขียนแล้วไม่ตรงจริง (ไม่มี Codex ทดสอบ) | กลาง | สอนคนผิด | ระบุชัดว่าเป็น "รองรับตาม design" ไม่ใช่ "ทดสอบแล้ว" |
-| README ยาวเกิน คนอ่านไม่ครบ | กลาง | pitch ไม่ถึง | pitch + 3 case อยู่บนสุด รายละเอียดลึกลิงก์ออกไป CLAUDE.md |
-| ลิงก์ broken หลัง merge | ต่ำ | ประสบการณ์แย่ | รัน link-check script ก่อน commit |
+| CLI section เขียนไม่ตรงจริง | กลาง | สอนคนผิด | รัน `bun fapony.ts --help` เช็คก่อน commit |
+| MCP tools list ไม่ครบ | ต่ำ | agent เรียก tool ไม่เจอ | cross-check กับ `src/mcp/tools/` |
+| CLAUDE.md sync ไม่ครบ | กลาง | agent ทำงานผิด | diff main → dev แล้ว cherry-pick ส่วนที่ขาด |
 
-## 6. ขั้นตอน (ทำอะไรก่อน-หลัง)
+## 6. ขั้นตอน
 
-1. เขียน pitch ย่อหน้าแรกใหม่ (vendor-neutral) — verify: อ่านแล้วไม่มีคำว่า "opencode"
-   ในย่อหน้าแรก
-2. Case 1: Claude Code + reviewer gate ผ่าน `fapony kickoff` — verify: คำสั่งรันจริงได้กับ
-   fixture ใน test/fixtures/
-3. Case 2: OpenCode + memory ผ่าน mem.ts — verify: อ้างอิง config.memory schema ตรงกับ
-   CLAUDE.md จริง
-4. Case 3: Codex + spec-driven ผ่าน `.fapony/spec/` — verify: อ้างอิง spec injection
-   behavior ตรงกับที่ src/run.ts ทำจริง (ไม่ใช่เดา)
-5. รัน link-check ทุกลิงก์ใน README ใหม่ — verify: ไม่มี broken link
+1. อัปเดต PLAN-readme-launch.md (plan นี้) — เพิ่ม MCP, verdict 6-grade, stats → verify: plan สะท้อนความจริง
+2. อัปเดต README.md — MCP section + CLI + verdict + stats + link docs → verify: คำสั่งตรง fapony.ts
+3. อัปเดต CLAUDE.md — MCP architecture + verdict + stats + plan template → verify: diff กับ main แล้วไม่มีส่วนสำคัญตกหล่น
+4. รัน `bun test` + lint/typecheck → verify: เขียว
 
-## 7. ตัวอย่าง (เห็นภาพ)
+## 7. ตัวอย่าง
 
 ```bash
-# ก่อน (README เดิม)
-"fapony = CLI orchestrator สำหรับ multi-agent dev loop: opencode เขียน → review → วนต่อ"
+# CLI loop (เดิม)
+fapony run myapp --plan .fapony/plan/PLAN-x.md
+fapony gate <id> pass-good "clean implementation"
 
-# หลัง (README ใหม่)
-"fapony ทำให้ coding agent ที่คุณใช้อยู่แล้ว (Claude Code / OpenCode / Codex)
-กลายเป็น multi-agent workflow ได้ โดยไม่ต้องเรียน framework ใหม่"
+# MCP (ใหม่ — agent-agnostic)
+fapony mcp   # stdio JSON-RPC → 4 tools
 ```
 
-## 8. อ้างอิง
+## 8. References
 
-- [ROADMAP.md](../ROADMAP.md) — เดือนที่ 3
-- [plan/done/PLAN-plan-with-me.md](done/2026-09-05-PLAN-plan-with-me.md) — examples/ ที่มีอยู่แล้วให้ลิงก์ไป
-- [plan/done/PLAN-init-scaffold.md](done/2026-09-05-PLAN-init-scaffold.md) — spec injection behavior ที่ case 3 อ้างอิง
-- [CLAUDE.md](../CLAUDE.md) — Plan Core template, CLI Commands
+- `docs/mcp-handcheck.md` — MCP usage guide + adapter examples
+- `src/mcp/` — MCP server implementation (transport, tools/)
+- PLAN-mcp-handcheck, PLAN-verdict-protocol, PLAN-verdict-stats (shipped on main)

@@ -11,6 +11,8 @@ import { cmdKickoff } from "./src/kickoff.js";
 
 import { cmdMcp } from "./src/mcp/index.js";
 import { cmdPlanMv } from "./src/planmv.js";
+import { cmdReport } from "./src/report.js";
+import { cmdReportWeb } from "./src/report-html.js";
 import { cmdRun } from "./src/run/index.js";
 import { cmdSetup } from "./src/setup.js";
 import { installSigintHandler } from "./src/sigint.js";
@@ -56,12 +58,16 @@ if (cmd === "run") {
   await cmdUpdate();
 } else if (cmd === "mcp") {
   cmdMcp();
+} else if (cmd === "report") {
+  cmdReport(a);
+} else if (cmd === "report-web") {
+  cmdReportWeb(a);
 } else if (cmd === "test") {
   await cmdTest();
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|run|ps|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|mcp|test> [args]",
+    "usage: fapony <setup|update|run|ps|status|stats|telemetry|handoff|stop|gate|init|kickoff|init-mem|report|report-web|mcp|test> [args]",
   );
   process.exit(1);
 }

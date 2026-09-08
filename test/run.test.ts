@@ -7,6 +7,39 @@ import { buildExecutorPrompt, executorCmd, runOnce } from "../src/run/index.js";
 import { createTestRepo } from "./fixtures/repo.js";
 import { baseConfig, silentErrors } from "./helpers.js";
 
+export function testExecutorCmdRejectsPromptPlaceholder(): void {
+  // roles.executor.cmd containing {PROMPT} → throw (prompt travels via stdin only)
+  const withRoles = baseConfig();
+  withRoles.roles = {
+    executor: { cmd: ["claude", "-p", "{model}", "{PROMPT}"] },
+  };
+  assert.throws(
+    () => executorCmd(withRoles, "m-1"),
+    /role "executor" cmd contains \{PROMPT\}/,
+  );
+
+  // legacy top-level executor.cmd containing {PROMPT} → same guard
+  const withLegacy = baseConfig();
+  withLegacy.executor = { cmd: ["claude", "-p", "{PROMPT}"], timeoutMin: 45 };
+  withLegacy.roles = undefined;
+  assert.throws(
+    () => executorCmd(withLegacy, null),
+    /role "executor" cmd contains \{PROMPT\}/,
+  );
+
+  // clean cmd → resolves with {model}/{id} filled, no throw
+  const clean = baseConfig();
+  clean.roles = {
+    executor: { cmd: ["opencode", "run", "--model", "{model}"] },
+  };
+  assert.deepEqual(executorCmd(clean, "m-1"), [
+    "opencode",
+    "run",
+    "--model",
+    "",
+  ]);
+}
+
 export function testBuildExecutorPrompt(): void {
   const template =
     "PLAN={{PLAN}}\nMEM={{MEM_ID}}\nSPEC={{SPEC}}\nFB={{FEEDBACK}}";

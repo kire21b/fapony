@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  parseGateEventData,
   parseGateVerdict,
   parsePlanUpdate,
   qualityScore,
@@ -91,6 +92,42 @@ Looks good, no issues found.`;
   assert.equal(VERDICT_GRADES.size, 6, "should have exactly 6 grades");
 
   console.log("  ✓ parseGateVerdict");
+}
+
+export function testParseGateEventData(): void {
+  // Gate events store JSON {verdict, note, round} — not VERDICT: stdout.
+  let v = parseGateEventData(
+    JSON.stringify({ verdict: "pass-good", note: "solid", round: 1 }),
+  );
+  assert(v !== null, "should read verdict from gate JSON");
+  assert.equal(v?.verdict, "pass-good");
+  assert.equal(v?.note, "solid");
+
+  v = parseGateEventData(JSON.stringify({ verdict: "fail", round: 2 }));
+  assert(v !== null, "note may be absent");
+  assert.equal(v?.verdict, "fail");
+  assert.equal(v?.note, "");
+
+  assert.equal(parseGateEventData(null), null, "null data → null");
+  assert.equal(parseGateEventData(""), null, "empty data → null");
+  assert.equal(parseGateEventData("not json"), null, "unparseable data → null");
+  assert.equal(
+    parseGateEventData(JSON.stringify({ verdict: "passsomething" })),
+    null,
+    "unknown grade → null",
+  );
+  assert.equal(
+    parseGateEventData(JSON.stringify({ note: "no verdict key" })),
+    null,
+    "missing verdict → null",
+  );
+  assert.equal(
+    parseGateEventData(JSON.stringify(["pass-good"])),
+    null,
+    "non-object JSON → null",
+  );
+
+  console.log("  ✓ parseGateEventData");
 }
 
 export function testParsePlanUpdate(): void {
