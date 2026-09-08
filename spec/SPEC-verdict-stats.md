@@ -1,6 +1,6 @@
 # SPEC-verdict-stats — qualityScore + valueScore (read-time) + fapony_stats shape
 
-> **Used by:** [PLAN-verdict-stats.md](../plan/PLAN-verdict-stats.md)
+> **Used by:** [PLAN-verdict-stats.md](../plan/done/2026-09-08-PLAN-verdict-stats.md)
 > งานนี้เปิด gate "value engine" ของ [SPEC-verdict-protocol.md](SPEC-verdict-protocol.md) —
 > mapping ขึ้นโค้ดได้แล้ว **แต่ค่าห้ามเปลี่ยน** และทุกอย่างคำนวณ **ตอนอ่าน** (events read-only)
 

@@ -3,7 +3,7 @@
 # PLAN-verdict-stats.md — MCP grade parity + fapony_stats (verify + measure + accumulate)
 
 > **Status:** shipped · **Owner:** delamind · **Created:** 2026-09-08
-> **Source spec:** [SPEC-verdict-stats.md](../spec/SPEC-verdict-stats.md)
+> **Source spec:** [SPEC-verdict-stats.md](../../spec/SPEC-verdict-stats.md)
 
 ---
 
@@ -78,15 +78,15 @@ grade 6 ระดับที่ core รองรับแล้ว (c298fef, 5
 ## 7. Examples (make it concrete)
 
 รูปทรงข้อมูล, valueScore null-rules, StatsData, sample JSON-RPC → ทั้งหมดอยู่ที่
-[SPEC-verdict-stats.md](../spec/SPEC-verdict-stats.md) — ใน plan นี้เก็บแค่ order + เงื่อนไขจบ
+[SPEC-verdict-stats.md](../../spec/SPEC-verdict-stats.md) — ใน plan นี้เก็บแค่ order + เงื่อนไขจบ
 
 ## 8. References
 
-- Design ที่ bridge: [CLAUDE.md](../CLAUDE.md) § Verdict Protocol (grade vocabulary + qualityScore)
-- Spec ที่ amend: [SPEC-verdict-protocol.md](../spec/SPEC-verdict-protocol.md) ·
-  [SPEC-mcp-handcheck.md](../spec/SPEC-mcp-handcheck.md)
+- Design ที่ bridge: [CLAUDE.md](../../CLAUDE.md) § Verdict Protocol (grade vocabulary + qualityScore)
+- Spec ที่ amend: [SPEC-verdict-protocol.md](../../spec/SPEC-verdict-protocol.md) ·
+  [SPEC-mcp-handcheck.md](../../spec/SPEC-mcp-handcheck.md)
 - Commits ที่ shipped ไปแล้ว: c298fef (6-grade grammar), 534ca3e (MCP→gateOnce routing)
-- โค้ดที่เกี่ยว: [src/parse.ts](../src/parse.ts) · [src/gate.ts](../src/gate.ts) ·
-  [src/cost.ts](../src/cost.ts) · [src/stats.ts](../src/stats.ts) ·
-  [src/mcp/tools/verdict.ts](../src/mcp/tools/verdict.ts) · [src/db/store.ts](../src/db/store.ts)
+- โค้ดที่เกี่ยว: [src/parse.ts](../../src/parse.ts) · [src/gate.ts](../../src/gate.ts) ·
+  [src/cost.ts](../../src/cost.ts) · [src/stats.ts](../../src/stats.ts) ·
+  [src/mcp/tools/verdict.ts](../../src/mcp/tools/verdict.ts) · [src/db/store.ts](../../src/db/store.ts)
 - Plan ก่อนหน้าในสายงานเดียวกัน: plan/done/2026-09-08-PLAN-verdict-protocol.md
