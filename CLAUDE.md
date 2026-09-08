@@ -155,7 +155,7 @@ events(
   id INTEGER PRIMARY KEY,
   run_id INTEGER NOT NULL,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,          -- spawn|commit|handoff|route|gate|stop|stalled|memory_claim|memory_claim_failed|memory_claim_closed|plan
+  kind TEXT NOT NULL,          -- spawn|spawn_fail|commit|handoff|route|gate|stop|stopped|stalled|interrupted|memory_claim|memory_claim_failed|memory_claim_closed|plan|plan_archived
   data TEXT                    -- json
 )
 ```

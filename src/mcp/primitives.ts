@@ -38,9 +38,9 @@ export interface EvidenceItem {
   command: string;
   /** Structured result status. */
   status: EvidenceStatus;
-  /** Exit code, or null when not_run / timeout. */
+  /** Exit code, or null when not_run / timeout / refused by safety gate. */
   exit_code: number | null;
-  /** Wall-clock duration in ms, or null when not_run. */
+  /** Wall-clock duration in ms, or null when not_run / refused. */
   duration_ms: number | null;
   /** Where the result came from. */
   provenance: EvidenceProvenance;

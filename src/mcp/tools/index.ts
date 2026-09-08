@@ -173,6 +173,24 @@ export const TOOLS = [
           description:
             "Agent's handoff text. If omitted with run_id, reads from events.",
         },
+        uncertain: {
+          type: "string",
+          description:
+            "Agent-reported uncertainty for the handoff check. If omitted, " +
+            "reported-ness is derived from whether the handoff text contains the field.",
+        },
+        not_done: {
+          type: "string",
+          description:
+            "Agent-reported incomplete items for the handoff check. If omitted, " +
+            "reported-ness is derived from whether the handoff text contains the field.",
+        },
+        checks: {
+          type: "string",
+          description:
+            "Agent-reported checks for the handoff check. If omitted, " +
+            "reported-ness is derived from whether the handoff text contains the field.",
+        },
         evidence_commands: {
           type: "array",
           items: { type: "string" },

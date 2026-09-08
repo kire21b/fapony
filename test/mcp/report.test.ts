@@ -1,6 +1,8 @@
 // test/mcp/report.test.ts — tests for verification_report tool
 
 import assert from "node:assert";
+import { newRun, openDb } from "../../src/db/index.js";
+import { gateOnce } from "../../src/gate.js";
 import { toolVerificationReport } from "../../src/mcp/tools/report.js";
 import { parseToolResult } from "../../src/mcp/types.js";
 import { withTmpDb } from "../helpers.js";
@@ -73,4 +75,80 @@ export function testVerificationReportToolCount(): void {
   assert.ok(names.includes("verification_report"));
   assert.equal(TOOLS.length, 5);
   console.log("  ✓ verification_report registered in TOOLS (5 tools total)");
+}
+
+export function testVerificationReportVerdictFromGateEvent(): void {
+  withTmpDb(() => {
+    // Gate events store JSON {verdict, note, round} — the report must read
+    // that shape, not parse a VERDICT: marker out of it.
+    const db = openDb();
+    const runId = newRun(db, "mcp-external", null, null, "mcp");
+    db.close();
+    const gated = gateOnce(runId, "pass-good", "solid work");
+    assert.equal(gated.error, undefined);
+
+    const result = toolVerificationReport({ run_id: runId, format: "json" });
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      verdict: { grade: string; note: string } | null;
+    };
+    assert.ok(data.verdict, "verdict must be populated from gate event");
+    assert.equal(data.verdict.grade, "pass-good");
+    assert.equal(data.verdict.note, "solid work");
+    console.log("  ✓ verification_report reads verdict from gate JSON event");
+  });
+}
+
+export function testVerificationReportCheckParity(): void {
+  withTmpDb(() => {
+    // Same strictness as handoff_check on the same text: a handoff missing
+    // the uncertain: line fails uncertain_not_empty (no vouching).
+    const handoff = [
+      "## HANDOFF",
+      "claimed: abc123",
+      "commits: abc123",
+      "checks: typecheck pass",
+    ].join("\n");
+    const result = toolVerificationReport({
+      worktree: "/tmp",
+      handoff,
+      format: "json",
+    });
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      handoff_checks: {
+        checks: { name: string; pass: boolean; note: string }[];
+      } | null;
+    };
+    assert.ok(data.handoff_checks, "handoff_checks must be computed");
+    const uncertain = data.handoff_checks.checks.find(
+      (c) => c.name === "uncertain_not_empty",
+    );
+    assert.equal(
+      uncertain?.pass,
+      false,
+      "missing uncertain field must fail like handoff_check",
+    );
+    console.log("  ✓ verification_report matches handoff_check strictness");
+  });
+}
+
+export function testVerificationReportSurfacesCollectError(): void {
+  withTmpDb(() => {
+    // /tmp is not a git repo and no SHAs given → collect errors; the report
+    // must surface it in git_error, not silently show zeroed facts.
+    const result = toolVerificationReport({
+      worktree: "/tmp",
+      format: "json",
+    });
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      facts: { files_changed: number; git_error: string | null };
+    };
+    assert.ok(
+      data.facts.git_error,
+      "collect failure must be visible in git_error",
+    );
+    console.log("  ✓ verification_report surfaces collect errors in git_error");
+  });
 }

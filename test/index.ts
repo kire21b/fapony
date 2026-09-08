@@ -87,8 +87,11 @@ import {
   testCollectEvidenceAgentCommands,
   testCollectEvidenceAgentDuplicatesAllowlist,
   testCollectEvidenceFailingCommand,
+  testCollectEvidenceInvalidEntry,
   testCollectEvidenceNoConfig,
   testCollectEvidencePassingCommand,
+  testCollectEvidenceRefusesDangerousCommand,
+  testCollectEvidenceTimeout,
   testReadEvidenceConfigInvalid,
   testReadEvidenceConfigMissing,
   testReadEvidenceConfigValid,
@@ -112,11 +115,14 @@ import {
   testRenderReportTextWithPassedVerdict,
 } from "./mcp/primitives.test.js";
 import {
+  testVerificationReportCheckParity,
   testVerificationReportJsonFormat,
   testVerificationReportMissingArgs,
   testVerificationReportRunNotFound,
+  testVerificationReportSurfacesCollectError,
   testVerificationReportTextFormat,
   testVerificationReportToolCount,
+  testVerificationReportVerdictFromGateEvent,
 } from "./mcp/report.test.js";
 import {
   testStatsTextMatchesCli,
@@ -151,6 +157,7 @@ import {
 } from "./memory.test.js";
 import {
   testFixtureGuard,
+  testParseGateEventData,
   testParseGateVerdict,
   testParsePlanUpdate,
   testQualityScore,
@@ -303,6 +310,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHandoff();
   testRenderHandoffGitError();
   await testParseGateVerdict();
+  testParseGateEventData();
   testParsePlanUpdate();
   testFixtureGuard();
   testQualityScore();
@@ -514,12 +522,18 @@ export async function cmdTest(): Promise<void> {
   testCollectEvidenceFailingCommand();
   testCollectEvidenceAgentCommands();
   testCollectEvidenceAgentDuplicatesAllowlist();
+  testCollectEvidenceTimeout();
+  testCollectEvidenceRefusesDangerousCommand();
+  testCollectEvidenceInvalidEntry();
   // Verification report tool tests
   testVerificationReportMissingArgs();
   testVerificationReportRunNotFound();
   testVerificationReportTextFormat();
   testVerificationReportJsonFormat();
   testVerificationReportToolCount();
+  testVerificationReportVerdictFromGateEvent();
+  testVerificationReportCheckParity();
+  testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
   testStatsNoPricingValueIsNull();

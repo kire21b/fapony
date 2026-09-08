@@ -6,12 +6,12 @@
 
 import { sumSpawnCost } from "../../cost.js";
 import { getEvents, getRun, openDb } from "../../db/index.js";
-import { parseGateVerdict } from "../../parse.js";
+import { parseGateEventData } from "../../parse.js";
 import { collectEvidence } from "../evidence.js";
 import type { CheckResult, VerificationReport } from "../primitives.js";
 import { computeEvidenceSummary, renderReportText } from "../primitives.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
-import { toolHandoffCheck } from "./check.js";
+import { extractMultiField, toolHandoffCheck } from "./check.js";
 import { toolHandoffCollect } from "./collect.js";
 
 // --- Handoff text reader ---
@@ -27,7 +27,9 @@ function readHandoffFromEvents(runId: number): string | null {
           missing?: boolean;
         };
         if (!parsed.missing && events[i].data) {
-          // Reconstruct handoff text from the parsed data
+          // Reconstruct handoff text from the parsed data. The executor
+          // template mandates uncertain:/not_done: lines always, so empty
+          // arrays rebuild as "none" — faithful to what the agent reported.
           const dataStr = events[i].data as string;
           const d = JSON.parse(dataStr) as Record<string, unknown>;
           const lines = ["## HANDOFF"];
@@ -37,10 +39,12 @@ function readHandoffFromEvents(runId: number): string | null {
               `commits: ${Array.isArray(d.commits) ? d.commits.join(" ") : d.commits}`,
             );
           if (d.checks) lines.push(`checks: ${d.checks}`);
-          if (d.uncertain && Array.isArray(d.uncertain) && d.uncertain.length)
-            lines.push(`uncertain: ${d.uncertain.join("\n")}`);
-          if (d.not_done && Array.isArray(d.not_done) && d.not_done.length)
-            lines.push(`not_done: ${d.not_done.join("\n")}`);
+          lines.push(
+            `uncertain: ${d.uncertain && Array.isArray(d.uncertain) && d.uncertain.length ? d.uncertain.join("\n") : "none"}`,
+          );
+          lines.push(
+            `not_done: ${d.not_done && Array.isArray(d.not_done) && d.not_done.length ? d.not_done.join("\n") : "none"}`,
+          );
           return lines.join("\n");
         }
       } catch {
@@ -110,6 +114,7 @@ export function toolVerificationReport(
     });
     const collectData = JSON.parse(collectResult.content[0].text) as {
       facts?: VerificationReport["facts"];
+      error?: unknown;
     };
     if (collectData.facts) {
       facts = {
@@ -121,6 +126,15 @@ export function toolVerificationReport(
         branch: collectData.facts.branch ?? "",
         git_error: collectData.facts.git_error ?? null,
       };
+    }
+    // Don't swallow collection failures: a refused/errored collect leaves
+    // zeroed facts, so surface the error instead of reporting "0 files".
+    if (
+      typeof collectData.error === "string" &&
+      collectData.error &&
+      !facts.git_error
+    ) {
+      facts = { ...facts, git_error: collectData.error };
     }
   }
 
@@ -134,13 +148,21 @@ export function toolVerificationReport(
         : null;
 
   if (handoffText) {
-    const checkResult = toolHandoffCheck({
-      handoff: handoffText,
-      facts,
-      uncertain: "none",
-      not_done: "none",
-      checks: "none",
-    });
+    // Forward caller-supplied uncertain/not_done/checks when present;
+    // otherwise a field present in the agent's text counts as reported
+    // (content is always read from the text by toolHandoffCheck). This keeps
+    // the composed tool exactly as strict as handoff_check on the same text —
+    // no hardcoded "none" vouching for fields the caller never supplied.
+    const checkArgs: Record<string, unknown> = { handoff: handoffText, facts };
+    for (const field of ["uncertain", "not_done", "checks"] as const) {
+      const fromCaller = args[field];
+      if (typeof fromCaller === "string") {
+        checkArgs[field] = fromCaller;
+      } else if (new RegExp(`^\\s*${field}:`, "im").test(handoffText)) {
+        checkArgs[field] = extractMultiField(handoffText, field)[0] ?? "";
+      }
+    }
+    const checkResult = toolHandoffCheck(checkArgs);
     const checkData = JSON.parse(checkResult.content[0].text) as {
       checks?: unknown[];
       summary?: {
@@ -168,6 +190,8 @@ export function toolVerificationReport(
   const evidence_summary = computeEvidenceSummary(evidence);
 
   // --- Verdict ---
+  // Gate events store JSON ({verdict, note, round}) — parseGateVerdict's
+  // `VERDICT:` marker never matches them, so read the JSON shape directly.
   let verdict: VerificationReport["verdict"] = null;
   if (resolvedRunId) {
     const db = openDb();
@@ -175,7 +199,7 @@ export function toolVerificationReport(
       const events = getEvents(db, resolvedRunId);
       for (let i = events.length - 1; i >= 0; i--) {
         if (events[i].kind !== "gate") continue;
-        const parsed = parseGateVerdict(events[i].data ?? "");
+        const parsed = parseGateEventData(events[i].data);
         if (parsed) {
           verdict = { grade: parsed.verdict, note: parsed.note };
         }

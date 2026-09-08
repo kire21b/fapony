@@ -132,8 +132,12 @@ Additive-only: append new values, never rename/remove.
 
 - Allowlist lives in `.fapony/evidence.json` inside the worktree (read-only,
   fapony never writes to worktree by rule #5).
-- Agent can also propose commands — they get `unverified` provenance.
-- fapony re-runs allowlisted commands itself → `verified` provenance.
+- Agent can also propose commands — recorded as `unverified` claims, NEVER
+  executed by fapony (`verified:false` means "fapony did not run this").
+- fapony runs allowlisted commands itself → `verified` provenance.
+- Every allowlisted command passes `assertSafe()` before spawn (rule #4 —
+  the file lives in agent-reachable worktree). Refused commands →
+  status `failed` with the refusal as note (surfaced, never silent).
 
 ### 4.1 `.fapony/evidence.json` shape
 
@@ -155,15 +159,20 @@ Additive-only: append new values, never rename/remove.
 ### 4.2 Agent-proposed commands
 
 When agent calls `verification_report` with `evidence_commands: ["cargo test"]`:
-- Commands NOT in allowlist → status `unverified`, provenance `agent_report`
-- Commands IN allowlist → fapony runs them → status from actual result, provenance `fapony_cli`
+- Commands NOT in allowlist → recorded as-is with status `unverified`,
+  provenance `agent_report` (`exit_code`/`duration_ms` null). fapony does
+  NOT execute them.
+- Commands IN allowlist → already ran as allowlisted (verified) — no duplicate item.
 
 ## 5. Evidence timeout & concurrency
 
 - Each command runs sequentially (no parallel execution — simpler, deterministic timing).
-- Per-command timeout from `.fapony/evidence.json` or default 30s.
-- Timeout → status `timeout`, note `"exceeded ${timeout_ms}ms"`, does not block other commands.
-- Total report generation timeout: 60s (hard cap). If exceeded, remaining commands → `timeout`.
+- Per-command timeout from `.fapony/evidence.json` or default 30s, clamped to
+  the remaining share of the total budget.
+- Timeout detected via kill signal / missing exit status (never message
+  sniffing) → status `timeout`, `exit_code` null, note `"exceeded ${ms}ms"`,
+  does not block other commands.
+- Total report generation timeout: 60s hard cap. If exceeded, remaining commands → `timeout`.
 
 ## 6. Provenance rules
 
@@ -200,10 +209,20 @@ Rules:
   "base_sha": "abc123",                  // optional — for handoff_collect
   "head_sha": "def456",                  // optional — for handoff_collect
   "handoff": "## HANDOFF\n...",          // optional — agent's handoff text
-  "evidence_commands": ["cargo test"],   // optional — additional commands to check
+  "uncertain": "none",                   // optional — forwarded to handoff_check; else derived from text
+  "not_done": "none",                    // optional — forwarded to handoff_check; else derived from text
+  "checks": "typecheck pass",            // optional — forwarded to handoff_check; else derived from text
+  "evidence_commands": ["cargo test"],   // optional — recorded unverified, never executed
   "format": "text"                       // optional — "text" (default) or "json"
 }
 ```
+
+Strictness parity: with the same handoff text, `verification_report`'
+s conformance section matches `handoff_check` exactly — fields present in
+the text count as reported, absent fields fail the same way.
+
+Verdict is read from the gate event JSON (`{verdict, note, round}`), not
+parsed as `VERDICT:` stdout.
 
 ### Output (format: "text")
 

@@ -114,3 +114,26 @@ export function parsePlanUpdate(
     text,
   };
 }
+
+/**
+ * Read a verdict back from a stored gate event (`kind='gate'`).
+ * Gate events are JSON (`{verdict, note, round}` from gateOnce) — NOT
+ * reviewer stdout, so parseGateVerdict's `VERDICT:` marker never matches
+ * them. Returns null for missing/unparseable data or unknown grades.
+ */
+export function parseGateEventData(data: string | null): GateVerdict | null {
+  if (!data) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const { verdict, note } = parsed as { verdict?: unknown; note?: unknown };
+  if (typeof verdict !== "string" || !VERDICT_GRADES.has(verdict)) return null;
+  return {
+    verdict: verdict as VerdictGrade,
+    note: typeof note === "string" ? note : "",
+  };
+}
