@@ -9,7 +9,7 @@
 
 `fapony install` รองรับ `--platform opencode` และ `--platform claude` แล้ว แต่ ZCode (ที่ใช้งานอยู่ทุกวัน) ยังไม่มี install command — ต้องแก้ `~/.zcode/cli/config.json` ด้วยตัวเอง ทำให้ "measure ข้าม agent" ไม่เท่ากัน ต้องให้ `fapony install --platform zcode` ติดตั้งได้ในคำสั่งเดียวเหมือนกัน
 
-**North star จาก [PLAN-mcp-verification-pivot.md](PLAN-mcp-verification-pivot.md):** dev สลับ use opencode, Claude Code, zcode — ไม้บรรทัดเดียวกันต้องเริ่มจากติดตั้งง่ายเท่ากันทุกแพลตฟอร์ม
+**North star จาก [PLAN-mcp-verification-pivot.md](done/2026-09-09-PLAN-mcp-verification-pivot.md):** dev สลับ use opencode, Claude Code, zcode — ไม้บรรทัดเดียวกันต้องเริ่มจากติดตั้งง่ายเท่ากันทุกแพลตฟอร์ม
 
 ## 2. ขอบเขต (ทำอะไร / ไม่ทำ)
 
@@ -99,5 +99,5 @@ fapony install --platform zcode
 - [src/install.ts](../src/install.ts) — opencode + claude implementation ที่ต้อง extend (pattern เดิม: idempotent + `--dry-run` + JSON write)
 - [README.md](../README.md) — Quick start §2 + CLI section ต้อง sync ให้ครบทั้ง 3 platform
 - [ZCode Configuration Guide](~/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md) — `~/.zcode/cli/config.json` → `mcp.servers` schema + fallback `~/.agents/mcp.json` → `mcpServers`
-- [PLAN-mcp-verification-pivot.md](PLAN-mcp-verification-pivot.md) — north star cross-agent measurement ที่ plan นี้เป็นหนึ่งใน pre-condition (วัด zcode ได้ ต้องติดตั้งง่ายก่อน)
-- [PLAN-claude-install.md](PLAN-claude-install.md) — plan น้องที่ทำ `--platform claude` เสร็จแล้ว (pattern ที่ต้องทำซ้ำ)
+- [PLAN-mcp-verification-pivot.md](done/2026-09-09-PLAN-mcp-verification-pivot.md) — north star cross-agent measurement ที่ plan นี้เป็นหนึ่งใน pre-condition (วัด zcode ได้ ต้องติดตั้งง่ายก่อน)
+- [PLAN-claude-install.md](done/2026-09-09-PLAN-claude-install.md) — plan น้องที่ทำ `--platform claude` เสร็จแล้ว (pattern ที่ต้องทำซ้ำ)
