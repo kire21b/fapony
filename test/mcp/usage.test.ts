@@ -6,20 +6,20 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { toolPassiveUsage } from "../../src/mcp/tools/usage.js";
-import { readPassiveUsage } from "../../src/session.js";
+import { readPassiveUsage } from "../../src/session/index.js";
 
 function withFixtureDb(fn: (dbPath: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-usage-"));
   const dbPath = join(dir, "opencode.db");
   const db = new Database(dbPath);
   try {
-    db.exec(
+    db.run(
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
-    db.exec(
+    db.run(
       `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_reasoning INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
-    db.exec(
+    db.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
     );
     db.prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`).run(

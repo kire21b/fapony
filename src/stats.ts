@@ -1,18 +1,14 @@
 import { sumSpawnCost } from "./cost.js";
 import { type Event, openDb, type Run } from "./db/index.js";
 import { enrichGateWindows } from "./gates.js";
+import { avg, minutesBetween } from "./math.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
-import { type PassiveUsageResult, readPassiveUsage } from "./session.js";
-
-function minutesBetween(a: string, b: string): number {
-  const t0 = new Date(`${a.replace(" ", "T")}Z`).getTime();
-  const t1 = new Date(`${b.replace(" ", "T")}Z`).getTime();
-  return (t1 - t0) / 60000;
-}
-
-function avg(xs: number[]): number {
-  return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;
-}
+import {
+  type PassiveUsageResult,
+  readClaudeCodeUsage,
+  readPassiveUsage,
+  readZcodeUsage,
+} from "./session/index.js";
 
 // Walks events per run in order and pairs up spawn→route (executor time)
 // and route→gate (review turnaround) per round, since one run row can span
@@ -111,7 +107,13 @@ function lastGateVerdict(events: Event[]): string | null {
   return last;
 }
 
-function computeEfficiency(
+/**
+ * Per-run efficiency — the single implementation. Telemetry reuses this
+ * (groups per-run results by model) so ES/CPQ semantics never drift between
+ * `fapony stats` and the telemetry payload. Never reimplement per-run
+ * quality/cost/minutes pairing elsewhere.
+ */
+export function computeEfficiency(
   runs: Run[],
   eventsByRun: Record<number, Event[]>,
 ): RunEfficiency[] {
@@ -193,6 +195,10 @@ export interface StatsData {
   /** Derived ES/CPQ per run (PLAN-usage-depth §3) — additive, always present. */
   efficiency: RunEfficiency[];
   usage: PassiveUsageResult;
+  /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
+  zcodeUsage?: PassiveUsageResult | null;
+  /** Claude Code passive usage (when ~/.claude/projects/ exists). */
+  claudeCodeUsage?: PassiveUsageResult | null;
 }
 
 export function getStatsData(): StatsData {
@@ -310,6 +316,8 @@ export function getStatsData(): StatsData {
       .sort((a, b) => b.runs - a.runs);
 
     const usage = readPassiveUsage();
+    const zcodeUsage = readZcodeUsage();
+    const claudeCodeUsage = readClaudeCodeUsage();
 
     const efficiency = computeEfficiency(runs, eventsByRun);
 
@@ -332,6 +340,9 @@ export function getStatsData(): StatsData {
       byWorktree,
       efficiency,
       usage,
+      zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
+      claudeCodeUsage:
+        claudeCodeUsage.session_count > 0 ? claudeCodeUsage : null,
     };
   } finally {
     // The MCP server is a long-lived stdio process — polling tools must not
@@ -449,6 +460,40 @@ export function formatStatsText(data: StatsData): string {
       for (const m of data.usage.by_model) {
         lines.push(
           `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out ($${m.cost.toFixed(4)})`,
+        );
+      }
+    }
+  }
+
+  // ZCode usage (separate DB)
+  if (data.zcodeUsage && data.zcodeUsage.session_count > 0) {
+    const zu = data.zcodeUsage;
+    lines.push("\nzcode usage:");
+    lines.push(
+      `  total: ${zu.total_tokens_input} in / ${zu.total_tokens_output} out / ${zu.total_tokens_reasoning} reasoning tokens over ${zu.session_count} sessions`,
+    );
+    if (zu.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of zu.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out`,
+        );
+      }
+    }
+  }
+
+  // Claude Code usage (JSONL files)
+  if (data.claudeCodeUsage && data.claudeCodeUsage.session_count > 0) {
+    const cc = data.claudeCodeUsage;
+    lines.push("\nclaude code usage:");
+    lines.push(
+      `  total: ${cc.total_tokens_input.toLocaleString()} in / ${cc.total_tokens_output.toLocaleString()} out / ${cc.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cc.session_count} sessions`,
+    );
+    if (cc.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of cc.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out`,
         );
       }
     }

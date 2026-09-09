@@ -2,26 +2,30 @@
 
 import { Database } from "bun:sqlite";
 import assert from "node:assert";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readPassiveUsage } from "../src/session.js";
+import {
+  readClaudeCodeUsage,
+  readPassiveUsage,
+  readZcodeUsage,
+} from "../src/session/index.js";
 
 function withFixtureDb(fn: (dbPath: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "fapony-opencode-"));
   const dbPath = join(dir, "opencode.db");
   const db = new Database(dbPath);
   try {
-    db.exec(
+    db.run(
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
-    db.exec(
+    db.run(
       `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_reasoning INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
-    db.exec(
+    db.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
     );
-    db.exec(`CREATE INDEX part_session_idx ON part (session_id)`);
+    db.run(`CREATE INDEX part_session_idx ON part (session_id)`);
 
     db.prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`).run(
       "p1",
@@ -207,4 +211,290 @@ export function testSessionDetailMatchesRawSql(): void {
     }),
   );
   console.log("  ✓ readPassiveUsage detail cross-checks against raw SQL");
+}
+
+// --- zcode usage tests ---
+
+function withZcodeFixtureDb(fn: (dbPath: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-zcode-"));
+  const dbPath = join(dir, "db.sqlite");
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `CREATE TABLE session (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL, directory TEXT NOT NULL,
+        time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL
+      )`,
+    );
+    db.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        reasoning_tokens INTEGER DEFAULT 0, cache_creation_input_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0, computed_total_tokens INTEGER DEFAULT 0
+      )`,
+    );
+    db.run(
+      `CREATE TABLE part (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, data TEXT NOT NULL, time_created INTEGER NOT NULL
+      )`,
+    );
+
+    db.prepare(
+      `INSERT INTO session (id, project_id, directory, time_created, time_updated) VALUES (?, ?, ?, ?, ?)`,
+    ).run("s1", "p1", "/tmp/zcode-wt", 1700000000, 1700000100);
+    db.prepare(
+      `INSERT INTO session (id, project_id, directory, time_created, time_updated) VALUES (?, ?, ?, ?, ?)`,
+    ).run("s2", "p1", "/tmp/zcode-wt", 1700000200, 1700000300);
+    db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, input_tokens, output_tokens, reasoning_tokens, cache_creation_input_tokens, cache_read_input_tokens, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run("m1", "s1", "claude-sonnet-5", 1000, 500, 200, 50, 30, 1780);
+    db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, input_tokens, output_tokens, reasoning_tokens, cache_creation_input_tokens, cache_read_input_tokens, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run("m2", "s1", "claude-opus-5", 2000, 800, 400, 100, 60, 3560);
+    db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, input_tokens, output_tokens, reasoning_tokens, cache_creation_input_tokens, cache_read_input_tokens, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run("m3", "s2", "claude-sonnet-5", 1500, 600, 300, 80, 40, 2620);
+    db.prepare(
+      `INSERT INTO part (id, session_id, data, time_created) VALUES (?, ?, ?, ?)`,
+    ).run("p1", "s1", '{"type":"step-finish"}', 1700000050);
+    db.prepare(
+      `INSERT INTO part (id, session_id, data, time_created) VALUES (?, ?, ?, ?)`,
+    ).run("p2", "s1", '{"type":"tool","tool":"Bash"}', 1700000060);
+
+    fn(dbPath);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testReadZcodeUsageNoDb(): void {
+  const orig = process.env.FAPONY_ZCODE_DB;
+  try {
+    // Point to a non-existent path so readZcodeUsage returns EMPTY_RESULT
+    process.env.FAPONY_ZCODE_DB = "/nonexistent/zcode/db.sqlite";
+    const result = readZcodeUsage();
+    assert.equal(result.session_count, 0);
+    assert.equal(result.total_tokens_input, 0);
+    console.log("  ✓ readZcodeUsage no DB → empty result");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_ZCODE_DB;
+    else process.env.FAPONY_ZCODE_DB = orig;
+  }
+}
+
+export function testReadZcodeUsagePrimaryPath(): void {
+  withZcodeFixtureDb((dbPath) => {
+    const orig = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_ZCODE_DB = dbPath;
+      const result = readZcodeUsage();
+      assert.equal(
+        result.session_count,
+        2,
+        `got ${result.session_count} sessions`,
+      );
+      assert.ok(result.total_tokens_input > 0);
+      assert.ok(result.by_model.length > 0);
+      const sonnet = result.by_model.find((m) => m.model === "claude-sonnet-5");
+      assert.ok(sonnet, "claude-sonnet-5 found");
+      assert.equal(sonnet!.tokens_input, 2500, "sonnet input tokens");
+      console.log("  ✓ readZcodeUsage primary path → reads ZCode DB");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = orig;
+    }
+  });
+}
+
+export function testReadZcodeUsageDetail(): void {
+  withZcodeFixtureDb((dbPath) => {
+    process.env.FAPONY_ZCODE_DB = dbPath;
+    const result = readZcodeUsage(undefined, undefined, undefined, true);
+    assert.ok(result.detail, "detail present");
+    assert.ok(result.detail!.tool_breakdown.Bash >= 0);
+    assert.ok(result.detail!.steps >= 0);
+    console.log("  ✓ readZcodeUsage detail → tool_breakdown and steps");
+    delete process.env.FAPONY_ZCODE_DB;
+  });
+}
+
+export function testReadZcodeUsageFilterByWorktree(): void {
+  withZcodeFixtureDb((dbPath) => {
+    process.env.FAPONY_ZCODE_DB = dbPath;
+    // Both sessions are in /tmp/zcode-wt — filter should return them
+    const result = readZcodeUsage("/tmp/zcode-wt");
+    assert.equal(result.session_count, 2);
+    // Filter with non-existent worktree → empty
+    const empty = readZcodeUsage("/nonexistent/wt");
+    assert.equal(empty.session_count, 0);
+    console.log("  ✓ readZcodeUsage filter by worktree");
+    delete process.env.FAPONY_ZCODE_DB;
+  });
+}
+
+// --- claude code usage tests ---
+
+function withClaudeCodeFixture(fn: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-claude-code-"));
+  const projectDir = join(dir, "projects", "-tmp-test-worktree");
+  const { mkdirSync } = require("node:fs");
+  mkdirSync(projectDir, { recursive: true });
+
+  // Session 1: 2 usage lines, 2 models
+  const session1 = [
+    JSON.stringify({
+      message: {
+        model: "claude-sonnet-5",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50,
+          cache_creation_input_tokens: 20,
+          cache_read_input_tokens: 10,
+          output_tokens_details: { thinking_tokens: 15 },
+        },
+      },
+      timestamp: "2026-09-09T03:00:00.000Z",
+      cwd: "/tmp/test-worktree",
+    }),
+    JSON.stringify({
+      message: {
+        model: "claude-opus-5",
+        usage: {
+          input_tokens: 200,
+          output_tokens: 80,
+          cache_creation_input_tokens: 30,
+          cache_read_input_tokens: 15,
+          output_tokens_details: { thinking_tokens: 25 },
+        },
+      },
+      timestamp: "2026-09-09T03:01:00.000Z",
+      cwd: "/tmp/test-worktree",
+    }),
+  ].join("\n");
+
+  // Session 2: 1 usage line
+  const session2 = [
+    JSON.stringify({
+      message: {
+        model: "claude-sonnet-5",
+        usage: {
+          input_tokens: 150,
+          output_tokens: 60,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+      timestamp: "2026-09-09T04:00:00.000Z",
+      cwd: "/tmp/test-worktree",
+    }),
+  ].join("\n");
+
+  writeFileSync(join(projectDir, "session-1.jsonl"), session1);
+  writeFileSync(join(projectDir, "session-2.jsonl"), session2);
+
+  try {
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testReadClaudeCodeUsageNoDir(): void {
+  const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+  try {
+    process.env.FAPONY_CLAUDE_PROJECTS_DIR = "/nonexistent/claude/projects";
+    const result = readClaudeCodeUsage();
+    assert.equal(result.session_count, 0);
+    assert.equal(result.total_tokens_input, 0);
+    console.log("  ✓ readClaudeCodeUsage no dir → empty result");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+    else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+  }
+}
+
+export function testReadClaudeCodeUsagePrimaryPath(): void {
+  withClaudeCodeFixture((dir) => {
+    const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+    try {
+      process.env.FAPONY_CLAUDE_PROJECTS_DIR = join(dir, "projects");
+      const result = readClaudeCodeUsage("/tmp/test-worktree");
+      assert.equal(
+        result.session_count,
+        2,
+        `got ${result.session_count} sessions`,
+      );
+      assert.equal(result.total_tokens_input, 450); // 100 + 200 + 150
+      assert.equal(result.total_tokens_output, 190); // 50 + 80 + 60
+      assert.equal(result.total_tokens_reasoning, 40); // 15 + 25
+      assert.equal(result.total_tokens_cache_read, 25); // 10 + 15
+      assert.equal(result.total_tokens_cache_write, 50); // 20 + 30
+      assert.equal(result.total_cost, 0, "Claude Code has no cost");
+      assert.ok(result.by_model.length >= 1);
+      const sonnet = result.by_model.find((m) => m.model === "claude-sonnet-5");
+      assert.ok(sonnet, "claude-sonnet-5 found");
+      assert.equal(sonnet!.tokens_input, 250); // 100 + 150
+      console.log("  ✓ readClaudeCodeUsage primary path → reads JSONL files");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+      else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+    }
+  });
+}
+
+export function testReadClaudeCodeUsageFilterByWorktree(): void {
+  withClaudeCodeFixture((dir) => {
+    const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+    try {
+      process.env.FAPONY_CLAUDE_PROJECTS_DIR = join(dir, "projects");
+      // Matching worktree → finds data
+      const result = readClaudeCodeUsage("/tmp/test-worktree");
+      assert.equal(result.session_count, 2);
+      // Non-existent worktree → empty
+      const empty = readClaudeCodeUsage("/nonexistent/wt");
+      assert.equal(empty.session_count, 0);
+      console.log("  ✓ readClaudeCodeUsage filter by worktree");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+      else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+    }
+  });
+}
+
+export function testReadClaudeCodeUsageSkipsMalformedLines(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-claude-malformed-"));
+  const projectDir = join(dir, "projects", "-tmp-test-worktree");
+  const { mkdirSync } = require("node:fs");
+  mkdirSync(projectDir, { recursive: true });
+
+  const content = [
+    "not valid json at all",
+    JSON.stringify({
+      message: {
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 100, output_tokens: 50 },
+      },
+      timestamp: "2026-09-09T03:00:00.000Z",
+      cwd: "/tmp/test-worktree",
+    }),
+    "{ broken json",
+    JSON.stringify({ type: "queue-operation" }), // no message.usage
+  ].join("\n");
+
+  writeFileSync(join(projectDir, "session-1.jsonl"), content);
+
+  const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+  try {
+    process.env.FAPONY_CLAUDE_PROJECTS_DIR = join(dir, "projects");
+    const result = readClaudeCodeUsage("/tmp/test-worktree");
+    assert.equal(result.session_count, 1, "skips malformed lines");
+    assert.equal(result.total_tokens_input, 100);
+    console.log("  ✓ readClaudeCodeUsage skips malformed lines");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+    else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

@@ -40,6 +40,7 @@ import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
+  testCmdInstallDispatchesZcode,
   testCmdInstallRejectsUnknownPlatform,
   testInstallClaudeAbsentAdds,
   testInstallClaudeAddFailureHintsHelp,
@@ -48,6 +49,11 @@ import {
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeMissingBinary,
   testInstallRootIsRepoRoot,
+  testInstallZcodeAlreadyConfiguredNoOp,
+  testInstallZcodeDryRunNoWrite,
+  testInstallZcodeFallbackPath,
+  testInstallZcodeNoConfigFails,
+  testInstallZcodePrimaryPath,
 } from "./install.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
@@ -165,6 +171,14 @@ import {
 } from "./report-html.test.js";
 import { testAssertSafe } from "./safety.test.js";
 import {
+  testReadClaudeCodeUsageFilterByWorktree,
+  testReadClaudeCodeUsageNoDir,
+  testReadClaudeCodeUsagePrimaryPath,
+  testReadClaudeCodeUsageSkipsMalformedLines,
+  testReadZcodeUsageDetail,
+  testReadZcodeUsageFilterByWorktree,
+  testReadZcodeUsageNoDb,
+  testReadZcodeUsagePrimaryPath,
   testSessionDefaultHasNoDetail,
   testSessionDetailBreakdown,
   testSessionDetailMatchesRawSql,
@@ -200,18 +214,35 @@ import {
   testStatsNoPricingValueIsNull,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
+// Telemetry tests (split into test/telemetry/)
 import {
   testTelemetryAggregatesFromRuns,
+  testTelemetryPerRoundCostMultiRound,
+  testTelemetryWorktreeRedacted,
+} from "./telemetry/aggregates.test.js";
+import {
+  testTelemetryDerivedAbsentWhenEmpty,
+  testTelemetryDerivedAttributesLatestGateModel,
+  testTelemetryDerivedFailDragsEsExcludesCpq,
+  testTelemetryDerivedMeanOfPerRunScores,
+  testTelemetryDerivedShape,
+  testTelemetryDerivedSkipsBytesProxyRuns,
+} from "./telemetry/derived-scores.test.js";
+import {
+  testTelemetryDerivedExcludedFromContentCheck,
+  testTelemetryDerivedToolCountsScopedToWorktrees,
+} from "./telemetry/derived-tools.test.js";
+import {
   testTelemetryEmptyDb,
   testTelemetryNoContentFields,
   testTelemetryPayloadShape,
-  testTelemetryPerRoundCostMultiRound,
   testTelemetrySchemaVersion,
+  testTelemetrySentAtIso,
+} from "./telemetry/payload.test.js";
+import {
   testTelemetrySelfReportedFromConfig,
   testTelemetrySelfReportedRoundTrip,
-  testTelemetrySentAtIso,
-  testTelemetryWorktreeRedacted,
-} from "./telemetry.test.js";
+} from "./telemetry/self-reported.test.js";
 import {
   testCmdUpdateAlreadyUpToDate,
   testCmdUpdateDirtyDeclined,
@@ -308,6 +339,12 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeAddFailureHintsHelp();
   testCmdInstallDispatchesClaude();
   testCmdInstallRejectsUnknownPlatform();
+  testInstallZcodeNoConfigFails();
+  testInstallZcodePrimaryPath();
+  testInstallZcodeFallbackPath();
+  testInstallZcodeAlreadyConfiguredNoOp();
+  testInstallZcodeDryRunNoWrite();
+  testCmdInstallDispatchesZcode();
   // MCP handcheck tests
   testMcpInitialize();
   testMcpToolsList();
@@ -406,6 +443,14 @@ export async function cmdTest(): Promise<void> {
   testSessionDetailSkipsUnknownType();
   testSessionDetailStepTokensNotSummed();
   testSessionDetailMatchesRawSql();
+  testReadZcodeUsageNoDb();
+  testReadZcodeUsagePrimaryPath();
+  testReadZcodeUsageDetail();
+  testReadZcodeUsageFilterByWorktree();
+  testReadClaudeCodeUsageNoDir();
+  testReadClaudeCodeUsagePrimaryPath();
+  testReadClaudeCodeUsageFilterByWorktree();
+  testReadClaudeCodeUsageSkipsMalformedLines();
   // Telemetry tests
   testTelemetrySchemaVersion();
   testTelemetryPayloadShape();
@@ -417,6 +462,14 @@ export async function cmdTest(): Promise<void> {
   testTelemetrySentAtIso();
   testTelemetryPerRoundCostMultiRound();
   testTelemetrySelfReportedRoundTrip();
+  testTelemetryDerivedAbsentWhenEmpty();
+  testTelemetryDerivedShape();
+  testTelemetryDerivedMeanOfPerRunScores();
+  testTelemetryDerivedSkipsBytesProxyRuns();
+  testTelemetryDerivedFailDragsEsExcludesCpq();
+  testTelemetryDerivedAttributesLatestGateModel();
+  testTelemetryDerivedToolCountsScopedToWorktrees();
+  testTelemetryDerivedExcludedFromContentCheck();
   testReportHtmlTotalCostCountsEachSpawnOnce();
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();

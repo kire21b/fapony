@@ -1,6 +1,11 @@
 // src/mcp/tools/usage.ts — fapony_usage tool
 
-import { type PassiveUsageResult, readPassiveUsage } from "../../session.js";
+import {
+  type PassiveUsageResult,
+  readClaudeCodeUsage,
+  readPassiveUsage,
+  readZcodeUsage,
+} from "../../session/index.js";
 import { jsonResult, type ToolResult } from "../types.js";
 
 export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
@@ -17,8 +22,18 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     detail,
   );
 
+  // ZCode data is always fetched when the DB exists
+  const zcodeData = readZcodeUsage(worktree, since, until, detail);
+
+  // Claude Code data is always fetched when the projects dir exists
+  const claudeCodeData = readClaudeCodeUsage(worktree, since, until);
+
   if (args.json === true) {
-    return jsonResult(data);
+    return jsonResult({
+      ...data,
+      zcode: zcodeData.session_count > 0 ? zcodeData : null,
+      claude_code: claudeCodeData.session_count > 0 ? claudeCodeData : null,
+    });
   }
 
   const lines: string[] = [];
@@ -79,6 +94,46 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
       lines.push(
         `    ... +${data.detail.by_session.length - 10} more (see json:true)`,
       );
+    }
+  }
+
+  // ZCode usage section
+  if (zcodeData.session_count > 0) {
+    lines.push("");
+    lines.push("zcode usage:");
+    lines.push(
+      `  total: ${zcodeData.total_tokens_input} in / ${zcodeData.total_tokens_output} out / ${zcodeData.total_tokens_reasoning} reasoning tokens over ${zcodeData.session_count} sessions`,
+    );
+    lines.push(
+      `  cache: ${zcodeData.total_tokens_cache_read.toLocaleString()} read / ${zcodeData.total_tokens_cache_write.toLocaleString()} write`,
+    );
+    if (zcodeData.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of zcodeData.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+        );
+      }
+    }
+  }
+
+  // Claude Code usage section
+  if (claudeCodeData.session_count > 0) {
+    lines.push("");
+    lines.push("claude code usage:");
+    lines.push(
+      `  total: ${claudeCodeData.total_tokens_input.toLocaleString()} in / ${claudeCodeData.total_tokens_output.toLocaleString()} out / ${claudeCodeData.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${claudeCodeData.session_count} sessions`,
+    );
+    lines.push(
+      `  cache: ${claudeCodeData.total_tokens_cache_read.toLocaleString()} read / ${claudeCodeData.total_tokens_cache_write.toLocaleString()} write`,
+    );
+    if (claudeCodeData.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of claudeCodeData.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+        );
+      }
     }
   }
 
