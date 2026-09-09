@@ -31,6 +31,8 @@ evidence, verdict, duration, rounds และ cost/usage พร้อม provena
 - ไม่เพิ่ม `plan_read`, `run_status`, `memory_query` และ tools อื่นเพียงเพราะเพิ่มไฟล์ได้ง่าย — ต้องมี use case จาก dogfood ก่อน
 - ไม่ทำ public protocol, registry, cloud dashboard หรือ auto-routing ในแผนนี้ — ต้องพิสูจน์ usefulness และ data quality ก่อน
 - ไม่เรียก byte count ว่า token usage จริง และไม่สร้าง cost จริงจากค่าประมาณ
+- ไม่เพิ่ม usage source อื่นนอก OpenCode ให้ `fapony_usage`/`readPassiveUsage()` — ดู
+  [PLAN-mcp-verification-pivot.md](PLAN-mcp-verification-pivot.md) §8 สำหรับ backlog cross-agent
 
 ## 3. เกณฑ์จบ (รู้ได้ว่าเสร็จ)
 

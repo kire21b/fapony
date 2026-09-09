@@ -1,6 +1,8 @@
 # PLAN-readme-launch — README ใหม่ vendor-neutral + MCP-first
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-05 · **Updated:** 2026-09-08
+> **Status:** ⛔ superseded โดย [PLAN-mcp-verification-pivot.md](PLAN-mcp-verification-pivot.md) (2026-09-09) —
+> positioning เปลี่ยนจาก "MCP-first + loop co-headline" เป็น MCP verification layer เด็ดขาด
+> · **Owner:** delamind · **Created:** 2026-09-05 · **Updated:** 2026-09-09
 > **Source spec:** ไม่มี
 
 ---
