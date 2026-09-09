@@ -5,7 +5,7 @@
 // Calls existing primitives — no duplicate parser/conformance logic.
 
 import { sumSpawnCost } from "../../cost.js";
-import { getEvents, getRun, openDb } from "../../db/index.js";
+import { addEvent, getEvents, getRun, newRun, openDb } from "../../db/index.js";
 import { loadConfig } from "../../db/load.js";
 import { parseGateEventData } from "../../parse.js";
 import { collectEvidence } from "../evidence.js";
@@ -254,6 +254,33 @@ export function toolVerificationReport(
     try {
       const events = getEvents(db, resolvedRunId);
       cost = sumSpawnCost(events);
+    } finally {
+      db.close();
+    }
+  }
+
+  // --- Log standalone calls ---
+  // A worktree-only report (no run_id) was previously read-only — nothing
+  // landed in runs/events, so calling this 100 times left zero trace.
+  // Create a lightweight run + event, same pattern verdict_submit uses for
+  // run_id-less calls (see mcp/tools/verdict.ts).
+  if (resolvedRunId === null) {
+    const db = openDb();
+    try {
+      resolvedRunId = newRun(
+        db,
+        resolvedWorktree ?? "mcp-external",
+        null,
+        null,
+        "mcp",
+      );
+      addEvent(db, resolvedRunId, "verification_report", {
+        facts_summary: {
+          files_changed: facts.files_changed,
+          commits: facts.commits.length,
+        },
+        evidence_summary,
+      });
     } finally {
       db.close();
     }

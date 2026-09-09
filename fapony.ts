@@ -1,60 +1,33 @@
 #!/usr/bin/env bun
 
-// fapony — multi-agent dev loop orchestrator
+// fapony — measure/verify MCP server for coding agents
 // CLI dispatch: all logic lives in src/
 
-import { cmdGate } from "./src/gate.js";
-import { cmdHandoff } from "./src/handoff.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
-import { cmdKickoff } from "./src/kickoff.js";
 
 import { cmdMcp } from "./src/mcp/index.js";
-import { cmdPlanMv } from "./src/planmv.js";
 import { cmdReport } from "./src/report.js";
 import { cmdReportWeb } from "./src/report-html.js";
-import { cmdRun } from "./src/run/index.js";
 import { cmdSetup } from "./src/setup.js";
-import { installSigintHandler } from "./src/sigint.js";
 import { cmdStats } from "./src/stats.js";
-import { cmdStatus } from "./src/status.js";
-import { cmdStop } from "./src/stop.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
-// Install SIGINT handler for long-running commands (run)
-if (cmd === "run") {
-  installSigintHandler();
-}
-
-if (cmd === "run") {
-  await cmdRun(a);
-} else if (cmd === "status" || cmd === "ps") {
-  cmdStatus(a);
-} else if (cmd === "stats") {
+if (cmd === "stats") {
   cmdStats(a);
 } else if (cmd === "telemetry") {
   await cmdTelemetry(a);
-} else if (cmd === "handoff") {
-  cmdHandoff(a);
-} else if (cmd === "stop") {
-  await cmdStop(a);
-} else if (cmd === "gate") {
-  await cmdGate(a);
 } else if (cmd === "init-mem") {
   cmdInitMem(a);
 } else if (cmd === "init") {
   cmdInit(a);
 } else if (cmd === "install") {
   cmdInstall(a);
-} else if (cmd === "kickoff") {
-  await cmdKickoff(a);
-} else if (cmd === "plan-mv") {
-  await cmdPlanMv(a);
 } else if (cmd === "setup") {
   await cmdSetup();
 } else if (cmd === "update") {
@@ -70,7 +43,7 @@ if (cmd === "run") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|run|ps|status|stats|telemetry|handoff|stop|gate|init|install|kickoff|init-mem|report|report-web|mcp|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|mcp|test> [args]",
   );
   process.exit(1);
 }

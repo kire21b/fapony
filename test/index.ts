@@ -1,18 +1,11 @@
 // test/index.ts — test runner. Import all test modules and run sequentially.
 
 import {
-  testAutoArchivePlanKeepsExistingHeader,
-  testAutoArchivePlanMissingFile,
-  testAutoArchivePlanNormalizesLinks,
-  testAutoArchivePlanSynthesizesHeader,
-} from "./archive.test.js";
-import {
   testConfigDefaults,
   testConfigDriftWarning,
   testConfigFileOverrides,
   testCustomMarkersParse,
   testCustomSafetyDeny,
-  testRenderRolePrompt,
   testSourceAndShippedRE,
   testTemplateArgsReplaceAll,
 } from "./config.test.js";
@@ -42,12 +35,6 @@ import {
   testGateOnceUncertain,
 } from "./gate.test.js";
 import {
-  testParseHandoff,
-  testParseHandoffMultiLine,
-  testRenderHandoff,
-  testRenderHandoffGitError,
-} from "./handoff.test.js";
-import {
   testInitCreatesDirectories,
   testInitIdempotent,
   testInitNoArgs,
@@ -65,12 +52,6 @@ import {
   testInstallClaudeMissingBinary,
   testInstallRootIsRepoRoot,
 } from "./install.test.js";
-import {
-  testKickoffMultiplePending,
-  testKickoffNoPending,
-  testKickoffShippedFiltered,
-  testKickoffSinglePending,
-} from "./kickoff.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
   testExtractMultiFieldEmptyLineEndsField,
@@ -176,87 +157,12 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
-  testPlanHygieneEnglishNoneNoLeak,
-  testPlanHygieneHeadingVariant,
-  testPlanHygieneNoSpecNoLeakWarning,
-  testPlanHygieneOk,
-  testPlanHygieneSpecLeak,
-  testPlanHygieneTooLong,
-} from "./planlint.test.js";
-import {
-  testPlanMvAlreadyDatedNotDoublePrefixed,
-  testPlanMvDestCollision,
-  testPlanMvDryRun,
-  testPlanMvInboundLinks,
-  testPlanMvMissingFile,
-  testPlanMvNoHeader,
-  testPlanMvNormalizeLinks,
-  testPlanMvWithHeader,
-} from "./planmv.test.js";
-import {
-  testPendingPlansFilteredAndSorted,
-  testPendingPlansMissingDir,
-  testRenderPendingPlansSection,
-  testResolvePlanArgErrors,
-  testResolvePlanArgExactAndPrefix,
-  testResolveRunArgsAutoSingle,
-  testResolveRunArgsDigitNotFound,
-  testResolveRunArgsErrors,
-  testResolveRunArgsFullForm,
-  testResolveRunArgsLoopFlag,
-  testResolveRunArgsResumeRunId,
-  testResolveRunArgsShortForms,
-  testWorktreeFromCwd,
-} from "./plans.test.js";
-import {
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
   testReportHtmlTotalCostCountsEachSpawnOnce,
 } from "./report-html.test.js";
-import {
-  testBackoffCappedAtMax,
-  testBackoffExponential,
-  testBackoffJitterRange,
-  testClassifyAuth,
-  testClassifyCrash,
-  testClassifyCustomPatterns,
-  testClassifyEmpty,
-  testClassifyEmptyExitZeroStderrAuth,
-  testClassifyLimit,
-  testClassifyLimit429,
-  testClassifyLimitNeedsContext,
-  testClassifyTailTruncated,
-  testClassifyTimeout,
-  testFlakyAgentRetriesAndSucceeds,
-  testIsSigintReceivedDefaultFalse,
-  testSigintHandlerMarksStopped,
-  testSleepInterruptibleAborts,
-  testSleepInterruptibleCompletes,
-  testWithRetryAbortedBeforeAttempt,
-  testWithRetryAuthNotRetried,
-  testWithRetryCanRetryGateBlocks,
-  testWithRetryExhausts,
-  testWithRetrySucceedsAfterTwoFails,
-  testWithRetrySucceedsFirstTry,
-  testWithRetryTerminalAttemptNumber,
-  testWithRetryTimeoutNotRetried,
-} from "./resilience.test.js";
-import {
-  testBuildExecutorPrompt,
-  testExecutorCmdRejectsPromptPlaceholder,
-  testExecutorCmdRolePreference,
-  testRunOnceAbortedMarksStopped,
-} from "./run.test.js";
 import { testAssertNoPromptInArgv, testAssertSafe } from "./safety.test.js";
-import {
-  testBuildScrutinizePrompt,
-  testResolveChangedFiles,
-  testShouldScrutinizeFix,
-  testSpawnRejectsPromptPlaceholder,
-  testSpawnScrutinizeFix,
-  testSpawnScrutinizeFixRejectsDangerousCmd,
-} from "./scrutinize.test.js";
 import {
   testBuildSetupConfigNoMemory,
   testBuildSetupConfigWithMemory,
@@ -280,10 +186,6 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
-  testSigintMarksStoppedAndLogs,
-  testSigintSkipsTerminalRuns,
-} from "./sigint.test.js";
-import {
   testStatsByWorktree,
   testStatsEmptyDb,
   testStatsGateWithoutSpawnsInWindow,
@@ -293,11 +195,6 @@ import {
   testStatsNoPricingValueIsNull,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
-import {
-  testStatusTableShowsNothingWhenEmpty,
-  testStatusTableShowsPlanAndMemId,
-  testStatusTableTruncatesLongMemId,
-} from "./status.test.js";
 import {
   testTelemetryAggregatesFromRuns,
   testTelemetryEmptyDb,
@@ -332,14 +229,10 @@ export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
   testAssertNoPromptInArgv();
-  testParseHandoff();
-  testParseHandoffMultiLine();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
   testMigrateDbRejectsNewerSchema();
-  testRenderHandoff();
-  testRenderHandoffGitError();
   await testParseGateVerdict();
   testParseGateEventData();
   testParsePlanUpdate();
@@ -354,62 +247,9 @@ export async function cmdTest(): Promise<void> {
   testGateOncePassGood();
   testGateOncePassAdequate();
   testGateOnceUncertain();
-  testPlanMvNoHeader();
-  testPlanMvWithHeader();
-  testPlanMvNormalizeLinks();
-  testPlanMvDryRun();
-  testPlanMvMissingFile();
-  testPlanMvDestCollision();
-  testPlanMvInboundLinks();
-  testPlanMvAlreadyDatedNotDoublePrefixed();
-  testClassifyAuth();
-  testClassifyTimeout();
-  testClassifyLimit();
-  testClassifyLimit429();
-  testClassifyCrash();
-  testClassifyEmpty();
-  testClassifyEmptyExitZeroStderrAuth();
-  testClassifyTailTruncated();
-  testClassifyCustomPatterns();
-  testClassifyLimitNeedsContext();
-  testBackoffExponential();
-  testBackoffCappedAtMax();
-  testBackoffJitterRange();
-  await testSleepInterruptibleCompletes();
-  await testSleepInterruptibleAborts();
-  await testWithRetrySucceedsFirstTry();
-  await testWithRetrySucceedsAfterTwoFails();
-  await testWithRetryExhausts();
-  await testWithRetryAuthNotRetried();
-  await testWithRetryTimeoutNotRetried();
-  await testWithRetryAbortedBeforeAttempt();
-  await testWithRetryTerminalAttemptNumber();
-  await testWithRetryCanRetryGateBlocks();
-  await testFlakyAgentRetriesAndSucceeds();
-  await testSigintHandlerMarksStopped();
-  testIsSigintReceivedDefaultFalse();
-  await testSigintMarksStoppedAndLogs();
-  await testSigintSkipsTerminalRuns();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
-  testKickoffSinglePending();
-  testKickoffShippedFiltered();
-  testKickoffMultiplePending();
-  testKickoffNoPending();
-  testWorktreeFromCwd();
-  testPendingPlansFilteredAndSorted();
-  testPendingPlansMissingDir();
-  testResolvePlanArgExactAndPrefix();
-  testResolvePlanArgErrors();
-  testResolveRunArgsFullForm();
-  testResolveRunArgsShortForms();
-  testResolveRunArgsAutoSingle();
-  testResolveRunArgsErrors();
-  testResolveRunArgsLoopFlag();
-  testResolveRunArgsDigitNotFound();
-  testResolveRunArgsResumeRunId();
-  testRenderPendingPlansSection();
   testMemoryDefaultWiringWithFile();
   testMemoryDefaultWiringNoFile();
   testMemoryExplicitConfigWins();
@@ -418,37 +258,13 @@ export async function cmdTest(): Promise<void> {
   // dev loop, keep it for CI/pre-commit (bun fapony.ts test, no SKIP_SLOW).
   if (!process.env.SKIP_SLOW) testClaimMemoryTimeout();
   else console.log("  ⏭ claimMemory timeout prevents hang (SKIP_SLOW)");
-  testShouldScrutinizeFix();
-  testBuildScrutinizePrompt();
-  testResolveChangedFiles();
-  await testSpawnScrutinizeFix();
-  await testSpawnScrutinizeFixRejectsDangerousCmd();
-  await testSpawnRejectsPromptPlaceholder();
-  testAutoArchivePlanSynthesizesHeader();
-  testAutoArchivePlanKeepsExistingHeader();
-  testAutoArchivePlanNormalizesLinks();
-  testAutoArchivePlanMissingFile();
   testConfigDefaults();
   testConfigFileOverrides();
   testCustomMarkersParse();
   testCustomSafetyDeny();
   testTemplateArgsReplaceAll();
-  testRenderRolePrompt();
   testSourceAndShippedRE();
   testConfigDriftWarning();
-  testBuildExecutorPrompt();
-  testExecutorCmdRolePreference();
-  testExecutorCmdRejectsPromptPlaceholder();
-  await testRunOnceAbortedMarksStopped();
-  testPlanHygieneOk();
-  testPlanHygieneTooLong();
-  testPlanHygieneSpecLeak();
-  testPlanHygieneNoSpecNoLeakWarning();
-  testPlanHygieneEnglishNoneNoLeak();
-  testPlanHygieneHeadingVariant();
-  testStatusTableShowsNothingWhenEmpty();
-  testStatusTableShowsPlanAndMemId();
-  testStatusTableTruncatesLongMemId();
   testCostAttributionAndBytes();
   testCostUsdEstimate();
   testCostPricingNullKeepsBytes();

@@ -1,5 +1,12 @@
 # fapony — Knowledge Base
 
+> ⚠️ **Legacy notice:** ส่วนใหญ่ของเอกสารนี้ (architecture tree, execution flow, DB
+> schema, `run`/`loop`/`kickoff`/`gate`/`stop`/`handoff`/`status`/`plan-mv`) อธิบาย
+> execute→review→fix CLI loop ที่**ถูก deprecate แล้ว** — fapony ตอนนี้คือ measure/verify
+> ผ่าน MCP tools (ดู [README.md](README.md)) เป็นหลัก โค้ด loop ยังอยู่ (ยังไม่ลบ) แต่
+> ห้ามอ้างอิงเอกสารนี้เป็น source of truth ของ public surface อีกต่อไป — จะ rewrite/ลบ
+> เนื้อหาที่ล้าสมัยเมื่อโค้ด loop ถูกลบจริง (Wave 2)
+
 ## What is fapony
 
 CLI orchestrator สำหรับ multi-agent dev loop: `opencode เขียน → review → วนต่อ`. อยู่นอก worktree ของ product (ไม่ใช่ git worktree ของ innominix) เพราะ state ของผู้คุมงานไม่ควรอยู่ในที่ที่ผู้ถูกคุมแก้ได้

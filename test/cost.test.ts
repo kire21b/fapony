@@ -18,7 +18,6 @@ import {
   pricingFor,
   roleModel,
 } from "../src/db/index.js";
-import { renderHandoff } from "../src/handoff.js";
 
 function baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
@@ -130,23 +129,6 @@ export function testCostBeginEndRoundTrip(): void {
 }
 
 export function testCostHandoffAndFormat(): void {
-  const facts = { files: 1, lines: 2, commits: [] as string[], branch: "main" };
-  const parsed = { missing: true } as const;
-
-  // No cost → old output unchanged (additive).
-  const plain = renderHandoff(facts, parsed);
-  assert(!plain.includes("--- cost"), "no cost section without data");
-
-  // Bytes only (pricing null) → no USD.
-  const bytesOnly = renderHandoff(facts, parsed, undefined, {
-    spawns: 2,
-    bytes_in: 100,
-    bytes_out: 50,
-    usd_estimate: null,
-  });
-  assert(bytesOnly.includes("100 bytes in / 50 bytes out over 2 spawns"));
-  assert(!bytesOnly.includes("$"), "no USD without pricing");
-
   // Priced → estimate labeled, never a bare charge.
   const priced = formatCost({
     spawns: 1,

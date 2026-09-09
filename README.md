@@ -1,10 +1,12 @@
 # fapony
 
-fapony turns any coding agent into a multi-agent workflow. You write the plan; fapony drives the execute → review → fix loop: one agent writes code and commits, a second agent reviews the diff, and a fix round runs only if the review fails. Plan, spec, and memory live as plain files in your own git repo, so you can swap agents at any time without migrating anything.
+fapony measures what coding agents actually do — tokens, cost, rounds, pass/fail, per model and per workflow — through 6 MCP tools that any agent can call (Claude Code, OpenCode, Codex, anything that speaks MCP). If you juggle more than one agent, this is the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on which kind of task" becomes a data question instead of a vibe. On top of measurement, fapony verifies claims: git facts first, handoff conformance, allowlisted evidence, a 6-grade verdict — with everything the agent claimed but couldn't prove marked as such.
 
-Whether you use Claude Code, OpenCode, Codex, or anything else that reads stdin — no framework to learn: if you can write a markdown plan and run a CLI command, you can use fapony.
+Two tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline.
 
-## Quick start
+Adopting it doesn't change your workflow. There is no loop to join and no framework to learn: install the MCP server, point your agent at it, and read the reports.
+
+## Quick start (MCP)
 
 ```bash
 # 1. Install (Bun is the only runtime dependency — fapony itself has zero packages)
@@ -12,155 +14,59 @@ git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 
-# 2. Scaffold .fapony/ (plan/, spec/, .memory/) into your project worktree
-fapony init /path/to/your-worktree
-
-# 3. Point fapony at your worktree and your agents
-#    (fapony.config.json in the fapony checkout — see "Config" below)
-
-# 4. Write a plan — use the template, or draft one with your agent
-cp templates/PLAN.md /path/to/your-worktree/.fapony/plan/PLAN-my-feature.md
-
-# 5. Run
-fapony kickoff <worktree-key>     # auto-detects the single pending plan
-fapony status                     # what's running, what awaits review
-fapony gate <run-id> pass-good    # or: fail "missing error handling on X"
-fapony stats                      # pass/stall rate, avg rounds, timing KPIs
-```
-
-After a run you get a **handoff**: verifiable git facts first (files, lines, commits, branch), then the executor's own report (what it was unsure about, what it didn't finish). You — or a review agent — judge from that, not from a chat transcript.
-
-## How the loop works
-
-```
-PLAN (you + your agent)
-  │
-  ▼
-fapony run <worktree> --plan <path>
-  │
-  ├─ git guard (dirty tree? dangerous command? → stop, ask, never clean up)
-  ├─ memory claim (optional, per-project memory via config.memory.*)
-  ├─ spawn executor (your agent — Claude Code / OpenCode / Codex / …)
-  │    └─ executor writes code, commits, outputs ## HANDOFF
-  ├─ gitFacts — real diff stats from git
-  ├─ route — big diff (>15 files or >400 lines) → full review, small → normal
-  └─ print handoff + review command
-        │
-        ▼
-  review gate (a reviewer agent, or you)
-        │
-        ├─ pass → done (loop continues to the next chunk if you use `fapony loop`)
-        └─ fix needed → run again (round +1, cap 2)
-             │
-             └─ round 3? → STOP. The plan has a problem, not the code.
-```
-
-Small diffs get a cheap pre-pass (`scrutinize-fix` prompt: review + fix in one round) *before* the expensive review gate — small bugs die young instead of burning tokens at the gate.
-
-## Four ways to use it
-
-### Case 1 — Claude Code user who wants a reviewer
-
-You already work in Claude Code. You want a second opinion on every diff before it lands, and you want the loop to chunk a big feature into reviewable pieces.
-
-```jsonc
-// fapony.config.json
-{
-  "worktrees": { "myapp": "/absolute/path/to/myapp" },
-  "executor": { "cmd": ["claude", "-p", "--dangerously-skip-permissions"], "timeoutMin": 45 },
-  "review": {
-    "bigDiff": { "files": 15, "lines": 400 },
-    "maxRounds": 2,
-    "gate": ["claude", "-p", "/code-review high"]
-  }
-}
-```
-
-```bash
-fapony run myapp --plan .fapony/plan/PLAN-my-feature.md
-# …review the printed handoff…
-fapony gate <run-id> pass        # or fail + note; the note is carried into the fix round
-```
-
-The gate note from a `fail` is injected into the next executor round as `{{FEEDBACK}}` — the fixer sees exactly what the reviewer saw.
-
-### Case 2 — OpenCode user who wants project memory
-
-You use OpenCode (`opencode run` reads a prompt from stdin). You want each run to claim a memory slot in the project, log what happened, and get a "what's next" kickoff when work passes review.
-
-```jsonc
-// fapony.config.json — memory via shell adapter, agent-agnostic by design
-{
-  "worktrees": { "myapp": "/absolute/path/to/myapp" },
-  "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
-  "memory": {
-    "claim":   ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
-    "close":   ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
-    "add":     ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
-    "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
-  }
-}
-```
-
-If `.fapony/.memory/mem.ts` exists (scaffolded by `fapony init`, from [templates/memory/](templates/memory/)) you can omit the whole `memory` block — fapony wires these defaults automatically. Memory is **per project**: the adapter runs inside each worktree against that worktree's own `.fapony/.memory/`, while fapony's run-state DB stays outside the worktree where agents can't rewrite it. A memory log that grows past a threshold can be compacted with `bun .fapony/.memory/mem.ts rotate --apply`.
-
-### Case 3 — Codex user who wants spec-driven work
-
-You use Codex (or any agent that takes a prompt on stdin). You keep the detailed contract in a spec file and want it attached to every executor round, so the agent works against a fixed contract instead of re-deriving one.
-
-Point `executor.cmd` at your Codex invocation (flags vary by Codex version — this case is supported by design and verified by fapony's test suite for the spec-injection behavior, not yet run against a live Codex session):
-
-```jsonc
-// fapony.config.json
-{
-  "worktrees": { "myapp": "/absolute/path/to/myapp" },
-  "executor": { "cmd": ["codex", "exec"], "timeoutMin": 45 }
-}
-```
-
-Then reference the spec from the plan header:
-
-```markdown
-# PLAN-my-feature
-> **Source spec:** .fapony/spec/my-feature.md
-```
-
-fapony reads `.fapony/spec/my-feature.md` inside the worktree and appends it to the executor prompt (truncated at `spec.maxLines`, default 200). Missing spec file → `(no spec)`, never a crash.
-
-### Case 4 — MCP agent (any agent, no loop needed)
-
-Any agent that speaks MCP can verify work without adopting fapony's loop. Start the server and call 6 tools:
-
-```
-handoff_collect  →  handoff_check  →  verdict_submit
-     ↓                    ↓                 ↓
-  git facts         conformance         store verdict
-
-fapony_stats  →  query KPIs (by-model, by-grade, by-value)
-verification_report  →  full report (facts + checks + evidence + verdict + cost)
-```
-
-```bash
-# Start the MCP server (stdio JSON-RPC)
-fapony mcp
-
-# Or add to your MCP client config (e.g., Claude Desktop):
+# 2. Wire it into your MCP client
+fapony install --platform opencode        # adds mcp.fapony to your opencode config
+fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
+# …or add it manually to any MCP client (e.g. Claude Desktop):
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
+
+# 3. Measure — zero per-project setup
+#    ask your agent: "Run fapony_stats and fapony_usage — what has it cost me, per model?"
+
+# 4. Verify (optional, per project) — scaffold the evidence allowlist
+fapony init /path/to/your-worktree
+#    .fapony/evidence.json lists the commands the evidence collector may run —
+#    edit the placeholder cmds to your real test/typecheck commands
 ```
 
-6 tools available: `handoff_collect` (git facts), `handoff_check` (conformance), `verdict_submit` (store verdict), `fapony_stats` (query KPIs), `fapony_usage` (passive usage from opencode sessions), `verification_report` (full report). See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
+With `.fapony/evidence.json` in place, ask your agent to verify its own work:
 
-## Why handoff must be a template with git facts first
+```
+"Run fapony verification_report on this repo and summarize the result."
+```
 
-The `## HANDOFF` block the executor outputs is a **template**, not a chat transcript. Git facts (files changed, commits, branch) come first because they are verifiable. The executor's self-reported items (uncertain, not_done) come second and are labeled as such. "Typecheck passed" only proves the code compiles — not that the flow or permissions are right. The template forces a structured summary a reviewer can actually consume, and `fapony handoff <run-id>` reprints it later from the audit trail.
+You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
 
-## Why cap at 2 rounds
+## The 6 tools
 
-Round 1: executor writes code, reviewer checks it. Round 2: executor fixes what the reviewer found. Round 3 means the **plan** has a problem, not the code — stop and go back to the human. More rounds just burn tokens fixing symptoms; fapony stops the run and says so.
+```
+measure:  handoff_collect ── fapony_stats ── fapony_usage
+verify:   handoff_check ── verdict_submit ── verification_report
+          (facts + checks + evidence + verdict + cost, in one call)
+```
+
+| Tool | Tier | Purpose |
+|------|------|---------|
+| `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
+| `fapony_stats` | measure | KPIs across runs: by-model, by-grade, by-value |
+| `fapony_usage` | measure | Passive usage from OpenCode sessions (tokens, cost, by-model) — other agents' session logs aren't wired in yet |
+| `handoff_check` | verify | Check the agent's handoff claims against those facts |
+| `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) |
+| `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
+
+Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page.
+
+Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
+
+## Why measure from the outside
+
+- **Raw facts are hard to argue with.** Cost, rounds, diff sizes, pass rates — collected from git and session logs, not self-reported. A vendor can dispute a verdict as unfair; they can't dispute their own token count.
+- **Agent platforms grading their own homework is a conflict of interest.** fapony is a separate layer that measures any agent the same way, which is what makes "model X vs. model Y" or "workflow A vs. workflow B" answerable with real data instead of vibes.
+- **Verification stays honest about its limits.** The collector runs only commands listed in `.fapony/evidence.json`; commands proposed by the agent outside the allowlist are reported as *proposed — not executed*, never run. And because fapony doesn't control your agent's flow, verdicts are labeled as one signal — not promised as truth.
 
 ## Verdict grades
 
-Reviews produce a quality grade, not just pass/fail. Each grade maps to a qualityScore (documented in CLAUDE.md):
+Verification produces a quality grade, not just pass/fail:
 
 | Grade | Meaning |
 |-------|---------|
@@ -181,9 +87,7 @@ fapony ships with three portable skills (copy to any agent tool):
 | `skill/move-to-done.md` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
 | `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
 
-## Using plan-with-me with any agent
-
-The `plan-with-me` prompt is vendor-neutral — pipe it to any agent:
+`plan-with-me` is vendor-neutral — pipe it to any agent:
 
 ```bash
 cat prompts/plan-with-me.md | claude -p     # Claude Code
@@ -191,51 +95,32 @@ cat prompts/plan-with-me.md | opencode run  # OpenCode
 cat prompts/plan-with-me.md | <your-agent>  # anything that reads stdin
 ```
 
-**Example plans** produced by this prompt (in [examples/](examples/)):
-
-| Plan | Type | Scope |
-|------|------|-------|
-| [PLAN-webapp-notifications.md](examples/PLAN-webapp-notifications.md) | Web app | Spec-heavy, wide (WebSocket + UI + backend) |
-| [PLAN-cli-logger.md](examples/PLAN-cli-logger.md) | CLI tool | Small, no spec |
-| [PLAN-refactor-auth.md](examples/PLAN-refactor-auth.md) | Refactor | Existing code, no new feature |
-| [PLAN-fix-race-condition.md](examples/PLAN-fix-race-condition.md) | Bug fix | Small, specific |
-| [PLAN-feature-export.md](examples/PLAN-feature-export.md) | New feature | Medium scope |
-
-## Prompts
-
-| Prompt | Used by | Purpose |
-|--------|---------|---------|
-| `prompts/execute.md` | executor | What to build, rules, output contract |
-| `prompts/fixer.md` | fixer | Fix gate review notes + re-handoff |
-| `prompts/planner.md` | planner | Update PLAN, mark shipped, hand off next chunk |
-| `prompts/scrutinize-fix.md` | review agent | Two-phase review + fix in one round |
-| `prompts/plan-with-me.md` | any agent | Draft plan + spec from conversation (vendor-neutral) |
+Example plans produced by it live in [examples/](examples/).
 
 ## CLI
 
 ```bash
-fapony init <path>                       # scaffold .fapony/ into a worktree
-fapony setup                             # interactive wizard: config + scaffold in one step
-fapony update                            # self-update via git pull
-fapony run <key> --plan <path> [--mem-id <id>] [--allow-dirty] [--loop]
-fapony run <run-id> --loop               # resume a run and loop until done
-fapony kickoff <key>                     # auto-detect the single pending plan
-fapony status                            # active runs table
-fapony stats                             # pass/stall rate, avg rounds, exec/review timing
-fapony handoff <run-id>                  # reprint a run's handoff
-fapony gate <run-id> <grade> [note]      # review verdict (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
-fapony stop <run-id> [reason]            # stop run + release memory
-fapony plan-mv <file>                    # archive a shipped PLAN
+# Verification & reporting
 fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
 fapony report <run-id>                   # verification report for a run
+fapony report-web [file]                 # static HTML report page
+fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
+fapony handoff <run-id>                  # reprint a run's handoff
+fapony gate <run-id> <grade> [note]      # review verdict (6 grades)
+
+# Setup & maintenance
+fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
 fapony install --platform opencode       # add mcp.fapony to opencode config
+fapony install --platform claude         # add fapony to Claude Code (user scope)
+fapony setup                             # interactive wizard: config + scaffold in one step
+fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
 fapony test                              # self-check
 ```
 
 ## Config
 
-`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) to get a complete working reference; every section is optional with sane defaults. Key fields:
+`fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
 - `executor.cmd` — command to spawn (receives the prompt via stdin); `roles.executor` overrides it per-role with `{model}` support
@@ -246,29 +131,19 @@ fapony test                              # self-check
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 
-## MCP
-
-fapony ships an MCP server (`fapony mcp`) for agents that speak JSON-RPC over stdio — no loop setup required. See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for the full protocol, adapter examples (bash, Python), and safety rules.
-
-| Tool | Purpose |
-|------|---------|
-| `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
-| `handoff_check` | Verify handoff conformance against facts |
-| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
-| `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
-| `fapony_usage` | Query passive usage from opencode sessions (tokens, cost, by-model) |
-
 ## Scope
 
 **Supported:**
-- Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
-- Git worktree coordination (guard, handoff, routing, auto-archive on ship)
 - MCP server — 6 tools via stdio JSON-RPC, works with any MCP client
-- Memory integration via shell adapter, per project (configurable or default-wired)
+- Measurement: cross-run KPIs by model/grade/value + passive usage (tokens, cost)
+- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed)
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
+- Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)
+- Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 
 **Not supported (yet):**
+- Cross-agent usage — `fapony_usage` reads OpenCode's session DB only; Claude Code and other agents keep their own session logs, not wired in
 - DeepSeek prefilter (a slot exists in config; the code path is not wired)
 - Distributed runs across multiple machines
 - Memory migration from `.fapony/.memory/log.jsonl`

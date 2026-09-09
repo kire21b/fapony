@@ -1,3 +1,6 @@
+// gateOnce is the core review-verdict logic — still live, called by the MCP
+// verdict_submit tool (src/mcp/tools/verdict.ts). The CLI wrapper (cmdGate)
+// was removed with the rest of the execute→review→fix loop (Wave 2).
 import {
   addEvent,
   getRun,
@@ -7,7 +10,7 @@ import {
   setStatus,
 } from "./db/index.js";
 import { closeMemory, kickoffMemory } from "./memory.js";
-import { isPassFamily, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
+import { isPassFamily, type VerdictGrade } from "./parse.js";
 
 export interface GateResult {
   runId: number;
@@ -121,47 +124,4 @@ export function gateOnce(
   }
 
   return { runId, status: "fixing", round: updated.round };
-}
-
-/** CLI wrapper — parses args, calls gateOnce, handles exit. */
-export async function cmdGate(args: string[]): Promise<void> {
-  const runId = parseInt(args[0], 10);
-  const rawVerdict = args[1];
-
-  if (!runId || Number.isNaN(runId) || !rawVerdict) {
-    console.error("usage: fapony gate <run-id> <grade> [note]");
-    console.error(`       grade: ${[...VERDICT_GRADES].join(" | ")}`);
-    console.error(
-      "       (long/multiline note? pipe it via stdin instead, e.g. `fapony gate 1 fail < findings.md`)",
-    );
-    process.exit(1);
-  }
-
-  if (!VERDICT_GRADES.has(rawVerdict)) {
-    console.error(`unknown grade: ${rawVerdict}`);
-    console.error(`valid grades: ${[...VERDICT_GRADES].join(", ")}`);
-    process.exit(1);
-  }
-
-  const verdict = rawVerdict as VerdictGrade;
-  const inline = args.slice(2).join(" ");
-  const note =
-    inline || (process.stdin.isTTY ? "" : await Bun.stdin.text()).trim();
-
-  const result = gateOnce(runId, verdict, note);
-
-  if (result.error) {
-    console.error(result.error);
-    process.exit(1);
-  }
-
-  if (result.status === "passed") {
-    console.log(`run ${runId} passed`);
-  } else if (result.status === "fixing") {
-    console.log(
-      `run ${runId} needs fixes (round ${result.round}): ${note || "(no note)"}`,
-    );
-  } else if (result.status === "stopped") {
-    console.log(`run ${runId} stopped — uncertain verdict`);
-  }
 }

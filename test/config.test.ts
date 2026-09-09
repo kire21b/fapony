@@ -25,8 +25,6 @@ import {
   specMaxLines,
   verdictRE,
 } from "../src/db/index.js";
-import { parseHandoff } from "../src/handoff.js";
-import { renderRolePrompt } from "../src/loop/index.js";
 import { parseGateVerdict, parsePlanUpdate } from "../src/parse.js";
 import { assertSafe } from "../src/safety.js";
 import { fillPrompt, templateArgs } from "../src/util.js";
@@ -128,12 +126,9 @@ export function testCustomMarkersParse(): void {
     fileDone: "## FINISHED",
   };
 
-  const h = parseHandoff(
-    "## DONE\nclaimed: x\ncommits: none\nchecks: ok\nuncertain: none\nnot_done: none",
-    handoffMarker(config),
-  );
-  assert.equal(h.missing, false);
-  assert.equal(h.claimed, "x");
+  // handoff marker itself (parseHandoff) is loop-only and was removed with
+  // it — custom handoff markers are still config-parseable, just unused now.
+  assert.equal(handoffMarker(config), "## DONE");
 
   const g = parseGateVerdict("RESULT: fail\nbroken", config);
   assert(g !== null && g.verdict === "fail", "custom verdict re should parse");
@@ -194,42 +189,6 @@ export function testTemplateArgsReplaceAll(): void {
   assert.equal(trickyFilled, "PLAN:\ncosts $100 and $& more");
 
   console.log("  ✓ templateArgs replaceAll + fillPrompt");
-}
-
-export function testRenderRolePrompt(): void {
-  const config = baseConfig();
-  const fallback = "builtin fallback";
-  // no prompt file → fallback verbatim
-  assert.equal(
-    renderRolePrompt(config, "gate", fallback, { RUN_ID: "1" }),
-    fallback,
-  );
-
-  // prompt file with vars → filled
-  const dir = mkdtempSync(join(tmpdir(), "fapony-prompt-"));
-  try {
-    const file = join(dir, "gate.md");
-    writeFileSync(file, "Review {{RUN_ID}} in {{WORKTREE}} ({{RUN_ID}})");
-    const withFile: Config = { ...config, prompts: { gate: file } };
-    assert.equal(
-      renderRolePrompt(withFile, "gate", fallback, {
-        RUN_ID: "9",
-        WORKTREE: "wt",
-      }),
-      "Review 9 in wt (9)",
-    );
-
-    // unreadable file → fallback, never throws
-    const missing: Config = {
-      ...config,
-      prompts: { gate: join(dir, "nope.md") },
-    };
-    assert.equal(renderRolePrompt(missing, "gate", fallback, {}), fallback);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-
-  console.log("  ✓ renderRolePrompt file + fallback");
 }
 
 export function testSourceAndShippedRE(): void {
