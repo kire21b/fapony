@@ -17,6 +17,7 @@ bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 # 2. Wire it into your MCP client
 fapony install --platform opencode        # adds mcp.fapony to your opencode config
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
+fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
 # …or add it manually to any MCP client (e.g. Claude Desktop):
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
@@ -110,6 +111,7 @@ fapony stats                             # KPIs: pass/stall rate, by-model, by-g
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)
 fapony install --platform opencode       # add mcp.fapony to opencode config
 fapony install --platform claude         # add fapony to Claude Code (user scope)
+fapony install --platform zcode          # add fapony to ZCode (user scope)
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md

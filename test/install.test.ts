@@ -1,5 +1,13 @@
 import assert from "node:assert";
-import { existsSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type ClaudeRunResult,
@@ -8,6 +16,7 @@ import {
   claudeGetPointsToFapony,
   cmdInstall,
   cmdInstallClaude,
+  cmdInstallZcode,
   INSTALL_ROOT,
   type InstallDeps,
 } from "../src/install.js";
@@ -236,6 +245,173 @@ export function testCmdInstallRejectsUnknownPlatform(): void {
     }),
   );
   assert.equal(code, 1);
-  assert.ok(err.includes("opencode|claude"), `got: ${err}`);
+  assert.ok(err.includes("opencode|claude|zcode"), `got: ${err}`);
   console.log("  ✓ install rejects unknown platform");
+}
+
+// --- zcode platform tests ---
+
+function withTempHome<T>(fn: (home: string) => T): T {
+  const home = mkdtempSync(join(tmpdir(), "fapony-home-"));
+  try {
+    return fn(home);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
+function writeJson(path: string, obj: unknown): void {
+  writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`);
+}
+
+function zcodeEntry(): Record<string, unknown> {
+  return {
+    type: "stdio",
+    command: "bun",
+    args: ["run", join(INSTALL_ROOT, "fapony.ts"), "mcp"],
+  };
+}
+
+export function testInstallZcodeNoConfigFails(): void {
+  withTempHome((home) => {
+    let code: number | null = null;
+    const err = silentErrors(() =>
+      captureErrors(() => {
+        try {
+          cmdInstallZcode(false, { exit: testExit, homedir: () => home });
+        } catch (e) {
+          code = (e as TestExit).code;
+        }
+      }),
+    );
+    assert.equal(code, 1);
+    assert.ok(err.includes("ZCode config not found"), `got: ${err}`);
+    console.log("  ✓ install zcode no config → clear error");
+  });
+}
+
+export function testInstallZcodePrimaryPath(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    writeJson(configPath, {
+      mcp: {
+        servers: { other: { type: "stdio", command: "node", args: ["x.js"] } },
+      },
+    });
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    const servers = (cfg.mcp as Record<string, unknown>).servers as Record<
+      string,
+      unknown
+    >;
+    assert.deepStrictEqual(servers.fapony, zcodeEntry());
+    assert.deepStrictEqual(servers.other, {
+      type: "stdio",
+      command: "node",
+      args: ["x.js"],
+    });
+    assert.ok(err.includes("added mcp.fapony"), `got: ${err}`);
+    console.log(
+      "  ✓ install zcode primary path → writes ~/.zcode/cli/config.json",
+    );
+  });
+}
+
+export function testInstallZcodeFallbackPath(): void {
+  withTempHome((home) => {
+    const agentsDir = join(home, ".agents");
+    mkdirSync(agentsDir, { recursive: true });
+    const configPath = join(agentsDir, "mcp.json");
+    writeJson(configPath, {
+      mcpServers: { other: { type: "stdio", command: "node", args: ["x.js"] } },
+    });
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    const servers = cfg.mcpServers as Record<string, unknown>;
+    assert.deepStrictEqual(servers.fapony, zcodeEntry());
+    assert.ok(err.includes("fallback path: ~/.agents/mcp.json"), `got: ${err}`);
+    console.log("  ✓ install zcode fallback path → writes ~/.agents/mcp.json");
+  });
+}
+
+export function testInstallZcodeAlreadyConfiguredNoOp(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    writeJson(configPath, { mcp: { servers: { fapony: zcodeEntry() } } });
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("already configured"), `got: ${err}`);
+    console.log("  ✓ install zcode already configured → no-op");
+  });
+}
+
+export function testInstallZcodeDryRunNoWrite(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    writeJson(configPath, {});
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallZcode(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("dry-run"), `got: ${err}`);
+    assert.ok(err.includes("mcp.servers.fapony"), `got: ${err}`);
+    console.log("  ✓ install zcode dry-run → no write");
+  });
+}
+
+export function testCmdInstallDispatchesZcode(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".zcode", "cli");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.json");
+    writeJson(configPath, {});
+
+    silentErrors(() =>
+      cmdInstall(["zcode"], { exit: testExit, homedir: () => home }),
+    );
+    const cfg = JSON.parse(readFileSync(configPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    const servers = (cfg.mcp as Record<string, unknown>).servers as Record<
+      string,
+      unknown
+    >;
+    assert.deepStrictEqual(servers.fapony, zcodeEntry());
+    console.log("  ✓ install dispatch routes --platform zcode");
+  });
 }
