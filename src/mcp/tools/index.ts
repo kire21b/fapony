@@ -121,6 +121,16 @@ export const TOOLS = [
           type: "string",
           description: "Optional note (required when reason_code = 'other')",
         },
+        worktree: {
+          type: "string",
+          description:
+            "Optional worktree label for a new run (used only when run_id is omitted, e.g. move-to-done archiving a shipped plan)",
+        },
+        plan: {
+          type: "string",
+          description:
+            "Optional plan file path for a new run (used only when run_id is omitted)",
+        },
       },
       required: ["verdict", "reason_code"],
     },

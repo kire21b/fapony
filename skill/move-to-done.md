@@ -36,6 +36,16 @@ You are about to move a PLAN that has been shipped to the archive.
    chore(plan): archive PLAN-foo.md (shipped <hash>)
    ```
 
+7. **Record the verdict** — call the `verdict_submit` MCP tool (fapony) so this ship feeds
+   `project_health_context` for the next plan-with-me draft. No `run_id` needed:
+   - `verdict`: `pass` (adjust if the ship had known rough edges — see VERDICT_GRADES)
+   - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
+     — pick `other` with a `note` if nothing fits, or leave a `note` on any grade to record
+     what actually happened (worked around, deferred, etc.) — this is what future plans see
+   - `worktree`: the repo/worktree name (e.g. `fapony`)
+   - `plan`: the archived plan's path (post-move, e.g. `.fapony/plan/done/PLAN-foo.md`)
+   Skip only if fapony's MCP tools aren't available in this session — don't block the archive on it.
+
 ## Example
 
 ```
@@ -45,6 +55,7 @@ Steps:
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
 3. git mv
 4. commit
+5. verdict_submit(verdict="pass", reason_code="other", note="clean ship", worktree="fapony", plan=".fapony/plan/done/PLAN-kickoff.md")
 ```
 
 ## If fail
