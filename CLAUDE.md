@@ -1,19 +1,12 @@
 # fapony — Knowledge Base
 
-> ⚠️ **Legacy notice:** ส่วนใหญ่ของเอกสารนี้ (architecture tree, execution flow, DB
-> schema, `run`/`loop`/`kickoff`/`gate`/`stop`/`handoff`/`status`/`plan-mv`) อธิบาย
-> execute→review→fix CLI loop ที่**ถูก deprecate แล้ว** — fapony ตอนนี้คือ measure/verify
-> ผ่าน MCP tools (ดู [README.md](README.md)) เป็นหลัก โค้ด loop ยังอยู่ (ยังไม่ลบ) แต่
-> ห้ามอ้างอิงเอกสารนี้เป็น source of truth ของ public surface อีกต่อไป — จะ rewrite/ลบ
-> เนื้อหาที่ล้าสมัยเมื่อโค้ด loop ถูกลบจริง (Wave 2)
-
 ## What is fapony
 
-CLI orchestrator สำหรับ multi-agent dev loop: `opencode เขียน → review → วนต่อ`. อยู่นอก worktree ของ product (ไม่ใช่ git worktree ของ innominix) เพราะ state ของผู้คุมงานไม่ควรอยู่ในที่ที่ผู้ถูกคุมแก้ได้
+Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 6 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
-**Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `Bun.spawn`, `node:fs`, `node:child_process`
-**State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode)
-**Topology:** `fapony/` = main (คุณแตะคนเดียว — merge เมื่อ gate ผ่าน) · `fapony/wt-fapony/` = dev (agents ทำงานที่นี่เท่านั้น) — worktree อยู่ใน repo จึงต้อง gitignore `wt-*/` ก่อน
+**Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
+**State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
+**Topology:** `fapony/` = main (คุณแตะคนเดียว) · `fapony/wt-fapony/` = dev (agents ทำงานที่นี่เท่านั้น) — worktree อยู่ใน repo จึงต้อง gitignore `wt-*/` ก่อน
 **License:** MIT, public ตั้งแต่ commit แรก
 
 ---
@@ -22,123 +15,62 @@ CLI orchestrator สำหรับ multi-agent dev loop: `opencode เขีย
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch (33 บรรทัด)
-  fapony.config.json  # runtime config (worktrees, executor, review gate, memory)
-  package.json        # bin: { fapony: "./fapony.ts" }, ไม่มี dependencies
+  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|setup|stats|telemetry|test|update
+  fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
   prompts/
-    execute.md        # execution prompt template ที่ inject เข้า executor
-    planner.md        # planner prompt — mark เสร็จ + NEXT-PROMPT/FILE_DONE
-    fixer.md          # fixer prompt — แก้ตาม gate note แล้ว HANDOFF
-    scrutinize-fix.md # two-phase review + fix in one round (ported from vela)
-                          # ← อยู่ใน prompts/ เพราะถูกใช้เป็น role (review gate), ไม่ใช่ standalone skill
+    plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
   skill/
     git-commit-conventional.md  # commit แยก concern + conventional message
     move-to-done.md             # archive PLAN หลัง ship
     plan-with-me.md             # draft plan + spec จาก conversation
+  templates/
+    PLAN.md / SPEC.md / memory/  # plan+spec templates, memory scaffold for `fapony init`
   src/
-    db/               # SQLite + config (แยกจาก monolith db.ts เดิม)
+    db/               # SQLite + config
       store.ts        # openDb + schema/migration (PRAGMA user_version) + CRUD
-      load.ts         # loadConfig() + B2 drift warning (executor.cmd vs roles.executor.cmd)
-      getters.ts      # getters รวมศูนย์ (specMaxLines, roleTimeoutMin, …) — ห้าม hardcode ที่ call site
+      load.ts         # loadConfig()
+      getters.ts      # getters รวมศูนย์ — ห้าม hardcode ที่ call site
       types.ts        # Config / Row types
-      defaults.ts     # DEFAULT_* constants (safety deny, markers, …)
+      defaults.ts     # DEFAULT_* constants (safety deny list, …)
       index.ts        # re-export
-    run/              # flow หลัก: guard → claim → spawn → facts → route + spec injection
-      cli.ts          # arg parsing (run-id / plan-prefix / --loop)
-      guard.ts        # git guard (assertSafe + dirty check)
-      plan.ts         # resolve plan file
-      spec.ts         # Source spec injection (truncated)
-      prompt.ts       # buildExecutorPrompt + executorCmd() — choke point ของ assertNoPromptInArgv
-      spawn.ts        # spawn executor agent (stdin, timeout, cost tracking)
-      flow.ts         # run flow orchestration
-      index.ts        # cmdRun entry
-      types.ts        # SpawnInput/SpawnResult
-    loop/             # loop driver: run → review → planner → repeat (pausable)
-      index.ts        # driver + review.autoLoop
-      spawn.ts        # role spawn (gate/planner/bigFixer/scrutinizeFix) + assertNoPromptInArgv + retry
-      prompt.ts       # renderRolePrompt
-      scrutinize.ts   # scrutinize-fix pre-pass (small diff lane)
-      archive.ts      # auto plan-mv on ship
-    cost.ts           # beginSpawn/endSpawn — role/model/bytes_in/out/usd_estimate ต่อ spawn
-    resilience.ts     # withRetry + classifyFailure (limit/auth/crash/empty) + retryPolicy
-    sigint.ts         # Ctrl-C: mark stopped + release claim (one-way door, sync cleanup)
-    gate.ts           # gate CLI: verdict + memory close
-    handoff.ts        # gitFacts() + parseHandoff() + renderHandoff()
-    parse.ts          # parseGateVerdict() + parsePlanUpdate() + qualityScore()
-    plans.ts          # worktreeFromCwd() + pendingPlans() + resolvePlanArg() — ใช้ร่วมกันโดย status/run/kickoff
+    cost.ts           # beginSpawn/endSpawn — role/model/bytes_in/out/usd_estimate ต่อ spawn event
+    gates.ts          # per-round gate enrichment — pairs gate events with spawn events in their round window
+    parse.ts          # parseGateVerdict() + qualityScore()
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
-    safety.ts         # assertSafe() deny-list + assertNoPromptInArgv (stdin-only rule)
-    status.ts         # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
-    stop.ts           # stop run + release memory claim
-    planmv.ts         # archive shipped PLAN → .fapony/plan/done/ (validate + normalize links + git mv)
-    init.ts           # fapony init — scaffold .fapony/{plan,spec,.memory}
-    kickoff.ts        # fapony kickoff — auto-detect pending plan + run
-    init-mem.ts       # init-mem command (legacy, superseded by init)
-    planlint.ts       # checkPlanHygiene() — warn เมื่อ spec content หลุดเข้า plan
-    stats.ts          # fapony stats — KPI + cost total ข้าม run
-    telemetry.ts      # opt-in payload (runs/events/cost allowlist เท่านั้น)
-    setup.ts          # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
-    update.ts         # fapony update — self-update via git pull (tripwire test คุม ROOT)
-    util.ts           # templateArgs / fillPrompt / isAffirmative
-    mcp/              # MCP server — stdio JSON-RPC, 6 tools
-      index.ts        # MCP entry point + tool registration
-      transport.ts    # JSON-RPC framing (stdin/stdout)
-      types.ts        # MCP type definitions
+    safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
+    session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL)
+      index.ts         # re-exports (backward compat)
+      types.ts         # ModelBreakdown, SessionDetail, UsageDetail, PassiveUsageResult
+      helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb()
+      opencode.ts      # readPassiveUsage() — OpenCode session DB
+      zcode.ts         # readZcodeUsage() — ZCode session DB
+      claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
+    math.ts            # minutesBetween(), avg() — shared pure numeric helpers
+    init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
+    init-mem.ts        # init-mem command (legacy, superseded by init)
+    stats.ts           # fapony stats — KPI + cost total across runs
+    report.ts / report-html.ts  # fapony report / report-web — verification report (CLI mirror of the MCP tool)
+    telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
+    setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
+    install.ts          # fapony install --platform opencode|claude|zcode — wire the MCP server into a client
+    update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
+    util.ts               # templateArgs / fillPrompt / isAffirmative
+    mcp/                   # MCP server — stdio JSON-RPC, 6 tools
+      index.ts             # MCP entry point + tool registration
+      transport.ts         # JSON-RPC framing (stdin/stdout)
+      evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
+      types.ts             # MCP type definitions
       tools/
-        collect.ts    # handoff_collect — git facts
-        check.ts      # handoff_check — conformance
-        verdict.ts    # verdict_submit — 6-grade verdict storage
-        stats.ts      # fapony_stats — KPI query
-    test.ts           # self-check ตัวเอง (thin wrapper → test/index.ts)
+        collect.ts         # handoff_collect — git facts
+        check.ts           # handoff_check — conformance
+        verdict.ts         # verdict_submit — 6-grade verdict storage
+        stats.ts           # fapony_stats — KPI query
+        usage.ts           # fapony_usage — passive OpenCode session usage
+        report.ts          # verification_report — facts + checks + evidence + verdict + cost, one call
+    test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
-    fixtures/
-      executor.ts     # stub executor — commit + HANDOFF (no network)
-      gate.ts         # stub gate — VERDICT pass/fail (no network)
-      planner.ts      # stub planner — NEXT-PROMPT/FILE_DONE (no network)
-```
-
----
-
-## Execution Flow
-
-```
-PLAN (คุณ + Claude)
-  │
-  ▼
-fapony run <worktree-key> --plan <path> [--mem-id <id>] [--allow-dirty]
-  │
-  ├─ 1. GIT GUARD
-  │     - assertSafe(): deny reset --hard / clean -f / checkout -- / stash
-  │     - ถ้า git status --porcelain ไม่ว่าง && ไม่มี --allow-dirty → exit 1
-  │     - ห้ามเขียนไฟล์ใดๆ ลง worktree เป้าหมาย
-  │
-  ├─ 2. BASE SHA + INSERT RUN
-  │     - เก็บ HEAD ปัจจุบันเป็น base (ไม่ใช่ HEAD~1)
-  │     - insert runs(status='running', round=0)
-  │
-  ├─ 3. MEMORY CLAIM (optional)
-  │     - รัน config.memory.claim shell cmd (cwd = worktree)
-  │     - ล้มเหลวไม่ต้องหยุด run แค่ log event
-  │
-  ├─ 4. SPAWN EXECUTOR
-  │     - สร้าง prompt จาก prompts/execute.md + plan content + mem_id
-  │     - ถ้า plan header มี Source spec → อ่านไฟล์ spec แนบท้าย prompt (truncated)
-  │     - Bun.spawn ด้วย config.executor.cmd, cwd = worktree
-  │     - เขียน prompt ทาง stdin, stream stdout ออกจอ + เก็บ buffer
-  │     - timeout หรือ exit!=0 → status='stalled' + memory release + exit 1
-  │
-  ├─ 5. GIT FACTS + PARSE HANDOFF
-  │     - gitFacts(worktree, baseSha) → { files, lines, commits, branch }
-  │     - parseHandoff(buffer) → { claimed, commits, checks, uncertain, not_done, missing }
-  │
-  ├─ 6. ROUTE
-  │     - files > 15 || lines > 400 → "big" (review เต็ม)
-  │     - ไม่งั้น → "small" (review ปกติ)
-  │     - status = 'awaiting_review'
-  │
-  └─ 7. PRINT HANDOFF + NEXT STEP
-        - renderHandoff() = ส่วน git facts นำหน้าเสมอ + executor report ต่อท้าย
-        - พิมพ์คำสั่ง review gate ให้ user รันเอง (chunk 1 ยังไม่ auto-drive)
+    *.test.ts              # one file per src module
+    mcp/                   # MCP tool tests
 ```
 
 ---
@@ -162,87 +94,66 @@ events(
   id INTEGER PRIMARY KEY,
   run_id INTEGER NOT NULL,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  kind TEXT NOT NULL,          -- spawn|spawn_fail|commit|handoff|route|gate|stop|stopped|stalled|interrupted|memory_claim|memory_claim_failed|memory_claim_closed|plan|plan_archived
+  kind TEXT NOT NULL,          -- spawn|gate|stop|memory_claim_closed|verification_report
   data TEXT                    -- json
 )
 ```
 
-**หลักคิด:** events คือ audit trail ที่เป็นข้อเท็จจริง (ไม่ใช่ transcript) — มาแทน "copy chat ทั้งหมด"
+**หลักคิด:** events คือ audit trail ที่เป็นข้อเท็จจริง (ไม่ใช่ transcript) — มาแทน "copy chat ทั้งหมด" · `runs` row = 1 measured/verified unit of work ที่ MCP client สร้างผ่าน `handoff_collect`, ไม่ใช่ 1 spawned execution loop
 
 ---
 
 ## Config Schema
 
+ทุก field optional, `fapony.config.json` เองก็ optional (ไม่มีไฟล์ = ใช้ default ทั้งหมด) — ดู `src/db/types.ts` เป็น source of truth ตรง ๆ:
+
 ```json
 {
   "worktrees": { "<key>": "<absolute-path>" },
-  "executor": { "cmd": ["opencode", "run"], "timeoutMin": 45 },
-  "review": {
-    "bigDiff": { "files": 15, "lines": 400 },
-    "maxRounds": 2,
-    "gate": ["claude", "-p", "/code-review high"],
-    "prefilter": null
-  },
+  "roles": { "<role-name>": { "model": "claude-sonnet-5" } },
+  "review": { "maxRounds": 2 },
   "memory": {
     "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
     "close": ["bun", ".fapony/.memory/mem.ts", "close", "{id}", "{msg}"],
     "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
     "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
   },
+  "pricing": { "<role>": { "inputPer1k": 3.0, "outputPer1k": 15.0 } },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
-  "pricing": { "<role>": { "inputPer1k": 3.0, "outputPer1k": 15.0 } }
+  "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
+  "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] }
 }
 ```
 
-- `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, and USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
-
+- `roles.<name>.model` — model attribution only, for cost/KPI breakdowns. Nothing spawns agents; there's no `cmd`/`timeout` to configure anymore.
+- `review.maxRounds` — round cap read by the gate/stats logic (see Key Design Decisions #2 below) — the only surviving field of the old `review` block.
+- `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
 - `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
-
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
-- `prefilter: null` = ยังไม่ทำ prefilter DeepSeek (มีช่องรอไว้ใน config แต่ code path ยังไม่ใช้)
-
-### Config เสริม (optional ทั้งหมด — ไม่ใส่ = ค่าเดิมที่เคย hardcode)
-
-```json
-{
-  "prompts": { "executor": "prompts/execute.md", "gate": null, "planner": null, "bigFixer": null, "scrutinizeFix": "prompts/scrutinize-fix.md" },
-  "spec": { "maxLines": 200, "sourceMarker": "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$" },
-  "markers": { "handoff": "## HANDOFF", "verdict": "^VERDICT:\\s*(pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)\\s*$", "nextPrompt": "## NEXT-PROMPT", "fileDone": "## FILE_DONE", "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*" },
-  "paths": { "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts", "doneDir": "done", "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"] },
-  "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
-  "plan": { "extensions": [".md"], "maxLines": 200 },
-  "planmv": { "archiveMsg": "chore(plan): archive {file} (shipped {hash})", "inboundWarnAt": 5 },
-  "display": { "dirtyPreview": 10, "shortSha": 8 },
-  "defaults": { "timeoutMin": 10 }
-}
-```
-
-- `prompts.<role> = null` = ใช้ inline fallback เดิม · `gate/planner/bigFixer` มี `{{RUN_ID}} {{WORKTREE}} {{MEM_ID}} {{FILES}} {{LINES}}` ให้ใช้ใน template
-- `defaults.timeoutMin` = fallback เมื่อ `roles.<name>.timeoutMin` ไม่ได้ตั้ง (ไม่ตั้งเลย → gate/planner 10, bigFixer 20, scrutinizeFix 15)
-- env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db)
-- getters รวมศูนย์ใน `src/db/getters.ts` (`specMaxLines()`, `shippedRE()`, `roleTimeoutMin()`, …) — ห้าม hardcode ค่าเดิมซ้ำที่ call site
+- env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db, ชนะ `paths.stateDir`)
+- getters รวมศูนย์ใน `src/db/getters.ts` — ห้าม hardcode ค่า default ซ้ำที่ call site
 
 ---
 
 ## Key Design Decisions
 
-### 1. ทำไม handoff ต้องเป็น template ไม่ใช่ chat transcript
+### 1. ทำไม handoff ต้องเป็น structured facts ไม่ใช่ chat transcript
 
-- Transcript ยาว = reviewer อ่านไม่หมด
+- Transcript ยาว = reviewer (คนหรือ agent) อ่านไม่หมด
 - "typecheck ผ่านครบ" เป็นข้อมูลที่พิสูจน์แค่ว่าคอมไพล์ได้ ไม่ใช่ว่า flow หรือ permissions ถูก
-- Handoff template บังคับให้ executor produce structured summary ที่ reviewer บริโภคได้จริง
-- ส่วน git facts (files, commits) นำหน้าเสมอเพราะเป็น verifiable; ส่วน executor report (uncertain, not_done) ต่อท้ายและติดป้ายว่ามาจาก executor
+- `handoff_collect` → `handoff_check` บังคับให้ claim ของ agent ถูกเทียบกับ git facts จริง ไม่ใช่เชื่อคำพูด
+- git facts (files, commits) มาก่อนเสมอเพราะ verifiable; ส่วนที่ agent claim เอง (uncertain, not_done) ติดป้ายแยกชัดว่าพิสูจน์ไม่ได้
 
-### 2. ทำไม cap 2 รอบ
+### 2. ทำไม cap 2 รอบ (`review.maxRounds`)
 
-- Round 1: executor เขียน code, reviewer ตรวจ
-- Round 2: executor แก้ตามที่ reviewer พบ
+- Round 1: agent เขียน code, reviewer ตรวจ
+- Round 2: agent แก้ตามที่ reviewer พบ
 - Round 3 แปลว่า **plan** มีปัญหา ไม่ใช่โค้ดมีปัญหา → ต้องกลับหาคน เผา token แก้ symptom ไม่จบ
 
 ### 3. ทำไม fapony อยู่นอก worktree
 
-- mem.ts ของ vela = เกิดอะไรขึ้นกับ product (อยู่ใน git ของ product)
-- fapony db = run ไหนอยู่รอบไหน (state ของผู้คุมงาน ไม่ควรอยู่ในที่ที่ผู้ถูกคุมแก้ได้)
+- mem.ts ของ product = เกิดอะไรขึ้นกับ product (อยู่ใน git ของ product)
+- fapony db = run ไหนถูกวัด/verify ผลอะไร (state ของผู้วัด ไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้)
 - fapony เรียก mem ผ่าน shell adapter ตาม config.memory.* ไม่ใช่ import โดยตรง
 
 ### 4. ทำไมใช้ SQLite สำหรับ run state
@@ -257,66 +168,28 @@ events(
 
 | Edge Case | วิธีจัดการ |
 |-----------|-----------|
-| Dangerous git commands | `assertSafe()` deny-list ใน run.ts — เป็นโค้ด ไม่ใช่ข้อความ |
-| Dirty working tree | หยุดถาม + exit 1 ไม่ใช่ล้างเอง ห้ามstash/clean |
-| fapony เขียนไฟล์ worktree | ห้ามเด็ด镩 — db อยู่ ~/.config/fapony/ เท่านั้น |
-| Executor ค้าง | timeout จาก config → status='stalled' + release claim |
-| Ctrl-C กลาง run/loop | one-way door: handler ใน [src/sigint.ts](src/sigint.ts) log `interrupted` + mark `stopped` + release memory claim แล้ว exit 130 — stopped run resume ไม่ได้ (by design = give up) · cleanup เป็น sync ทั้งหมด ไม่มี "2nd Ctrl-C" |
+| Dangerous shell commands (memory claim/close/add, evidence collector cmds, `install`'s `claude mcp add`) | `assertSafe()` deny-list ([src/safety.ts](src/safety.ts)) เรียกก่อนทุก shell spawn ที่มาจาก config — เป็นโค้ด ไม่ใช่ข้อความ |
+| fapony เขียนไฟล์ worktree | ห้ามเด็ดขาด — db อยู่ ~/.config/fapony/ เท่านั้น |
 | `fapony update` รันจาก src/ | ROOT = `join(import.meta.dir, "..")` — ถ้าพลาดเป็น `import.meta.dir` ตรงๆ git pathspec (`-- bun.lock`) จะ relative กับ src/ → lockfile change ตรวจจับไม่เจอ และ version อ่านจาก package.json ไม่เจอบอก "unknown" (มี tripwire test ใน update.test.ts) |
-| Crash หลัง commit ก่อน log mem | events มี commit hash แล้ว; `fapony status` เตือน run ที่มี commit แต่ไม่มี memory event |
-| ไม่มี ## HANDOFF ใน stdout | ห้าม fail ทั้ง run → mark handoff_missing แล้วใช้ git-only handoff ต่อ |
-| Base SHA | เก็บ HEAD ตอนเริ่ม run (ไม่ใช่ HEAD~1) เพราะ opencode commit หลายก้อนตาม concern |
 | ~/.config/fapony/ ไม่มี | mkdirSync(recursive) ก่อนเปิด db |
-| `fapony init` ซ้ำ | 逐目 check ทุก dir → error ถ้าเจอของเก่า ห้ามทับ |
-| kickoff ambiguous (>1 pending) | คืน error list ชื่อไฟล์ ห้ามเดา |
+| `fapony init` ซ้ำ | เช็คทุก dir (plan/spec/memory/evidence.json) → error ถ้าเจอของเก่า ห้ามทับ |
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
-| Source spec ไม่มีไฟล์ | prompt ใส่ (no spec) — ไม่ error |
-| log.jsonl บวม (multi-agent, มี decision/note เยอะ) | `mem rotate --apply` — `git mv` archive แถวที่ resolved แล้ว (close/spec synced) เหลือแค่ open work + unresolved ใน log.jsonl (default threshold 3000 rows, `MEM_ROTATE_THRESHOLD` ปรับได้) |
-| ดูแต่ NEXT-PROMPT + mem_id ไม่เปิด plan เลย | `fapony status` แสดง plan path + mem_id ในตารางเดียวกัน ([src/status.ts](src/status.ts)) — ไม่เขียนกลับเข้า plan file (ผิดกฎ #5) |
+| Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
 | AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls plan/` เช็คชื่อชนก่อนเขียนเสมอ |
-| `plan/done/` ต้องเปิดทีละไฟล์เพื่อดู ship date | `planMv()` prefix ชื่อไฟล์ด้วย `YYYY-MM-DD-` ตอน archive ([src/planmv.ts](src/planmv.ts)) — เห็นวันที่จาก `ls` ตรงๆ |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
 
-## Integration with vela
+## History
 
-fapony ถูก config ให้ทำงานกับ worktree ของ vela (key `"vela"` ใน `fapony.config.json`) —
-รายละเอียดว่าอะไรย้ายมาจาก wt-vela / อะไรไม่ย้าย / หน้าตา config เดิมของ vela เป็นยังไง
-ย้ายไปอยู่ [docs/vela-migration.md](docs/vela-migration.md) แล้ว (ประวัติ อ่านเมื่อสงสัย
-ไม่ใช่ทุกครั้งที่ทำงาน)
-
----
-
-## Chunk Roadmap
-
-### Chunk 1 (เสร็จแล้ว) — repo skeleton + run รอบเดียวจบ
-- [x] git init + package.json + .gitignore
-- [x] fapony.ts CLI dispatch
-- [x] src/db.ts — SQLite schema + loadConfig()
-- [x] src/handoff.ts — gitFacts() + parseHandoff() + renderHandoff()
-- [x] src/run.ts — full flow
-- [x] prompts/execute.md + fapony.config.json
-- [x] README.md + self-test
-- [x] ไม่ auto-drive Claude Code (user รัน review เอง)
-- [x] ไม่ทำ prefilter DeepSeek
-
-### Chunk 2 (เสร็จแล้ว) — auto-drive + review loop
-- [x] 2a: src/parse.ts + prompts/planner.md + prompts/fixer.md + test fixtures
-- [x] 2b: runOnce + loop driver (pausable)
-- [x] 2c: auto-gate + bigFixer lane
-- [x] 2d: plan-mv
-- DeepSeek prefilter (prefilter: null ยังคงเดิม — deferred ไม่ใช่ chunk 2 scope)
-- [x] ย้าย scrutinize-fix skill → prompts/scrutinize-fix.md (ถอด vela แล้ว)
-- [x] skill/git-commit-conventional.md + skill/move-to-done.md + skill/plan-with-me.md
-- Plan file: [plan/done/2026-09-05-PLAN-loop.md](plan/done/2026-09-05-PLAN-loop.md) (shipped 2fd51e5)
-
-### Pre-condition ก่อน chunk 2
-- ต้องรัน chunk 1 กับ vela จริงสัก 2-3 รอบแล้วเห็นว่า handoff template ใช้ได้จริง
-
-### สิ่งที่กำลังจะทำต่อ
-ดู [ROADMAP.md](ROADMAP.md) — chunk ที่เสร็จ (1, 2) เก็บไว้ที่นี่เป็นประวัติ ส่วนงานที่ยังไม่เริ่ม
-อยู่ใน ROADMAP.md ที่เดียว (กัน duplicate 2 ที่ไม่ sync กัน) plan file รายละเอียดอยู่ใต้ `plan/`
+fapony started as an execute→review→fix CLI loop (`fapony run`/`loop`/`kickoff`/`gate`/`stop`/`handoff`/
+`status`/`plan-mv`) that spawned executor/reviewer agents itself. That loop, and all the code behind it
+(`src/run/`, `src/loop/`, `src/plans.ts`, `src/planmv.ts`, `src/status.ts`, `src/stop.ts`, `src/kickoff.ts`,
+`src/handoff.ts`, `src/resilience.ts`, `src/sigint.ts`, `src/planlint.ts`), was deleted. fapony no longer
+drives any agent — it's a measurement/verification layer any agent calls via MCP (see README.md). What's
+left of that era: `runs`/`events` SQLite schema (repurposed — a run row is one measured/verified unit of
+work, not one spawned loop iteration), `review.maxRounds` (still read as a cap signal), and the plan/spec
+templates + `move-to-done`/`plan-with-me` skills below (now agent-driven, not CLI-enforced).
 
 ---
 
@@ -325,11 +198,9 @@ fapony ถูก config ให้ทำงานกับ worktree ของ vel
 1. **ห้ามสร้าง abstraction ที่มี implementation เดียว** — ไม่ scaffold เผื่ออนาคต
 2. **ห้าม git push** — กฎจาก vela opencode.json
 3. **Commit แยก concern** — one commit per feature/area
-4. **assertSafe() ต้องเรียกกับทุก command** ก่อน spawn รวมถึงที่มาจาก config
+4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
-6. **status ที่ถูกต้อง:** running → awaiting_review → fixing → passed | stopped | stalled
-7. **round cap:** ถ้า round > maxRounds → STOP, plan มีปัญหา
-8. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
+6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
 
 ---
 
@@ -343,38 +214,24 @@ what/why/order, spec = how in detail** — ห้ามแปะ API shape/schem
 ตรงๆ ให้ link ไปที่ spec แทน
 
 Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)`) — ทำให้เป็น graph สองทาง ไม่ต้องมี tooling
-เพิ่ม แค่ markdown link ที่ `fapony plan-mv` เดินหา inbound link อยู่แล้ว (`linkScanDirs` คลุมทั้ง `plan/` และ
-`spec/`)
-
-**Enforcement:** `fapony run` เรียก `checkPlanHygiene()` ([src/planlint.ts](src/planlint.ts)) ก่อน spawn
-executor ทุกครั้ง — เตือน (ไม่ block) เมื่อ plan ยาวเกิน `plan.maxLines` (default 200) หรือ section 7 บวมทั้งที่
-มี Source spec ผูกอยู่แล้ว (สัญญาณว่า spec content หลุดเข้ามาใน plan)
+เพิ่ม แค่ markdown link ที่ skill `move-to-done` เดินหา inbound link ด้วย grep เอง (ไม่มี CLI enforcement
+แล้ว — ดู History ด้านบน)
 
 ---
 
 ## CLI Commands
 
 ```bash
-fapony run [<key>] [<plan-prefix>|<run-id>] [--plan <path>] [--mem-id <id>] [--allow-dirty] [--loop]
-                                 # cwd อยู่ใน worktree → key ตกได้; pending เดียว → --plan ตกได้
-                                 # `fapony run PLAN-al` = ชื่อ prefix (เลขล้วนๆ = run ID เสมอ ไม่ใช่ plan index)
-                                 # `fapony run <run-id>` = resume run เดิม (1 รอบ)
-                                 # `fapony run <run-id> --loop` = resume + loop จนจบ
-fapony ps | status               # ตาราง active runs + pending plans (เมื่อ cwd อยู่ใน worktree)
-fapony stats                     # KPI ข้าม run ทั้งหมด — pass/stall rate, avg rounds, exec/review time
-fapony telemetry show|send       # opt-in เท่านั้น (default off) — ดู TELEMETRY.md ว่าส่งอะไรบ้าง
-fapony handoff <run-id>          # reprint handoff ล่าสุด
-fapony stop <run-id> [reason]    # stop run + release memory
-fapony gate <run-id> <grade> [note]  # review verdict + memory close (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
-fapony plan-mv <file>          # archive shipped PLAN → .fapony/plan/done/
-fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้างใน)
-fapony setup                   # interactive wizard: config + scaffold ในขั้นเดียว
-fapony update                  # self-update via git pull
-fapony kickoff [<worktree-key>]  # auto-detect pending plan + run (key ตกได้เมื่อ cwd อยู่ใน worktree)
-fapony mcp                     # MCP server — stdio JSON-RPC, 6 tools
-fapony report <run-id>         # verification report สำหรับ run
-fapony install --platform opencode  # เพิ่ม mcp.fapony ใน opencode config
-fapony test                    # self-check ตัวเอง
+fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
+fapony report <run-id>              # verification report for a run
+fapony report-web [file]            # static HTML report page
+fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
+fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
+fapony install --platform opencode|claude|zcode  # wire mcp.fapony into an MCP client
+fapony setup                        # interactive wizard: config + scaffold in one step
+fapony update                       # self-update via git pull
+fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
+fapony test                         # self-check
 ```
 
 <!-- code-review-graph MCP tools -->
