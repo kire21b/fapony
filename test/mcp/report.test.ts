@@ -81,8 +81,9 @@ export function testVerificationReportVerdictFromGateEvent(): void {
   withTmpDb(() => {
     // Gate events store JSON {verdict, note, round} — the report must read
     // that shape, not parse a VERDICT: marker out of it.
+    // Use an absolute path as worktree so resolution skips config lookup.
     const db = openDb();
-    const runId = newRun(db, "mcp-external", null, null, "mcp");
+    const runId = newRun(db, "/tmp", null, null, "mcp");
     db.close();
     const gated = gateOnce(runId, "pass-good", "solid work");
     assert.equal(gated.error, undefined);

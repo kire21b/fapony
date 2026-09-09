@@ -129,7 +129,7 @@ fapony reads `.fapony/spec/my-feature.md` inside the worktree and appends it to 
 
 ### Case 4 — MCP agent (any agent, no loop needed)
 
-Any agent that speaks MCP can verify work without adopting fapony's loop. Start the server and call 5 tools:
+Any agent that speaks MCP can verify work without adopting fapony's loop. Start the server and call 6 tools:
 
 ```
 handoff_collect  →  handoff_check  →  verdict_submit
@@ -148,7 +148,7 @@ fapony mcp
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 ```
 
-5 tools available: `handoff_collect` (git facts), `handoff_check` (conformance), `verdict_submit` (store verdict), `fapony_stats` (query KPIs), `verification_report` (full report). See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
+6 tools available: `handoff_collect` (git facts), `handoff_check` (conformance), `verdict_submit` (store verdict), `fapony_stats` (query KPIs), `fapony_usage` (passive usage from opencode sessions), `verification_report` (full report). See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
 
 ## Why handoff must be a template with git facts first
 
@@ -226,7 +226,9 @@ fapony handoff <run-id>                  # reprint a run's handoff
 fapony gate <run-id> <grade> [note]      # review verdict (grade: pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)
 fapony stop <run-id> [reason]            # stop run + release memory
 fapony plan-mv <file>                    # archive a shipped PLAN
-fapony mcp                               # MCP server (stdio JSON-RPC — 5 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
+fapony report <run-id>                   # verification report for a run
+fapony install --platform opencode       # add mcp.fapony to opencode config
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md
 fapony test                              # self-check
 ```
@@ -254,13 +256,14 @@ fapony ships an MCP server (`fapony mcp`) for agents that speak JSON-RPC over st
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
+| `fapony_usage` | Query passive usage from opencode sessions (tokens, cost, by-model) |
 
 ## Scope
 
 **Supported:**
 - Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 - Git worktree coordination (guard, handoff, routing, auto-archive on ship)
-- MCP server — 5 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 6 tools via stdio JSON-RPC, works with any MCP client
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)

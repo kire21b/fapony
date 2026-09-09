@@ -73,7 +73,7 @@ fapony/
     setup.ts          # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     update.ts         # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts           # templateArgs / fillPrompt / isAffirmative
-    mcp/              # MCP server — stdio JSON-RPC, 5 tools
+    mcp/              # MCP server — stdio JSON-RPC, 6 tools
       index.ts        # MCP entry point + tool registration
       transport.ts    # JSON-RPC framing (stdin/stdout)
       types.ts        # MCP type definitions
@@ -364,14 +364,16 @@ fapony init <path>             # scaffold .fapony/ (plan/spec/.memory ข้า�
 fapony setup                   # interactive wizard: config + scaffold ในขั้นเดียว
 fapony update                  # self-update via git pull
 fapony kickoff [<worktree-key>]  # auto-detect pending plan + run (key ตกได้เมื่อ cwd อยู่ใน worktree)
-fapony mcp                     # MCP server — stdio JSON-RPC, 5 tools
+fapony mcp                     # MCP server — stdio JSON-RPC, 6 tools
+fapony report <run-id>         # verification report สำหรับ run
+fapony install --platform opencode  # เพิ่ม mcp.fapony ใน opencode config
 fapony test                    # self-check ตัวเอง
 ```
 
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 5 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 6 tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -379,6 +381,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
+| `fapony_usage` | Query passive usage from opencode sessions (tokens, cost, by-model) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.

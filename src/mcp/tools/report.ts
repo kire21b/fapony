@@ -6,6 +6,7 @@
 
 import { sumSpawnCost } from "../../cost.js";
 import { getEvents, getRun, openDb } from "../../db/index.js";
+import { loadConfig } from "../../db/load.js";
 import { parseGateEventData } from "../../parse.js";
 import { collectEvidence } from "../evidence.js";
 import type { CheckResult, VerificationReport } from "../primitives.js";
@@ -85,7 +86,20 @@ export function toolVerificationReport(
         return errorResult(`run ${run_id} not found`);
       }
       resolvedRunId = run_id;
-      resolvedWorktree = run.worktree;
+      // run.worktree is a key (e.g. "falsify"); resolve to absolute path
+      // via config so git commands run in the right directory.
+      const config = loadConfig();
+      const fromConfig = config.worktrees[run.worktree];
+      if (fromConfig) {
+        resolvedWorktree = fromConfig;
+      } else if (run.worktree.includes("/")) {
+        // Already an absolute path (legacy or direct-path storage).
+        resolvedWorktree = run.worktree;
+      } else {
+        return errorResult(
+          `worktree key "${run.worktree}" not found in config. Set FAPONY_CONFIG to the config file that defines this key.`,
+        );
+      }
     } finally {
       db.close();
     }

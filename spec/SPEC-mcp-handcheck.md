@@ -1,4 +1,4 @@
-# SPEC-mcp-handcheck.md — MCP handcheck (5 tools, originally 4)
+# SPEC-mcp-handcheck.md — MCP handcheck (6 tools, originally 4)
 
 > **Used by:** [PLAN-mcp-handcheck.md](../plan/PLAN-mcp-handcheck.md)
 
