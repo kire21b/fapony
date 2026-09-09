@@ -1,143 +1,16 @@
-// src/report-html.ts — static HTML report from local run data (P5)
-//
-// Self-contained HTML with inline CSS/JS — no external dependencies.
-// Filter by model, grade, worktree via dropdowns. Shows sample size +
-// freshness. Displays "insufficient data" when sample is too small.
+// src/report/render.ts — HTML report rendering
 
-import { writeFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
-import { sumSpawnCost } from "./cost.js";
-import { type Event, loadConfig, openDb, type Run } from "./db/index.js";
-import { enrichGateWindows } from "./gates.js";
-
-// ─── Data shapes ───────────────────────────────────────────────────────
-
-interface RunRow {
-  id: number;
-  worktree: string;
-  plan: string | null;
-  status: string;
-  round: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface GateRow {
-  run_id: number;
-  verdict: string;
-  round: number;
-  model: string;
-  /** Canonical quality from the shared gate helper (null when unknown). */
-  quality: number | null;
-  cost_usd: number | null;
-}
-
-interface ReportData {
-  runs: RunRow[];
-  gates: GateRow[];
-  total_cost_usd: number;
-  generated_at: string;
-}
-
-// ─── Data collection ───────────────────────────────────────────────────
-
-function minutesBetween(a: string, b: string): number {
-  const t0 = new Date(`${a.replace(" ", "T")}Z`).getTime();
-  const t1 = new Date(`${b.replace(" ", "T")}Z`).getTime();
-  return (t1 - t0) / 60000;
-}
-
-/** Collect report data. Exported for tests. */
-export function collectReportData(): ReportData {
-  const db = openDb();
-  try {
-    const runs = db.prepare("SELECT * FROM runs ORDER BY id").all() as Run[];
-    const events = db
-      .prepare("SELECT * FROM events ORDER BY run_id, id")
-      .all() as Event[];
-
-    // Per-round gate windows from the shared helper (src/gates.ts) — the
-    // same disjoint windows stats.ts uses, never cumulative.
-    const gates: GateRow[] = enrichGateWindows(events).map((w) => ({
-      run_id: w.runId,
-      verdict: w.verdict || "(unknown)",
-      round: w.round,
-      model: w.model ?? "(unknown)",
-      quality: w.quality,
-      cost_usd: w.costUSD,
-    }));
-
-    // True total: each spawn counted once (never the per-gate window sum,
-    // which would double-count round-1 spawns on multi-round runs).
-    const totalCost = sumSpawnCost(events);
-
-    return {
-      runs: runs.map((r) => ({
-        id: r.id,
-        worktree: r.worktree,
-        plan: r.plan,
-        status: r.status,
-        round: r.round,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-      })),
-      gates,
-      total_cost_usd: totalCost.usd_estimate ?? 0,
-      generated_at: new Date().toISOString(),
-    };
-  } finally {
-    db.close();
-  }
-}
-
-// ─── HTML generation ───────────────────────────────────────────────────
-
-const MIN_SAMPLE_SIZE = 5;
-
-function fmtRate(r: number): string {
-  return `${(r * 100).toFixed(0)}%`;
-}
-
-function fmtUsd(usd: number | null): string {
-  return usd !== null ? `~$${usd.toFixed(4)} est.` : "—";
-}
-
-function fmtMinutes(m: number): string {
-  if (m < 1) return "<1m";
-  return `${m.toFixed(0)}m`;
-}
-
-function freshness(createdAt: string): string {
-  const now = Date.now();
-  const then = new Date(`${createdAt.replace(" ", "T")}Z`).getTime();
-  const days = Math.floor((now - then) / 86400000);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
-function latestRunDate(runs: RunRow[]): string {
-  if (!runs.length) return "never";
-  const latest = runs.reduce((a, b) => (a.created_at > b.created_at ? a : b));
-  return freshness(latest.created_at);
-}
-
-function insufficientData(total: number, label: string): string {
-  if (total < MIN_SAMPLE_SIZE) {
-    return `<div class="insufficient">⚠ Insufficient data: ${total} ${label} (need ≥${MIN_SAMPLE_SIZE} for meaningful comparison)</div>`;
-  }
-  return "";
-}
-
-function esc(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+import { minutesBetween } from "../math.js";
+import type { ReportData } from "./data.js";
+import {
+  esc,
+  fmtMinutes,
+  fmtRate,
+  fmtUsd,
+  insufficientData,
+  latestRunDate,
+  MIN_SAMPLE_SIZE,
+} from "./format.js";
 
 /** Render report data as HTML. Exported for tests. */
 export function renderReportHtml(data: ReportData): string {
@@ -382,34 +255,4 @@ ${byWorktree
 
 </body>
 </html>`;
-}
-
-// ─── CLI ───────────────────────────────────────────────────────────────
-
-export function cmdReportWeb(args: string[]): void {
-  const outFile = args[0];
-  if (outFile) {
-    // Rule #5: fapony never writes into a target worktree — refuse output
-    // paths inside a configured worktree. Stdout stays always available.
-    const config = loadConfig();
-    const abs = resolve(outFile);
-    for (const wt of Object.values(config.worktrees ?? {})) {
-      if (abs === wt || abs.startsWith(wt + sep)) {
-        console.error(
-          `fapony report-web: refusing to write inside worktree "${wt}" — choose a path outside worktrees or omit the file to print to stdout`,
-        );
-        process.exit(1);
-      }
-    }
-  }
-
-  const data = collectReportData();
-  const html = renderReportHtml(data);
-
-  if (outFile) {
-    writeFileSync(outFile, html, "utf-8");
-    console.log(`report written to ${outFile}`);
-  } else {
-    console.log(html);
-  }
 }

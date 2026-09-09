@@ -8,8 +8,7 @@ import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
 
 import { cmdMcp } from "./src/mcp/index.js";
-import { cmdReport } from "./src/report.js";
-import { cmdReportWeb } from "./src/report-html.js";
+import { cmdReport, cmdReportWeb } from "./src/report/index.js";
 import { cmdSetup } from "./src/setup.js";
 import { cmdStats } from "./src/stats.js";
 import { cmdTelemetry } from "./src/telemetry.js";

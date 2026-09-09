@@ -8,7 +8,7 @@ import {
   openDb,
   setStatus,
 } from "../src/db/index.js";
-import { collectReportData, renderReportHtml } from "../src/report-html.js";
+import { collectReportData, renderReportHtml } from "../src/report/index.js";
 
 function baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
