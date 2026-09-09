@@ -19,6 +19,18 @@ const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
 #   fapony run <key> --plan X  — explicit plan path
 `;
 
+// Static template — deliberately NOT derived from the repo (reading package.json
+// etc. to guess commands would produce a fake allowlist, which is worse than none).
+// verification_report only runs commands listed here; agent-proposed commands
+// outside the allowlist are reported, never executed.
+const EVIDENCE_JSON = `{
+  "commands": [
+    { "name": "test", "cmd": "echo 'edit me: the real test command'", "timeout_ms": 30000 },
+    { "name": "typecheck", "cmd": "echo 'edit me: the real typecheck command'", "timeout_ms": 30000 }
+  ]
+}
+`;
+
 export function initProject(targetPath: string, config?: Config): void {
   // Create target root
   mkdirSync(targetPath, { recursive: true });
@@ -32,6 +44,13 @@ export function initProject(targetPath: string, config?: Config): void {
   }
   mkdirSync(faponyDir, { recursive: true });
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
+
+  // --- evidence.json (verification_report allowlist — see src/mcp/evidence.ts) ---
+  const evidencePath = join(faponyDir, "evidence.json");
+  if (existsSync(evidencePath)) {
+    throw new Error(`${evidencePath} already exists — not overwriting.`);
+  }
+  writeFileSync(evidencePath, EVIDENCE_JSON);
 
   // --- plan/ spec/ .memory/ — all under .fapony/ ---
   const planDirAbs = join(targetPath, planDir(config));
@@ -62,9 +81,14 @@ export function initProject(targetPath: string, config?: Config): void {
   const files = copyDir(templateDir, memoryDir);
 
   console.log(`scaffolded ${targetPath}/`);
-  console.log(`  .fapony/         — project dir (plans, specs, memory)`);
+  console.log(
+    `  .fapony/         — project dir (plans, specs, memory, evidence)`,
+  );
   console.log(`  ${planDir(config)}/    — plan files`);
   console.log(`  ${specDir(config)}/    — spec files`);
+  console.log(
+    `  evidence.json    — allowlist for verification_report (edit the cmds!)`,
+  );
   console.log(
     `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,
   );

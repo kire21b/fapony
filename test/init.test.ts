@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initProject } from "../src/init.js";
@@ -24,6 +24,24 @@ export function testInitCreatesDirectories(): void {
     assert(
       existsSync(join(target, ".fapony", ".memory", "mem.ts")),
       ".fapony/.memory/mem.ts",
+    );
+    assert(
+      existsSync(join(target, ".fapony", "evidence.json")),
+      ".fapony/evidence.json",
+    );
+    // Scaffold must be parseable JSON with the shape evidence.ts expects
+    const evidence = JSON.parse(
+      readFileSync(join(target, ".fapony", "evidence.json"), "utf-8"),
+    );
+    assert(Array.isArray(evidence.commands), "evidence.commands is an array");
+    assert(
+      evidence.commands.every(
+        (c: { name?: unknown; cmd?: unknown }) =>
+          typeof c.name === "string" &&
+          typeof c.cmd === "string" &&
+          c.cmd.trim() !== "",
+      ),
+      "every evidence command has non-empty name + cmd",
     );
   });
 
