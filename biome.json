@@ -13,7 +13,8 @@
       "!!**/.vscode",
       "!!**/.mcp.json",
       "!!**/.github",
-      "!!**/.qoder"
+      "!!**/.qoder",
+      "!!**/.fapony"
     ]
   },
   "linter": {
