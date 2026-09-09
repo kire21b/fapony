@@ -1,6 +1,6 @@
 # PLAN-claude-install.md — `fapony install --platform claude`
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-09
+> ✅ **shipped** (5b54e11) · **Owner:** delamind · **Created:** 2026-09-09
 > **Source spec:** ไม่มี — ห่อ `claude mcp add` ที่มีอยู่แล้ว รายละเอียดพอในนี้
 
 ---
