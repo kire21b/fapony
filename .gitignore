@@ -2,7 +2,7 @@
 node_modules/
 *.db*
 wt-*/
-ROADMAP.md
+*-TEMP.md
 
 # Personal machine config — see fapony.config.example.json
 fapony.config.json

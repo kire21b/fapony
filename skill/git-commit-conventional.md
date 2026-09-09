@@ -28,6 +28,8 @@ You are about to commit completed changes.
 <body — what changed and why, max 76 chars per line>
 
 Ref <PLAN-file if applicable>
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ```
 
 ### Examples
@@ -46,7 +48,7 @@ Ref PLAN-kickoff.md
 
 ## Rules
 
-- **NEVER git push** — pushing waits for the user or the review gate
+- **NEVER git push from this skill** — this skill only commits. Push/PR/merge is [git-pr-merge](../git-pr-merge/SKILL.md)'s job
 - **NEVER --amend** an existing commit unless explicitly authorized
 - **NEVER --no-verify** in hooks that protect the tree
 - If there's a conflict with main: STOP, report, don't merge yourself

@@ -1,7 +1,8 @@
 # PLAN-usage-depth.md — วัดลึกขึ้น: tool calls + step breakdown, ES/CPQ
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-09
+> **Status:** ✅ done · **Owner:** delamind · **Created:** 2026-09-09
 > **Amended:** 2026-09-09 — ตัด benchmark framework/export/web server ออก (speculative, ยังไม่มี evidence ว่าจำเป็น) เหลือแค่ extend query + 2 metric
+> **Shipped:** 2026-09-09 — b87ca21, 4fd89d4
 > **Source spec:** data สำรวจแล้วจาก opencode.db ทั้งหมด (ดู §5)
 
 ---

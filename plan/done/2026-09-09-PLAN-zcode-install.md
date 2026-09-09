@@ -1,6 +1,6 @@
 # PLAN-zcode-install.md — `fapony install --platform zcode`
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-09
+> **Status:** ✅ shipped · **Owner:** delamind · **Created:** 2026-09-09
 > **Source spec:** ไม่มี — ห่อ config JSON write ที่มีอยู่แล้ว รายละเอียดพอในนี้
 
 ---
@@ -9,12 +9,12 @@
 
 `fapony install` รองรับ `--platform opencode` และ `--platform claude` แล้ว แต่ ZCode (ที่ใช้งานอยู่ทุกวัน) ยังไม่มี install command — ต้องแก้ `~/.zcode/cli/config.json` ด้วยตัวเอง ทำให้ "measure ข้าม agent" ไม่เท่ากัน ต้องให้ `fapony install --platform zcode` ติดตั้งได้ในคำสั่งเดียวเหมือนกัน
 
-**North star จาก [PLAN-mcp-verification-pivot.md](done/2026-09-09-PLAN-mcp-verification-pivot.md):** dev สลับ use opencode, Claude Code, zcode — ไม้บรรทัดเดียวกันต้องเริ่มจากติดตั้งง่ายเท่ากันทุกแพลตฟอร์ม
+**North star จาก [PLAN-mcp-verification-pivot.md](2026-09-09-PLAN-mcp-verification-pivot.md):** dev สลับ use opencode, Claude Code, zcode — ไม้บรรทัดเดียวกันต้องเริ่มจากติดตั้งง่ายเท่ากันทุกแพลตฟอร์ม
 
 ## 2. ขอบเขต (ทำอะไร / ไม่ทำ)
 
 **ทำ:**
-- เพิ่ม `--platform zcode` branch ใน [src/install.ts](../src/install.ts) — อ่าน/เขียน `~/.zcode/cli/config.json` ใต้ `mcp.servers.fapony` โดยตรง (เหมือน opencode pattern คือแก้ JSON เอง ไม่ได้ shell ออกไปที่ CLI)
+- เพิ่ม `--platform zcode` branch ใน [src/install.ts](../../src/install.ts) — อ่าน/เขียน `~/.zcode/cli/config.json` ใต้ `mcp.servers.fapony` โดยตรง (เหมือน opencode pattern คือแก้ JSON เอง ไม่ได้ shell ออกไปที่ CLI)
 - รองรับ fallback path `~/.agents/mcp.json` → `mcpServers.fapony` ตาม [ZCode Configuration Guide](~/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md) — อ่าน `.zcode` ก่อน ถ้าไม่มีจึง fallback ไป `.agents/mcp.json`
 - MCP entry เดียวกับแพลตฟอร์มอื่น: `{ "type": "local", "command": ["bun", "run", "fapony.ts", "mcp"] }`
 - `--dry-run` พิมพ์ diff ก่อนเขียน (pattern เดียวกับ opencode)
@@ -41,10 +41,10 @@
 ## 4. ข้อจำกัด / กฎเหล็ก (ห้ามละเมิด)
 
 - ห้าม shell ออกไปที่ `zcode` CLI — ไม่มี CLI equivalent เหมือน `claude mcp add`
-- คำสั่งที่ spawn ต้องผ่าน `assertSafe()` เหมือน spawn อื่นทุกจุดใน fapony (กฎข้อ 4 ใน [CLAUDE.md](../CLAUDE.md))
+- คำสั่งที่ spawn ต้องผ่าน `assertSafe()` เหมือน spawn อื่นทุกจุดใน fapony (กฎข้อ 4 ใน [CLAUDE.md](../../CLAUDE.md))
 - ห้ามเขียนไฟล์นอก `~/.config/fapony/` เพิ่มเติม — งานนี้ไม่แตะ state ของ fapony เอง
 - ต้อง verify `~/.zcode/cli/config.json` schema จริงก่อน implement — schema ของ zcode อาจมี fields อื่นที่ต้อง preserve
-- คำสั่งใน README ต้อง cross-check กับ [fapony.ts](../fapony.ts) จริงก่อน commit
+- คำสั่งใน README ต้อง cross-check กับ [fapony.ts](../../fapony.ts) จริงก่อน commit
 
 ## 5. ความเสี่ยง & ทางหนี (ถ้าจะ fail)
 
@@ -59,7 +59,7 @@
 ## 6. ขั้นตอน (เรียงลำดับ แต่ละขั้น verify ได้)
 
 1. **Verify `~/.zcode/cli/config.json` schema** — อ่าน config จริงจาก environment นี้ + docs จาก [ZCode Configuration Guide](~/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md) → verify: รู้จัก `mcp.servers` path และ schema ที่แน่นอน
-2. **เพิ่ม `--platform zcode` branch ใน [src/install.ts](../src/install.ts)** — อ่าน `~/.zcode/cli/config.json` (fallback `~/.agents/mcp.json`) → verify: unit test mock fs ครอบ 3 เคส (ไม่มีไฟล์ / มี `.zcode` / มีแค่ `.agents`)
+2. **เพิ่ม `--platform zcode` branch ใน [src/install.ts](../../src/install.ts)** — อ่าน `~/.zcode/cli/config.json` (fallback `~/.agents/mcp.json`) → verify: unit test mock fs ครอบ 3 เคส (ไม่มีไฟล์ / มี `.zcode` / มีแค่ `.agents`)
 3. **เขียน `mcp.servers.fapony` entry + idempotent check** → verify: รันซ้ำ → "already configured"; ตรวจสอบ JSON ไม่เสียรูป
 4. **`--dry-run` + error handling เมื่อไม่มี config** → verify: exit code ไม่ใช่ 0 + message ชัด, dry-run ไม่เปลี่ยน config จริง
 5. **อัปเดต README** — `fapony install --platform zcode` เพิ่มใน quick start + CLI table → verify: คำสั่งตรงกับ implementation
@@ -96,8 +96,8 @@ fapony install --platform zcode
 
 ## 8. References
 
-- [src/install.ts](../src/install.ts) — opencode + claude implementation ที่ต้อง extend (pattern เดิม: idempotent + `--dry-run` + JSON write)
-- [README.md](../README.md) — Quick start §2 + CLI section ต้อง sync ให้ครบทั้ง 3 platform
+- [src/install.ts](../../src/install.ts) — opencode + claude implementation ที่ต้อง extend (pattern เดิม: idempotent + `--dry-run` + JSON write)
+- [README.md](../../README.md) — Quick start §2 + CLI section ต้อง sync ให้ครบทั้ง 3 platform
 - [ZCode Configuration Guide](~/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md) — `~/.zcode/cli/config.json` → `mcp.servers` schema + fallback `~/.agents/mcp.json` → `mcpServers`
-- [PLAN-mcp-verification-pivot.md](done/2026-09-09-PLAN-mcp-verification-pivot.md) — north star cross-agent measurement ที่ plan นี้เป็นหนึ่งใน pre-condition (วัด zcode ได้ ต้องติดตั้งง่ายก่อน)
-- [PLAN-claude-install.md](done/2026-09-09-PLAN-claude-install.md) — plan น้องที่ทำ `--platform claude` เสร็จแล้ว (pattern ที่ต้องทำซ้ำ)
+- [PLAN-mcp-verification-pivot.md](2026-09-09-PLAN-mcp-verification-pivot.md) — north star cross-agent measurement ที่ plan นี้เป็นหนึ่งใน pre-condition (วัด zcode ได้ ต้องติดตั้งง่ายก่อน)
+- [PLAN-claude-install.md](2026-09-09-PLAN-claude-install.md) — plan น้องที่ทำ `--platform claude` เสร็จแล้ว (pattern ที่ต้องทำซ้ำ)

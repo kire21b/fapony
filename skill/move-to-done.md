@@ -27,7 +27,11 @@ You are about to move a PLAN that has been shipped to the archive.
    git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/PLAN-foo.md
    ```
 
-5. **Commit split by concern**:
+5. **Archive the related spec too** — if the PLAN's "Source spec:" line points to a file under
+   `.fapony/spec/`, `git mv` it to `.fapony/spec/done/` the same way (normalize its links first).
+   No source spec → skip, don't invent one.
+
+6. **Commit split by concern**:
    ```
    chore(plan): archive PLAN-foo.md (shipped <hash>)
    ```

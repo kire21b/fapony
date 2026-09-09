@@ -1,9 +1,10 @@
 # PLAN-central-benchmark.md — extend telemetry ด้วย ES/CPQ aggregate
 
-> **Status:** 🚧 in-progress · **Owner:** delamind · **Created:** 2026-09-09
+> **Status:** ✅ done · **Owner:** delamind · **Created:** 2026-09-09
 > **Amended:** 2026-09-09 — [PLAN-usage-depth.md](PLAN-usage-depth.md) ตัด benchmark framework (Phase B/C: `benchmark run/compare/export/serve`) และ metric 5 ตัว (TAR/TER/RLE/SBC/TDE) ทิ้งแล้ว — เหลือ Phase A (query extension) + ES/CPQ เท่านั้น
 >   plan นี้เคยผูกทั้งก้อนไว้กับ Phase B/C ที่ไม่มีอยู่แล้ว จึงตัดชั้น 2 (`benchmark submit`) และชั้น 3
 >   (`benchmark serve`) ทิ้งทั้งหมด — ไม่มีอะไรให้ submit/serve เพราะไม่มี benchmark run ให้ผลิต report แล้ว
+> **Shipped:** 2026-09-09 — telemetry schema v3, derived namespace
 > **Source spec:** extend telemetry pattern ที่มีอยู่แล้ว + ES/CPQ จาก [PLAN-usage-depth.md](PLAN-usage-depth.md) §3
 
 ---
