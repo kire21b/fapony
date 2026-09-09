@@ -1,4 +1,7 @@
 {
+  "worktrees": {
+    "myapp": "/absolute/path/to/myapp"
+  },
   "review": {
     "maxRounds": 2
   },
@@ -21,5 +24,8 @@
     "port": 1710,
     "hostname": "127.0.0.1",
     "pollInterval": 1771
+  },
+  "pricing": {
+    "executor": { "inputPer1k": 3, "outputPer1k": 15 }
   }
 }
