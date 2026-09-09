@@ -1,6 +1,6 @@
 # SPEC-config-schema-cleanup.md — trim the config schema back to what MCP actually reads
 
-> **Used by:** [PLAN-config-schema-cleanup.md](../plan/PLAN-config-schema-cleanup.md)
+> **Used by:** [PLAN-config-schema-cleanup.md](../plan/done/2026-09-09-PLAN-config-schema-cleanup.md)
 
 ---
 

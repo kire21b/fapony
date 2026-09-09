@@ -1,13 +1,15 @@
+> ✅ **shipped** (ab024d8, c534820)
+
 # PLAN-config-schema-cleanup.md — remove the loop-era config schema residue
 
-> **Status:** 📝 draft — รอ kickoff · **Owner:** delamind · **Created:** 2026-09-09
-> **Source spec:** [spec/SPEC-config-schema-cleanup.md](../spec/SPEC-config-schema-cleanup.md)
+> **Status:** shipped · **Owner:** delamind · **Created:** 2026-09-09
+> **Source spec:** [SPEC-config-schema-cleanup.md](../../spec/SPEC-config-schema-cleanup.md)
 
 ---
 
 ## 1. Goal (why)
 
-Wave 0-2 ([629b33c](../../../commit/629b33c)) ลบ CLI loop (`src/run/`, `src/loop/`, ฯลฯ) ไปแล้ว
+Wave 0-2 (629b33c) ลบ CLI loop (`src/run/`, `src/loop/`, ฯลฯ) ไปแล้ว
 แต่ `Config` schema (`db/types.ts`/`getters.ts`/`defaults.ts`/`load.ts`) ยังลากฟิลด์ของ
 loop ค้างอยู่ — `executor`, `review.bigDiff/gate/prefilter`, `prompts`, `markers`, `plan`,
 `planmv`, `display`, `defaults.timeoutMin`, `resilience` — ไม่มีใครอ่านแล้วแม้แต่บรรทัดเดียว
@@ -90,17 +92,24 @@ mcp แบบนี้แหละเข้าได้ทุกที่") — 
 9. **Full gate** — `bun run typecheck && bun run lint && bun fapony.ts test`. *Verify: all
    three exit 0.*
 10. **Commit** — `chore!:` prefix (breaking: config keys removed), list dropped fields in
-    the body, same style as [629b33c](../../../commit/629b33c).
+    the body, same style as 629b33c.
+11. **(post-ship gap, closed in c534820)** `src/setup.ts`'s interactive wizard
+    (`buildSetupConfig`) still wrote `executor`/`review.bigDiff/gate/prefilter/autoLoop`
+    into every new `fapony.config.json` — missed by this plan's original audit (setup.ts
+    wasn't in the spec's file list). Fixed same-day as a follow-up commit: wizard now
+    only asks worktree path/name/memory, `buildSetupConfig` emits `worktrees` +
+    `review.maxRounds` + `memory`, dead `splitCmd`/`parseTimeoutMinutes` removed too.
 
 ## 7. Examples
 
-See [spec/SPEC-config-schema-cleanup.md § Examples](../spec/SPEC-config-schema-cleanup.md#examples)
+See [SPEC-config-schema-cleanup.md § Examples](../../spec/SPEC-config-schema-cleanup.md#examples)
 for the before/after `Config.review` shape.
 
 ## 8. References
 
-- [spec/SPEC-config-schema-cleanup.md](../spec/SPEC-config-schema-cleanup.md) — full
+- [SPEC-config-schema-cleanup.md](../../spec/SPEC-config-schema-cleanup.md) — full
   field-by-field audit
-- Commit [629b33c](../../../commit/629b33c) — Wave 0-2, the CLI loop removal this plan
-  finishes cleaning up after
-- [CLAUDE.md](../CLAUDE.md) — legacy banner already flags this doc as stale on the loop
+- Commit 629b33c — Wave 0-2, the CLI loop removal this plan finishes cleaning up after
+- Commit ab024d8 — this plan's main execution (steps 1-9)
+- Commit c534820 — step 11 follow-up (`setup.ts` wizard gap)
+- [CLAUDE.md](../../CLAUDE.md) — legacy banner already flags this doc as stale on the loop
