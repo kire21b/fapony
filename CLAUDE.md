@@ -15,7 +15,7 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|setup|stats|telemetry|test|update
+  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|setup|stats|telemetry|test|update
   fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
   prompts/
     plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
@@ -48,8 +48,24 @@ fapony/
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
     init-mem.ts        # init-mem command (legacy, superseded by init)
-    stats.ts           # fapony stats — KPI + cost total across runs
-    report.ts / report-html.ts  # fapony report / report-web — verification report (CLI mirror of the MCP tool)
+    stats/                # fapony stats — KPI + cost total across runs
+      data.ts             # getStatsData() + StatsData type + computeEfficiency()
+      format.ts           # formatStatsText() — CLI + MCP text mode
+      cli.ts              # cmdStats()
+      index.ts            # barrel re-export
+    web/                  # shared HTML helpers (report-web + usage-web)
+      html.ts             # esc(), DARK_THEME_CSS, TABLE_CSS
+      index.ts            # barrel re-export
+    report/               # fapony report / report-web — verification report
+      cli.ts              # cmdReport (per-run), cmdReportWeb (aggregate HTML)
+      render.ts           # renderReportHtml(stats, generated_at) — renders from StatsData
+      format.ts           # fmtRate, fmtUsd, fmtMinutes, insufficientData
+      index.ts            # barrel re-export
+    usage/                # fapony usage-web — live usage comparison dashboard
+      cli.ts              # cmdUsageWeb + Bun.serve routes (/, /data, /favicon.ico)
+      render.ts           # renderUsageHtml() — HTML with summary cards + per-client tables
+      format.ts           # fmtTokens(), fmtCost(), fmtDelta(), shortModel() — re-exports esc() from web/
+      index.ts            # barrel re-export
     telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     install.ts          # fapony install --platform opencode|claude|zcode — wire the MCP server into a client
@@ -121,7 +137,8 @@ events(
   "pricing": { "<role>": { "inputPer1k": 3.0, "outputPer1k": 15.0 } },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
   "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
-  "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] }
+  "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
+  "usageWeb": { "port": 8080, "hostname": "127.0.0.1", "pollInterval": 3000 }
 }
 ```
 
@@ -130,6 +147,7 @@ events(
 - `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
 - `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
+- `usageWeb` — optional, `{ port, hostname, pollInterval }` for `fapony usage-web` defaults. CLI args override config. `null` or omit = use defaults (port 8080, localhost, 3000ms)
 - env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db, ชนะ `paths.stateDir`)
 - getters รวมศูนย์ใน `src/db/getters.ts` — ห้าม hardcode ค่า default ซ้ำที่ call site
 
@@ -225,6 +243,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
+fapony usage-web [port]             # live usage comparison dashboard (OpenCode / ZCode / Claude Code)
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony install --platform opencode|claude|zcode  # wire mcp.fapony into an MCP client

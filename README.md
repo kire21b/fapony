@@ -55,7 +55,7 @@ verify:   handoff_check ── verdict_submit ── verification_report
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
 
-Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page.
+Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page. `fapony usage-web [port]` starts a live comparison dashboard across OpenCode, ZCode, and Claude Code sessions.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 
@@ -105,6 +105,7 @@ Example plans produced by it live in [examples/](examples/).
 fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
+fapony usage-web [port]                  # live usage comparison dashboard (OpenCode / ZCode / Claude Code)
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
 # Setup & maintenance
@@ -123,11 +124,12 @@ fapony test                              # self-check
 `fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
-- `roles.<name>.model` — model attribution per role (used for cost/KPI breakdowns; nothing spawns agents — the CLI loop is gone, measurement is via MCP)
+- `roles.<name>.model` — model attribution per role, used for cost/KPI breakdowns (optional, no effect on behavior)
 - `review.maxRounds` — round cap enforced by the gate
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
 - `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
+- `usageWeb` — optional `{ port, hostname, pollInterval }` for `fapony usage-web` server defaults (CLI args override)
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 
@@ -143,7 +145,6 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 - Bun-only, zero runtime dependency (`bun:sqlite` for run state, WAL mode)
 
 **Not supported (yet):**
-- Cross-agent usage — `fapony_usage` reads OpenCode's session DB only; Claude Code and other agents keep their own session logs, not wired in
 - DeepSeek prefilter (not wired; no config slot — the loop-era `review.prefilter` key was removed)
 - Distributed runs across multiple machines
 - Memory migration from `.fapony/.memory/log.jsonl`
