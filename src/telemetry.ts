@@ -10,8 +10,17 @@
 // wire is user-configured telemetry.metadata (self-reported, advisory).
 
 import { sumSpawnCost } from "./cost.js";
-import { type Event, loadConfig, openDb, type Run } from "./db/index.js";
-import { enrichGateWindows } from "./gates.js";
+import {
+  type Config,
+  type Event,
+  loadConfig,
+  openDb,
+  type Run,
+} from "./db/index.js";
+import { enrichGateWindows, type GateWindow } from "./gates.js";
+import { avg, minutesBetween } from "./math.js";
+import { readPassiveUsage } from "./session/index.js";
+import { computeEfficiency } from "./stats.js";
 
 // ─── Schema version ────────────────────────────────────────────────────
 
@@ -22,8 +31,9 @@ import { enrichGateWindows } from "./gates.js";
  *
  * v1 = original (raw run/event rows — DEPRECATED, removed)
  * v2 = aggregate payload with machine-observed facts + self-reported metadata
+ * v3 = v2 + derived namespace (tool_call_counts, efficiency_scores, cost_per_quality)
  */
-export const TELEMETRY_SCHEMA_VERSION = 2;
+export const TELEMETRY_SCHEMA_VERSION = 3;
 
 // ─── Retention policy ──────────────────────────────────────────────────
 
@@ -85,6 +95,33 @@ export interface MachineObserved {
     passed: number;
     stalled: number;
   }>;
+  /** Derived aggregates (v3+) — activity signals, not quality scores. */
+  derived?: DerivedAggregates;
+}
+
+// ─── Derived aggregates (v3) ─────────────────────────────────────────
+
+/**
+ * Derived from usage-depth queries — activity signals only.
+ * All fields are numeric aggregates; no content, no raw rows.
+ *
+ * `tool_call_counts`: tool-call counts from OpenCode sessions whose project
+ * worktree resolves from this DB's run worktree keys via
+ * `config.worktrees` — fapony-scoped, never global. Sorted desc by count.
+ * `efficiency_scores`: mean of per-run ES (`computeEfficiency`, stats.ts)
+ * over USD-priced runs of that model. Fail runs contribute ES 0.
+ * `cost_per_quality`: mean of per-run CPQ over USD-priced runs of that
+ * model. Fail runs are excluded (their CPQ is undefined, not infinite).
+ * Unpriced (bytes-proxy) runs are excluded from both — dollars and byte
+ * counts are never averaged together.
+ */
+export interface DerivedAggregates {
+  /** Scoped tool-call counts (name → count), sorted desc by count. */
+  tool_call_counts: Record<string, number>;
+  /** Per-model mean ES, USD-priced runs only. Missing when no data. */
+  efficiency_scores: Record<string, number>;
+  /** Per-model mean CPQ, USD-priced runs only. Missing when no data. */
+  cost_per_quality: Record<string, number>;
 }
 
 // ─── Self-reported metadata ────────────────────────────────────────────
@@ -125,16 +162,6 @@ export interface TelemetryPayload {
 }
 
 // ─── Payload builder ───────────────────────────────────────────────────
-
-function minutesBetween(a: string, b: string): number {
-  const t0 = new Date(`${a.replace(" ", "T")}Z`).getTime();
-  const t1 = new Date(`${b.replace(" ", "T")}Z`).getTime();
-  return (t1 - t0) / 60000;
-}
-
-function avg(xs: number[]): number {
-  return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0;
-}
 
 function parseEventData(data: string | null): Record<string, unknown> {
   if (!data) return {};
@@ -259,6 +286,13 @@ export function buildPayload(): TelemetryPayload {
         }
       : undefined;
 
+    // --- Derived aggregates (v3): tool call counts + ES/CPQ per model ---
+    const derived = buildDerived(
+      events,
+      runs,
+      resolveTelemetryWorktrees(runs, config),
+    );
+
     return {
       schema_version: TELEMETRY_SCHEMA_VERSION,
       sent_at: new Date().toISOString(),
@@ -273,12 +307,106 @@ export function buildPayload(): TelemetryPayload {
         by_model: byModel,
         by_grade: byGrade,
         by_worktree: byWorktree,
+        ...(derived ? { derived } : {}),
       },
       ...(selfReported ? { self_reported: selfReported } : {}),
     };
   } finally {
     db.close();
   }
+}
+
+// ─── Derived aggregates builder (v3) ─────────────────────────────────
+
+/**
+ * Run worktree keys (e.g. "wt-fapony", "mcp-external") resolve to absolute
+ * paths via config.worktrees. Only resolvable paths are queried — keys with
+ * no mapping (mcp-external, stale keys) contribute nothing, never global.
+ */
+function resolveTelemetryWorktrees(runs: Run[], config: Config): string[] {
+  const paths = new Set<string>();
+  for (const r of runs) {
+    const p = config.worktrees?.[r.worktree];
+    if (typeof p === "string" && p) paths.add(p);
+  }
+  return [...paths];
+}
+
+/**
+ * Build derived aggregates from fapony runs/events + scoped OpenCode usage.
+ * Returns null when there's nothing to report (no data).
+ *
+ * Per-run ES/CPQ comes from computeEfficiency (stats.ts, single
+ * implementation); this function only groups per-run results by model and
+ * averages. Model attribution uses the run's latest gate window
+ * (enrichGateWindows) — the same window whose verdict produced the quality
+ * score — never the first spawn.
+ */
+function buildDerived(
+  events: Event[],
+  runs: Run[],
+  worktreePaths: string[],
+): DerivedAggregates | null {
+  // --- tool_call_counts, scoped to this DB's fapony worktrees ---
+  const merged: Record<string, number> = {};
+  for (const wt of worktreePaths) {
+    const usage = readPassiveUsage(wt, undefined, undefined, true);
+    const tb = usage.detail?.tool_breakdown ?? {};
+    for (const [tool, c] of Object.entries(tb)) {
+      merged[tool] = (merged[tool] ?? 0) + c;
+    }
+  }
+  const tool_call_counts: Record<string, number> = {};
+  for (const [tool, c] of Object.entries(merged).sort((a, b) => b[1] - a[1])) {
+    tool_call_counts[tool] = c;
+  }
+
+  // --- ES/CPQ per model: mean of per-run scores, USD-priced runs only ---
+  const eventsByRun: Record<number, Event[]> = {};
+  for (const e of events) (eventsByRun[e.run_id] ??= []).push(e);
+  const efficiencies = computeEfficiency(runs, eventsByRun);
+
+  const windowsByRun = new Map<number, GateWindow[]>();
+  for (const w of enrichGateWindows(events)) {
+    const arr = windowsByRun.get(w.runId) ?? [];
+    arr.push(w);
+    windowsByRun.set(w.runId, arr);
+  }
+
+  const esByModel: Record<string, number[]> = {};
+  const cpqByModel: Record<string, number[]> = {};
+  for (const r of efficiencies) {
+    // Dollars and byte proxies are different units — never average them
+    // together. Unpriced runs stay visible in stats per-run display; the
+    // cross-run model aggregate is USD-only by definition.
+    if (r.basis !== "usd") continue;
+    const windows = windowsByRun.get(r.runId) ?? [];
+    const model = windows.length ? windows[windows.length - 1].model : null;
+    if (!model) continue;
+    // Fail runs carry es 0 (drag the mean down, as in stats); their cpq is
+    // null (undefined, not infinite) and stays out of the CPQ mean.
+    if (r.es !== null) (esByModel[model] ??= []).push(r.es);
+    if (r.cpq !== null) (cpqByModel[model] ??= []).push(r.cpq);
+  }
+
+  const efficiency_scores: Record<string, number> = {};
+  for (const [model, xs] of Object.entries(esByModel)) {
+    if (xs.length) efficiency_scores[model] = avg(xs);
+  }
+  const cost_per_quality: Record<string, number> = {};
+  for (const [model, xs] of Object.entries(cpqByModel)) {
+    if (xs.length) cost_per_quality[model] = avg(xs);
+  }
+
+  // Only include derived section when at least one field has data
+  const hasData =
+    Object.keys(tool_call_counts).length > 0 ||
+    Object.keys(efficiency_scores).length > 0 ||
+    Object.keys(cost_per_quality).length > 0;
+
+  return hasData
+    ? { tool_call_counts, efficiency_scores, cost_per_quality }
+    : null;
 }
 
 // ─── CLI ───────────────────────────────────────────────────────────────

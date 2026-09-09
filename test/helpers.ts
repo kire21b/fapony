@@ -94,3 +94,39 @@ export function silentErrors<T>(fn: () => T): T {
     console.error = orig;
   }
 }
+
+/**
+ * Run fn with a temp FAPONY_CONFIG file. The config object is serialized
+ * to JSON, FAPONY_CONFIG points at it for the duration of fn, then the
+ * env is restored and the file removed.
+ */
+export function withTempConfig(configObj: unknown, fn: () => void): void {
+  const cfgPath = join(
+    tmpdir(),
+    `fapony-test-cfg-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`,
+  );
+  writeFileSync(cfgPath, JSON.stringify(configObj));
+  const prevConfig = process.env.FAPONY_CONFIG;
+  process.env.FAPONY_CONFIG = cfgPath;
+  try {
+    fn();
+  } finally {
+    if (prevConfig === undefined) delete process.env.FAPONY_CONFIG;
+    else process.env.FAPONY_CONFIG = prevConfig;
+    rmSync(cfgPath, { force: true });
+  }
+}
+
+/**
+ * Assert two floats are equal within 1e-9. For mean-of-ratio checks
+ * where exact decimal equality cannot hold.
+ */
+export function assertClose(
+  actual: number,
+  expected: number,
+  label: string,
+): void {
+  if (Math.abs(actual - expected) >= 1e-9) {
+    throw new Error(`${label}: expected ${expected}, got ${actual}`);
+  }
+}
