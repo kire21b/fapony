@@ -105,8 +105,6 @@ fapony mcp                               # MCP server (stdio JSON-RPC — 6 tool
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
-fapony handoff <run-id>                  # reprint a run's handoff
-fapony gate <run-id> <grade> [note]      # review verdict (6 grades)
 
 # Setup & maintenance
 fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/evidence)

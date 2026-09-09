@@ -80,7 +80,7 @@ Off unless both are set in `fapony.config.json`:
 `metadata` is optional. Omit it entirely to send only machine-observed data.
 
 `fapony telemetry send` is a manual command — nothing runs automatically in
-the background or as part of `fapony run`/`loop`/`gate`. There is no default
+the background or as part of any other `fapony` command. There is no default
 endpoint; you point it at a server you control.
 
 `endpoint` just needs to accept a `POST` with a JSON body (see

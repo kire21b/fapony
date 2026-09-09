@@ -10,11 +10,12 @@ Instead, use GitHub's private vulnerability reporting: [Report a vulnerability](
 
 ## Scope
 
-fapony is a CLI orchestrator that runs locally. It does not expose network services. The primary security concerns are:
+fapony is an MCP server plus CLI that runs locally. It does not expose network services. The primary security concerns are:
 
-- **Command injection** — fapony spawns shell commands from config. `assertSafe()` deny-lists dangerous git commands (`reset --hard`, `clean -f`, `checkout --`, `git stash`), but always verify before running untrusted configs.
+- **Command injection** — fapony spawns shell commands from config (memory adapter, `install`, and the evidence collector's `.fapony/evidence.json` allowlist). `assertSafe()` deny-lists dangerous git commands (`reset --hard`, `clean -f`, `checkout --`, `git stash`), but always verify before running untrusted configs.
 - **Path traversal** — fapony must not write files into the target worktree. DB lives in `~/.config/fapony/` only.
 - **Memory claims** — memory commands are executed via shell adapter. Ensure memory scripts are trusted.
+- **Evidence collector** — only runs commands listed in `.fapony/evidence.json`; commands an agent proposes outside that allowlist are reported as *proposed — not executed*, never run.
 
 ## Supported Versions
 
