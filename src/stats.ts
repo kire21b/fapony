@@ -68,6 +68,89 @@ function enrichGates(events: Event[]): EnrichedGate[] {
   });
 }
 
+// --- Derived efficiency (PLAN-usage-depth §3): ES + CPQ per fapony run ---
+//
+// derived: quality comes from the run's LATEST gate verdict (read-time,
+// never written), cost from sumSpawnCost over that run's spawns, minutes
+// from created_at→updated_at. When no spawn was USD-priced (pricing:null or
+// unpriced), bytes_in+bytes_out is used as proxy — basis flags which one.
+// Label rule: text output prefixes this section with "derived:".
+
+export interface RunEfficiency {
+  runId: number;
+  grade: string | null;
+  /** Canonical quality via qualityScore(), or null when no/unknown grade. */
+  quality: number | null;
+  costUSD: number | null;
+  bytes: number;
+  minutes: number;
+  /** quality / (cost × minutes). 0 for fail-with-cost, null when undefined. */
+  es: number | null;
+  /**
+   * cost / quality. fail (quality=0) → null (censored, not infinite —
+   * JSON-safe, distinct from "undefined/no data" when grade is present).
+   * Null when undefined.
+   */
+  cpq: number | null;
+  basis: "usd" | "bytes-proxy";
+}
+
+function lastGateVerdict(events: Event[]): string | null {
+  let last: string | null = null;
+  for (const e of events) {
+    if (e.kind !== "gate" || !e.data) continue;
+    try {
+      const d = JSON.parse(e.data) as { verdict?: unknown };
+      if (typeof d.verdict === "string" && VERDICT_GRADES.has(d.verdict)) {
+        last = d.verdict;
+      }
+    } catch {
+      // unparseable gate data — not a valid verdict, keep scanning
+    }
+  }
+  return last;
+}
+
+function computeEfficiency(
+  runs: Run[],
+  eventsByRun: Record<number, Event[]>,
+): RunEfficiency[] {
+  const out: RunEfficiency[] = [];
+  for (const r of runs) {
+    const es = eventsByRun[r.id] ?? [];
+    const grade = lastGateVerdict(es);
+    const quality = grade !== null ? qualityScore(grade as VerdictGrade) : null;
+    const cost = sumSpawnCost(es);
+    const minutes = minutesBetween(r.created_at, r.updated_at);
+    const bytes = cost.bytes_in + cost.bytes_out;
+
+    const useUsd = cost.usd_estimate !== null && cost.usd_estimate > 0;
+    const basis: "usd" | "bytes-proxy" = useUsd ? "usd" : "bytes-proxy";
+    const denom = useUsd ? (cost.usd_estimate as number) : bytes;
+
+    let eScore: number | null = null;
+    let cpq: number | null = null;
+    if (quality !== null && minutes > 0 && denom > 0) {
+      eScore = quality / (denom * minutes);
+      // fail (quality=0) → censored cpq: cannot divide meaningfully.
+      cpq = quality > 0 ? denom / quality : null;
+    }
+
+    out.push({
+      runId: r.id,
+      grade,
+      quality,
+      costUSD: cost.usd_estimate,
+      bytes,
+      minutes,
+      es: eScore,
+      cpq,
+      basis,
+    });
+  }
+  return out.sort((a, b) => a.runId - b.runId);
+}
+
 // --- StatsData shape (SPEC-verdict-stats §StatsData) ---
 
 export interface StatsData {
@@ -107,6 +190,8 @@ export interface StatsData {
     passed: number;
     stalled: number;
   }>;
+  /** Derived ES/CPQ per run (PLAN-usage-depth §3) — additive, always present. */
+  efficiency: RunEfficiency[];
   usage: PassiveUsageResult;
 }
 
@@ -226,6 +311,8 @@ export function getStatsData(): StatsData {
 
     const usage = readPassiveUsage();
 
+    const efficiency = computeEfficiency(runs, eventsByRun);
+
     return {
       runs: {
         total: runs.length,
@@ -243,6 +330,7 @@ export function getStatsData(): StatsData {
       byModel,
       byGrade,
       byWorktree,
+      efficiency,
       usage,
     };
   } finally {
@@ -325,6 +413,28 @@ export function formatStatsText(data: StatsData): string {
     for (const w of data.byWorktree) {
       lines.push(
         `  ${w.worktree.padEnd(8)} | ${String(w.runs).padStart(4)} | ${String(w.passed).padStart(6)} | ${String(w.stalled).padStart(7)}`,
+      );
+    }
+  }
+
+  const effShown = data.efficiency.filter((e) => e.quality !== null);
+  if (effShown.length > 0) {
+    lines.push(
+      "\nderived: efficiency (ES/CPQ per run — activity signal, not quality)",
+    );
+    lines.push("  run | grade | ES | CPQ | basis");
+    lines.push("  ----|-------|----|-----|------");
+    for (const e of effShown) {
+      const es =
+        e.es !== null && Number.isFinite(e.es) ? e.es.toExponential(2) : "—";
+      const cpq =
+        e.cpq !== null
+          ? e.basis === "usd"
+            ? `$${e.cpq.toFixed(4)}`
+            : `${Math.round(e.cpq)}B`
+          : "—";
+      lines.push(
+        `  ${String(e.runId).padStart(3)} | ${(e.grade ?? "?").padEnd(14)} | ${es.padStart(9)} | ${cpq.padStart(9)} | ${e.basis}`,
       );
     }
   }

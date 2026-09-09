@@ -150,3 +150,43 @@ export function testStatsToolByGradeSeparation(): void {
   });
   console.log("  ✓ fapony_stats separates grades in byGrade");
 }
+
+export function testStatsEfficiencyTextFailCensored(): void {
+  withTempDb(() => {
+    const db = openDb();
+    const config: Config = {
+      ...baseConfig(),
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
+    endSpawn(db, s, config, "executor", "b".repeat(4000));
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+
+    const text = toolFaponyStats({ json: false }).content[0].text;
+    assert.ok(
+      text.includes("derived: efficiency"),
+      "text should include derived section",
+    );
+    assert.ok(
+      !text.includes("Infinity"),
+      "text must not display Infinity for fail CPQ",
+    );
+    // Find the efficiency section (between "derived:" header and next blank line)
+    const effStart = text.indexOf("derived: efficiency");
+    const effEnd = text.indexOf("\n\n", effStart);
+    const effSection = text.slice(
+      effStart,
+      effEnd > effStart ? effEnd : undefined,
+    );
+    const line = effSection
+      .split("\n")
+      .find((l) => l.includes(String(runId)) && l.includes("|"))!;
+    assert.ok(line, "should have efficiency line for the run");
+    const cpqField = line.split("|")[3]!.trim();
+    assert.equal(cpqField, "—", "fail CPQ should render as censored dash");
+  });
+  console.log("  ✓ fapony_stats efficiency text censors fail CPQ");
+}

@@ -221,3 +221,126 @@ export function testStatsModelFromExecutorSpawn(): void {
   });
   console.log("  ✓ getStatsData: model attribution from executor spawn");
 }
+
+function setRunMinutes(
+  db: ReturnType<typeof import("../src/db/index.js").openDb>,
+  runId: number,
+  minutes: number,
+): void {
+  db.prepare(
+    `UPDATE runs SET created_at = '2026-09-09 10:00:00', updated_at = datetime('2026-09-09 10:00:00', ?) WHERE id = ?`,
+  ).run(`+${minutes} minutes`, runId);
+}
+
+export function testStatsEfficiencyUsd(): void {
+  withTmpDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+    // 4000B in + 4000B out = $8; quality pass-good = 4; 10 minutes
+    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
+    endSpawn(db, s, config, "executor", "b".repeat(4000));
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+    setRunMinutes(db, runId, 10);
+
+    const data = getStatsData();
+    const eff = data.efficiency.find((e) => e.runId === runId)!;
+    assert(eff, "efficiency entry per run");
+    assert.equal(eff.grade, "pass-good");
+    assert.equal(eff.quality, 4);
+    assert.equal(eff.costUSD, 8);
+    assert.equal(eff.basis, "usd");
+    assert.equal(eff.es, 4 / (8 * 10), "ES = quality/(cost×minutes)");
+    assert.equal(eff.cpq, 8 / 4, "CPQ = cost/quality");
+  });
+  console.log("  ✓ getStatsData: efficiency ES/CPQ from USD cost");
+}
+
+export function testStatsEfficiencyBytesProxy(): void {
+  withTmpDb((db) => {
+    const config = baseConfig(); // no pricing → bytes proxy
+    const runId = newRun(db, "wt1", null, null, "abc");
+    const s = beginSpawn(db, runId, config, "executor", "a".repeat(100));
+    endSpawn(db, s, config, "executor", "b".repeat(100));
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+    setRunMinutes(db, runId, 10);
+
+    const data = getStatsData();
+    const eff = data.efficiency.find((e) => e.runId === runId)!;
+    assert.equal(eff.basis, "bytes-proxy");
+    assert.equal(eff.costUSD, null);
+    assert.equal(eff.bytes, 200);
+    assert.equal(eff.es, 4 / (200 * 10));
+    assert.equal(eff.cpq, 200 / 4);
+  });
+  console.log("  ✓ getStatsData: efficiency falls back to bytes proxy");
+}
+
+export function testStatsEfficiencyFailIsInfinite(): void {
+  withTmpDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
+    endSpawn(db, s, config, "executor", "b".repeat(4000));
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+    setRunMinutes(db, runId, 10);
+
+    const data = getStatsData();
+    const eff = data.efficiency.find((e) => e.runId === runId)!;
+    assert.equal(eff.quality, 0);
+    assert.equal(eff.es, 0);
+    assert.equal(eff.cpq, null, "fail → censored cpq, not infinite");
+  });
+  console.log("  ✓ getStatsData: fail grade → ES 0, CPQ Infinity");
+}
+
+export function testStatsEfficiencyNoGateIsNull(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+    setStatus(db, runId, "passed");
+    setRunMinutes(db, runId, 10);
+
+    const data = getStatsData();
+    const eff = data.efficiency.find((e) => e.runId === runId)!;
+    assert.equal(eff.grade, null);
+    assert.equal(eff.quality, null);
+    assert.equal(eff.es, null);
+    assert.equal(eff.cpq, null);
+  });
+  console.log("  ✓ getStatsData: run without gate → null efficiency");
+}
+
+export function testStatsEfficiencyJsonFailCensored(): void {
+  withTmpDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
+    endSpawn(db, s, config, "executor", "b".repeat(4000));
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+    setRunMinutes(db, runId, 10);
+
+    const data = getStatsData();
+    const eff = data.efficiency.find((e) => e.runId === runId)!;
+    assert.equal(eff.cpq, null);
+
+    const serialized = JSON.parse(JSON.stringify(eff));
+    assert.equal(serialized.cpq, null, "JSON must not expose Infinity/NaN");
+  });
+  console.log("  ✓ getStatsData: efficiency JSON round-trip censors fail CPQ");
+}

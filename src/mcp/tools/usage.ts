@@ -8,8 +8,14 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     typeof args.worktree === "string" ? args.worktree : undefined;
   const since = typeof args.since === "number" ? args.since : undefined;
   const until = typeof args.until === "number" ? args.until : undefined;
+  const detail = args.detail === true;
 
-  const data: PassiveUsageResult = readPassiveUsage(worktree, since, until);
+  const data: PassiveUsageResult = readPassiveUsage(
+    worktree,
+    since,
+    until,
+    detail,
+  );
 
   if (args.json === true) {
     return jsonResult(data);
@@ -39,6 +45,39 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
         `  ${m.model}: ${m.session_count} sessions, ` +
           `${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out, ` +
           `$${m.cost.toFixed(4)}`,
+      );
+    }
+  }
+
+  // detail:true is opt-in — default text above is byte-identical to before.
+  if (detail && data.detail) {
+    lines.push("");
+    lines.push("Detail (tool activity — signal, not quality):");
+    lines.push(`  steps: ${data.detail.steps.toLocaleString()}`);
+    const tools = Object.entries(data.detail.tool_breakdown).sort(
+      (a, b) => b[1] - a[1],
+    );
+    if (tools.length > 0) {
+      lines.push("  by tool:");
+      for (const [tool, count] of tools.slice(0, 20)) {
+        lines.push(`    ${tool}: ${count.toLocaleString()}`);
+      }
+      if (tools.length > 20) {
+        lines.push(`    ... +${tools.length - 20} more (see json:true)`);
+      }
+    }
+    lines.push(`  sessions with activity: ${data.detail.by_session.length}`);
+    const top = data.detail.by_session.slice(0, 10);
+    for (const s of top) {
+      const topTool = Object.entries(s.tools).sort((a, b) => b[1] - a[1])[0];
+      lines.push(
+        `    ${s.session_id}: ${s.steps} steps` +
+          (topTool ? `, top tool ${topTool[0]}×${topTool[1]}` : ""),
+      );
+    }
+    if (data.detail.by_session.length > 10) {
+      lines.push(
+        `    ... +${data.detail.by_session.length - 10} more (see json:true)`,
       );
     }
   }

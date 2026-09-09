@@ -163,6 +163,12 @@ export const TOOLS = [
           description:
             "Unix timestamp — include sessions created at or before this time",
         },
+        detail: {
+          type: "boolean",
+          description:
+            "If true, include tool-call breakdown + step counts per session " +
+            "(activity signal, not quality). Default false keeps output compact.",
+        },
         json: {
           type: "boolean",
           description:

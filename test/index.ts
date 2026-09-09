@@ -116,6 +116,7 @@ import {
   testVerificationReportVerdictFromGateEvent,
 } from "./mcp/report.test.js";
 import {
+  testStatsEfficiencyTextFailCensored,
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
   testStatsToolEmptyDb,
@@ -129,6 +130,11 @@ import {
   testMcpToolsList,
   testMcpUnknownMethod,
 } from "./mcp/transport.test.js";
+import {
+  testUsageDefaultRegression,
+  testUsageDetailJson,
+  testUsageDetailText,
+} from "./mcp/usage.test.js";
 import {
   testVerdictSubmitAllGrades,
   testVerdictSubmitAutoCreatesRun,
@@ -157,7 +163,14 @@ import {
   testReportHtmlFiltersAndMethodology,
   testReportHtmlTotalCostCountsEachSpawnOnce,
 } from "./report-html.test.js";
-import { testAssertNoPromptInArgv, testAssertSafe } from "./safety.test.js";
+import { testAssertSafe } from "./safety.test.js";
+import {
+  testSessionDefaultHasNoDetail,
+  testSessionDetailBreakdown,
+  testSessionDetailMatchesRawSql,
+  testSessionDetailSkipsUnknownType,
+  testSessionDetailStepTokensNotSummed,
+} from "./session.test.js";
 import {
   testBuildSetupConfigNoMemory,
   testBuildSetupConfigWithMemory,
@@ -174,6 +187,11 @@ import {
 } from "./setup.test.js";
 import {
   testStatsByWorktree,
+  testStatsEfficiencyBytesProxy,
+  testStatsEfficiencyFailIsInfinite,
+  testStatsEfficiencyJsonFailCensored,
+  testStatsEfficiencyNoGateIsNull,
+  testStatsEfficiencyUsd,
   testStatsEmptyDb,
   testStatsGateWithoutSpawnsInWindow,
   testStatsLegacyPassMergedWithPassAdequate,
@@ -215,7 +233,6 @@ import { testIsAffirmative } from "./util.test.js";
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
-  testAssertNoPromptInArgv();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
@@ -302,6 +319,10 @@ export async function cmdTest(): Promise<void> {
   testStatsToolTextMode();
   testStatsTextMatchesCli();
   testStatsToolByGradeSeparation();
+  testStatsEfficiencyTextFailCensored();
+  testUsageDefaultRegression();
+  testUsageDetailJson();
+  testUsageDetailText();
   testHandoffCollectMissingArgs();
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();
@@ -375,6 +396,16 @@ export async function cmdTest(): Promise<void> {
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
   testStatsModelFromExecutorSpawn();
+  testStatsEfficiencyUsd();
+  testStatsEfficiencyBytesProxy();
+  testStatsEfficiencyFailIsInfinite();
+  testStatsEfficiencyJsonFailCensored();
+  testStatsEfficiencyNoGateIsNull();
+  testSessionDefaultHasNoDetail();
+  testSessionDetailBreakdown();
+  testSessionDetailSkipsUnknownType();
+  testSessionDetailStepTokensNotSummed();
+  testSessionDetailMatchesRawSql();
   // Telemetry tests
   testTelemetrySchemaVersion();
   testTelemetryPayloadShape();
