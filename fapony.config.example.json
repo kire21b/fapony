@@ -1,25 +1,8 @@
 {
-  "worktrees": {
-    "myapp": "/absolute/path/to/your-worktree"
-  },
-  "roles": {
-    "executor": {
-      "model": "opencode/mimo-v2.5-free"
-    },
-    "gate": {
-      "model": "sonnet"
-    },
-    "planner": {
-      "model": "opus"
-    }
-  },
   "review": {
     "maxRounds": 2
   },
   "memory": null,
-  "pricing": {
-    "executor": { "inputPer1k": 3.0, "outputPer1k": 15.0 }
-  },
   "telemetry": null,
   "paths": {
     "planDir": ".fapony/plan",
@@ -33,5 +16,10 @@
       "checkout\\s+--\\s",
       "git\\s+stash"
     ]
+  },
+  "usageWeb": {
+    "port": 1710,
+    "hostname": "127.0.0.1",
+    "pollInterval": 1771
   }
 }
