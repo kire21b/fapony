@@ -2,7 +2,9 @@
 
 ## What is fapony
 
-Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 6 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
+Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 7 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
+
+**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **project health + knowledge accumulation ข้าม run/client/project** — reason_code ที่ fail ซ้ำ, plan ที่ escalate เกิน round cap, pattern ที่ผ่าน round แรก — สะสมใน `runs`+`events` แล้วป้อนกลับเข้า `plan-with-me` เป็น context (`project_health_context` tool, ดู [.fapony/plan/PLAN-project-health-context.md](.fapony/plan/PLAN-project-health-context.md)) fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
@@ -40,17 +42,20 @@ fapony/
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
     session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
       index.ts         # re-exports (backward compat)
-      types.ts         # ModelBreakdown, SessionDetail, UsageDetail, PassiveUsageResult
-      helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb()
+      types.ts         # ModelBreakdown, SessionDetail, UsageDetail, StepTimingSummary, PassiveUsageResult
+      helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb(), parseTimeMs()/extractPartTiming()/summarizeTiming()/collectTiming()/readTimingFromDb()
       opencode.ts      # readPassiveUsage() — OpenCode session DB
       zcode.ts         # readZcodeUsage() — ZCode session DB
       claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
       codex.ts         # readCodexUsage() — Codex JSONL files
+    context/           # project-health context block for plan-with-me
+      projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max
+      index.ts         # barrel re-export
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
     init-mem.ts        # init-mem command (legacy, superseded by init)
     stats/                # fapony stats — KPI + cost total across runs
-      data.ts             # getStatsData() + StatsData type + computeEfficiency()
+      data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
       format.ts           # formatStatsText() — CLI + MCP text mode
       cli.ts              # cmdStats()
       index.ts            # barrel re-export
@@ -72,7 +77,7 @@ fapony/
     install.ts          # fapony install --platform opencode|claude|zcode|codex — wire the MCP server into a client
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 6 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 7 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout)
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
@@ -195,6 +200,8 @@ events(
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
 | AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
+| `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | `readTimingFromDb` ([src/session/helpers.ts](src/session/helpers.ts)) parse JSON ทุกแถวใน JS — คือ bottleneck ไม่ใช่ SQL aggregate จึง default `ORDER BY time_created DESC LIMIT 20000` (sampling) แทน full scan · `fapony usage-web --full` สั่ง exact scan |
+| `usage-web` ช้าอยู่ต่อแม้ limit OpenCode/ZCode แล้ว (บล็อค startup ~10s) | Claude Code/Codex reader ไม่มี SQL ให้ aggregate — `readFileSync` ทุกไฟล์ `.jsonl` เต็มไฟล์เสมอ (ไม่มี fast path) จึง (1) default `since` = 30 วันย้อนหลังใน `fetchAllUsage` ([src/usage/cli.ts](src/usage/cli.ts)) เว้นแต่ `--full` (2) ใน `claude-code.ts`/`codex.ts` เช็ค `statSync(file).mtimeMs` ก่อน `readFileSync` — ไฟล์ session เป็น append-only ถ้า mtime เก่ากว่า `since` ข้ามได้เลยไม่ต้องอ่าน |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -241,10 +248,10 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ## CLI Commands
 
 ```bash
-fapony mcp                          # MCP server — stdio JSON-RPC, 6 tools
+fapony mcp                          # MCP server — stdio JSON-RPC, 7 tools
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
-fapony usage-web [port]             # live usage comparison dashboard (OpenCode / ZCode / Claude Code)
+fapony usage-web [port] [--full]    # live usage comparison dashboard (OpenCode / ZCode / Claude Code) — default samples (last 30d + last 20k parts), --full for exact all-time
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client
@@ -257,16 +264,17 @@ fapony test                         # self-check
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 6 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 7 tools:
 
 | Tool | Purpose |
 |------|---------|
 | `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
-| `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
-| `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model) |
+| `fapony_stats` | Query KPIs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N failure/plan slices |
+| `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
+| `project_health_context` | Known-patterns block for plan-with-me: recurring fail reasons, escalations, round-1-pass shapes |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
 

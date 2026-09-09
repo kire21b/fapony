@@ -8,10 +8,19 @@ export { readCodexUsage } from "./codex.js";
 export {
   aggregateDetail,
   buildWhereClause,
+  collectTiming,
   type DetailPerSessionToolRow,
   type DetailStepRow,
   type DetailToolRow,
+  type ExtractedPartTiming,
+  extractPartTiming,
+  parseTimeMs,
   readDetailFromDb,
+  readTimingFromDb,
+  rowFallbackMs,
+  summarizeTiming,
+  type TimingInput,
+  type TimingRow,
   type WhereClause,
 } from "./helpers.js";
 export { readPassiveUsage } from "./opencode.js";
@@ -21,6 +30,9 @@ export {
   type PassiveUsageResult,
   type SessionDetail,
   STEP_TOKENS_NOTE,
+  type StepTimingSummary,
+  TIMING_NOTE,
+  type ToolLatencyStat,
   type UsageDetail,
 } from "./types.js";
 export { readZcodeUsage } from "./zcode.js";

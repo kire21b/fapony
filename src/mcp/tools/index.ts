@@ -5,6 +5,7 @@ import { REASON_CODES } from "../types.js";
 
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
+export { toolProjectHealthContext } from "./context.js";
 export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
 export { toolPassiveUsage } from "./usage.js";
@@ -120,6 +121,16 @@ export const TOOLS = [
           type: "string",
           description: "Optional note (required when reason_code = 'other')",
         },
+        worktree: {
+          type: "string",
+          description:
+            "Optional worktree label for a new run (used only when run_id is omitted, e.g. move-to-done archiving a shipped plan)",
+        },
+        plan: {
+          type: "string",
+          description:
+            "Optional plan file path for a new run (used only when run_id is omitted)",
+        },
       },
       required: ["verdict", "reason_code"],
     },
@@ -128,7 +139,9 @@ export const TOOLS = [
     name: "fapony_stats",
     description:
       "Query accumulated run statistics: pass/stall rates, cost, quality scores, " +
-      "breakdown by model/grade/worktree. Returns StatsData shape.",
+      "breakdown by model/grade/worktree. Returns StatsData shape. " +
+      "With group_by='reason_code'|'plan', returns top-N rows for that grouping " +
+      "(recurring failure signatures / per-plan totals) instead of the full shape.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -136,6 +149,21 @@ export const TOOLS = [
           type: "boolean",
           description:
             "If true, return raw JSON StatsData. If false (default), return human-readable text.",
+        },
+        group_by: {
+          type: "string",
+          enum: ["reason_code", "plan"],
+          description:
+            "Optional grouping: top-N reason_code counts or per-plan totals from real gate events.",
+        },
+        top: {
+          type: "number",
+          description: "Max rows returned with group_by (default 10).",
+        },
+        worktree: {
+          type: "string",
+          description:
+            "Scope a group_by query to one worktree path (absolute).",
         },
       },
       required: [],
@@ -239,6 +267,24 @@ export const TOOLS = [
           type: "string",
           enum: ["text", "json"],
           description: "Output format. Default: text.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "project_health_context",
+    description:
+      "Known-patterns context for plan-with-me: recurring fail reasons, " +
+      "escalated runs, and round-1-pass shapes from real run history. " +
+      "Short plain-text block (framed as watch-fors, not constraints).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description:
+            "Scope to one worktree path (absolute). Global across worktrees when omitted.",
         },
       },
       required: [],

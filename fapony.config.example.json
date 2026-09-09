@@ -23,7 +23,8 @@
   "usageWeb": {
     "port": 1710,
     "hostname": "127.0.0.1",
-    "pollInterval": 1771
+    "pollInterval": 1771,
+    "ownerName": "your-name"
   },
   "pricing": {
     "executor": { "inputPer1k": 3, "outputPer1k": 15 }

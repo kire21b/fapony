@@ -8,7 +8,11 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildWhereClause, readDetailFromDb } from "./helpers.js";
+import {
+  buildWhereClause,
+  readDetailFromDb,
+  readTimingFromDb,
+} from "./helpers.js";
 import {
   EMPTY_RESULT,
   type ModelBreakdown,
@@ -30,6 +34,7 @@ export function readZcodeUsage(
   since?: number,
   until?: number,
   detail?: boolean,
+  full?: boolean,
 ): PassiveUsageResult {
   const dbPath = resolveZcodeDbPath();
   if (!existsSync(dbPath)) return EMPTY_RESULT;
@@ -110,6 +115,23 @@ export function readZcodeUsage(
         since,
         until,
       );
+      // ZCode part table has no time_updated column (spec §1: verify before
+      // coding) — embedded data.time only, row fallback disabled.
+      // ASSUMPTION: ZCode part.data.type uses the same vocabulary as OpenCode
+      // ("tool", "step-finish", "reasoning"). If ZCode uses different type
+      // strings, timing silently returns empty (graceful degradation, no error).
+      try {
+        result.detail.timing = readTimingFromDb(db, "s.directory", {
+          worktree,
+          since,
+          until,
+          hasTimeUpdated: false,
+          limit: full ? false : undefined,
+        });
+      } catch {
+        // Timing is additive signal — never break totals/detail.
+        result.detail.timing = null;
+      }
     }
 
     return result;

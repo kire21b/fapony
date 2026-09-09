@@ -2,7 +2,13 @@
 
 import assert from "node:assert";
 import { beginSpawn, endSpawn } from "../src/cost.js";
-import { addEvent, type Config, newRun, setStatus } from "../src/db/index.js";
+import {
+  addEvent,
+  type Config,
+  incrementRound,
+  newRun,
+  setStatus,
+} from "../src/db/index.js";
 import { getStatsData } from "../src/stats.js";
 import { baseConfig, withTmpDb } from "./helpers.js";
 
@@ -343,4 +349,124 @@ export function testStatsEfficiencyJsonFailCensored(): void {
     assert.equal(serialized.cpq, null, "JSON must not expose Infinity/NaN");
   });
   console.log("  ✓ getStatsData: efficiency JSON round-trip censors fail CPQ");
+}
+
+// --- Cross-run knowledge (PLAN-project-health-context §2) ---
+
+export function testStatsReasonCodeBreakdown(): void {
+  withTmpDb((db) => {
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    const r2 = newRun(db, "wt1", "plan-a", null, "abc");
+    const r3 = newRun(db, "wt2", "plan-b", null, "abc");
+    const r4 = newRun(db, "wt1", "plan-a", null, "abc");
+
+    addEvent(db, r1, "gate", {
+      verdict: "fail",
+      reason_code: "scope_mismatch",
+      note: "",
+      round: 0,
+    });
+    addEvent(db, r2, "gate", {
+      verdict: "fail",
+      reason_code: "scope_mismatch",
+      note: "",
+      round: 0,
+    });
+    addEvent(db, r2, "gate", {
+      verdict: "fail",
+      reason_code: "missing_test",
+      note: "",
+      round: 1,
+    });
+    // pass gate carrying a reason_code must NOT count
+    addEvent(db, r3, "gate", {
+      verdict: "pass-good",
+      reason_code: "scope_mismatch",
+      note: "",
+      round: 0,
+    });
+    // legacy shape: no reason_code field, [code] note prefix fallback
+    addEvent(db, r4, "gate", {
+      verdict: "fail",
+      note: "[spec_gap] underspecified",
+      round: 0,
+    });
+
+    const data = getStatsData();
+    assert.equal(data.byReasonCode[0].worktree, "wt1");
+    assert.equal(data.byReasonCode[0].reason, "scope_mismatch");
+    assert.equal(data.byReasonCode[0].count, 2);
+    const spec = data.byReasonCode.find((r) => r.reason === "spec_gap");
+    assert(spec && spec.count === 1, "note-prefix fallback counts");
+    assert(
+      !data.byReasonCode.some((r) => r.worktree === "wt2"),
+      "pass gates excluded",
+    );
+  });
+  console.log(
+    "  ✓ getStatsData: byReasonCode counts non-pass gates per worktree",
+  );
+}
+
+export function testStatsEscalatedRuns(): void {
+  withTmpDb((db) => {
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    incrementRound(db, r1);
+    incrementRound(db, r1);
+    incrementRound(db, r1); // round 3 > default maxRounds 2
+    const r2 = newRun(db, "wt1", "plan-b", null, "abc");
+    incrementRound(db, r2); // round 1 — not escalated
+
+    const data = getStatsData();
+    assert.equal(data.escalatedRuns.length, 1);
+    assert.equal(data.escalatedRuns[0].id, r1);
+    assert.equal(data.escalatedRuns[0].plan, "plan-a");
+    assert.equal(data.escalatedRuns[0].round, 3);
+  });
+  console.log("  ✓ getStatsData: escalatedRuns lists round > maxRounds");
+}
+
+export function testStatsPlanBreakdown(): void {
+  withTmpDb((db) => {
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    newRun(db, "wt2", "plan-a", null, "abc");
+    const r3 = newRun(db, "wt1", "plan-b", null, "abc");
+    setStatus(db, r1, "passed");
+    incrementRound(db, r3);
+    incrementRound(db, r3);
+    incrementRound(db, r3); // plan-b escalated
+
+    const data = getStatsData();
+    const a = data.byPlan.find((p) => p.plan === "plan-a");
+    const b = data.byPlan.find((p) => p.plan === "plan-b");
+    assert(a && b);
+    assert.equal(a.runs, 2);
+    assert.equal(a.passed, 1);
+    assert.equal(a.escalated, 0);
+    assert.deepEqual(a.worktrees, ["wt1", "wt2"]);
+    assert.equal(b.escalated, 1);
+  });
+  console.log("  ✓ getStatsData: byPlan totals runs/passed/escalated");
+}
+
+export function testStatsBestPassing(): void {
+  withTmpDb((db) => {
+    const r1 = newRun(db, "wt1", "good-shape", null, "abc");
+    addEvent(db, r1, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, r1, "passed");
+    // round 2 pass — not a round-1 template
+    const r2 = newRun(db, "wt1", "slow-shape", null, "abc");
+    incrementRound(db, r2);
+    incrementRound(db, r2);
+    addEvent(db, r2, "gate", { verdict: "pass-good", note: "", round: 2 });
+    // null plan — excluded even with round-1 pass
+    const r3 = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, r3, "gate", { verdict: "pass-good", note: "", round: 0 });
+
+    const data = getStatsData();
+    assert.equal(data.bestPassing.length, 1);
+    assert.equal(data.bestPassing[0].plan, "good-shape");
+    assert.equal(data.bestPassing[0].worktree, "wt1");
+  });
+  console.log("  ✓ getStatsData: bestPassing only round-1 passes with a plan");
 }

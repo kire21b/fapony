@@ -1,5 +1,6 @@
 // src/usage/render.ts — HTML generator for usage-web
 
+import { DEFAULT_TIMING_SAMPLE_LIMIT } from "../session/helpers.js";
 import type { ModelBreakdown, PassiveUsageResult } from "../session/types.js";
 import { esc, fmtCost, fmtTokens, shortModel } from "./format.js";
 
@@ -26,6 +27,9 @@ interface SummaryMetrics {
   output: number;
   reasoning: number;
   cacheRead: number;
+  avgStepMs: number | null;
+  avgStepInput: number | null;
+  avgStepOutput: number | null;
 }
 
 function calcMetrics(d: PassiveUsageResult | null): SummaryMetrics {
@@ -41,9 +45,13 @@ function calcMetrics(d: PassiveUsageResult | null): SummaryMetrics {
       output: 0,
       reasoning: 0,
       cacheRead: 0,
+      avgStepMs: null,
+      avgStepInput: null,
+      avgStepOutput: null,
     };
   const totalCache = d.total_tokens_cache_read + d.total_tokens_cache_write;
   const contextTokens = d.total_tokens_input + d.total_tokens_output;
+  const t = d.detail?.timing;
   return {
     sessions: d.session_count,
     cacheHitRate: totalCache > 0 ? d.total_tokens_cache_read / totalCache : 0,
@@ -67,6 +75,9 @@ function calcMetrics(d: PassiveUsageResult | null): SummaryMetrics {
     output: d.total_tokens_output,
     reasoning: d.total_tokens_reasoning,
     cacheRead: d.total_tokens_cache_read,
+    avgStepMs: t?.avgStepMs ?? null,
+    avgStepInput: t?.avgStepInput ?? null,
+    avgStepOutput: t?.avgStepOutput ?? null,
   };
 }
 
@@ -84,12 +95,19 @@ function metric(
   value: string,
   cls: string,
   bar: string,
+  wide = false,
 ): string {
-  return `<div class="card-metric">
+  return `<div class="card-metric${wide ? " wide" : ""}">
     <div class="metric-label">${label}</div>
     <div class="metric-value ${cls}">${value}</div>
     ${bar}
   </div>`;
+}
+
+function fmtMs(ms: number): string {
+  if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`;
+  if (ms >= 1_000) return `${(ms / 1_000).toFixed(1)}s`;
+  return `${Math.round(ms)}ms`;
 }
 
 function summaryCard(name: string, color: string, m: SummaryMetrics): string {
@@ -99,6 +117,17 @@ function summaryCard(name: string, color: string, m: SummaryMetrics): string {
       <div class="card-empty">no sessions</div>
     </div>`;
   const maxInput = Math.max(m.input, m.output, m.reasoning, 1);
+  const timingMetrics =
+    m.avgStepMs !== null ? metric("Avg Step", fmtMs(m.avgStepMs), "", "") : "";
+  const stepTokenMetrics =
+    m.avgStepInput !== null
+      ? metric(
+          "Step Tokens",
+          `${fmtTokens(m.avgStepInput)} in / ${fmtTokens(m.avgStepOutput ?? 0)} out`,
+          "",
+          "",
+        )
+      : "";
   return `<div class="card" style="border-left-color:${color}">
   <div class="card-title" style="color:${color}">${name} <span class="sample">(${m.sessions} sessions)</span></div>
   <div class="card-metrics">
@@ -110,7 +139,8 @@ function summaryCard(name: string, color: string, m: SummaryMetrics): string {
     ${metric("Reasoning", fmtTokens(m.reasoning), m.reasoningPct > 0.15 ? "warn" : "", barHtml(m.reasoning, maxInput, "var(--yellow)"))}
     ${metric("Cache Read", fmtTokens(m.cacheRead), "", "")}
     ${metric("Avg/Session", fmtTokens(m.avgPerSession), "", "")}
-    ${metric("Cost", fmtCost(m.totalCost), "", "")}
+    ${metric("Cost", fmtCost(m.totalCost), "", "", true)}
+    ${timingMetrics}${stepTokenMetrics}
   </div>
 </div>`;
 }
@@ -130,7 +160,19 @@ function modelRows(data: PassiveUsageResult | null): string {
   if (!data || data.by_model.length === 0)
     return '    <tr><td class="muted" colspan="8">no sessions</td></tr>';
   return data.by_model
-    .sort((a, b) => b.session_count - a.session_count)
+    .sort(
+      (a, b) =>
+        b.tokens_input +
+        b.tokens_output +
+        b.tokens_reasoning +
+        b.tokens_cache_read +
+        b.tokens_cache_write -
+        (a.tokens_input +
+          a.tokens_output +
+          a.tokens_reasoning +
+          a.tokens_cache_read +
+          a.tokens_cache_write),
+    )
     .map(
       (m) =>
         `    <tr data-model="${esc(m.model)}">
@@ -186,22 +228,27 @@ export function renderUsageHtml(
   claude_code: PassiveUsageResult | null,
   codex: PassiveUsageResult | null,
   pollInterval: number,
+  ownerName?: string,
+  full?: boolean,
 ): string {
   const oc = calcMetrics(opencode);
   const zc = calcMetrics(zcode);
   const cc = calcMetrics(claude_code);
   const cx = calcMetrics(codex);
+  const owner = ownerName?.trim() ? esc(ownerName.trim()) : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fapony usage — live comparison</title>
+<title>fapony usage — live comparison${owner ? ` — ${owner}` : ""}</title>
 <style>
   :root { --bg: #0d1117; --fg: #c9d1d9; --border: #30363d; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --muted: #8b949e; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .owner { color: var(--muted); font-size: 0.9rem; font-weight: 400; white-space: nowrap; }
   h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
   h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
   .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
@@ -226,8 +273,9 @@ export function renderUsageHtml(
   .card { background: #161b22; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.8rem 1rem; }
   .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
   .card-empty { color: var(--muted); font-size: 0.85rem; }
-  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
   .card-metric { font-size: 0.8rem; }
+  .card-metric.wide { grid-column: span 2; }
   .metric-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em; }
   .metric-value { font-size: 0.95rem; font-weight: 700; color: var(--fg); }
   .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.15rem; overflow: hidden; }
@@ -237,7 +285,14 @@ export function renderUsageHtml(
 </head>
 <body>
 
-<h1>fapony usage — live comparison</h1>
+<div class="header">
+  <h1>fapony usage — live comparison <span class="owner">${
+    full
+      ? "(full scan)"
+      : `(sampled — last 30d, ${DEFAULT_TIMING_SAMPLE_LIMIT.toLocaleString()} parts)`
+  }</span></h1>
+  ${owner ? `<span class="owner">${owner}</span>` : ""}
+</div>
 <div class="meta">
   <span class="status on" id="status-dot"></span>
   <span id="status-text">polling every ${pollInterval / 1000}s</span>
@@ -268,7 +323,7 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
   function fmt(n) {
     if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
     if (n >= 1e3) return (n / 1e3).toFixed(0) + "K";
-    return String(n);
+    return String(Math.round(n));
   }
 
   function fmtCost(n) {
@@ -283,10 +338,17 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
     return raw;
   }
 
+  function fmtMs(ms) {
+    if (ms >= 60000) return (ms / 60000).toFixed(1) + "m";
+    if (ms >= 1000) return (ms / 1000).toFixed(1) + "s";
+    return Math.round(ms) + "ms";
+  }
+
   function calcMetrics(d) {
     if (!d || d.session_count === 0) return null;
     var totalCache = d.total_tokens_cache_read + d.total_tokens_cache_write;
     var context = d.total_tokens_input + d.total_tokens_output;
+    var t = d.detail && d.detail.timing ? d.detail.timing : null;
     return {
       sessions: d.session_count,
       cacheHitRate: totalCache > 0 ? d.total_tokens_cache_read / totalCache : 0,
@@ -297,7 +359,10 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
       input: d.total_tokens_input,
       output: d.total_tokens_output,
       reasoning: d.total_tokens_reasoning,
-      cacheRead: d.total_tokens_cache_read
+      cacheRead: d.total_tokens_cache_read,
+      avgStepMs: t && typeof t.avgStepMs === "number" ? t.avgStepMs : null,
+      avgStepInput: t && typeof t.avgStepInput === "number" ? t.avgStepInput : null,
+      avgStepOutput: t && typeof t.avgStepOutput === "number" ? t.avgStepOutput : null
     };
   }
 
@@ -308,8 +373,8 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
     return '<div class="bar"><div class="bar-fill" style="width:' + w + '%;background:' + color + '"></div></div>';
   }
 
-  function metricItem(label, value, cls, bar) {
-    return '<div class="card-metric">'
+  function metricItem(label, value, cls, bar, wide) {
+    return '<div class="card-metric' + (wide ? ' wide' : '') + '">'
       + '<div class="metric-label">' + label + '</div>'
       + '<div class="metric-value ' + cls + '">' + value + '</div>'
       + bar
@@ -342,11 +407,13 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
       + metricItem("Reasoning", fmt(m.reasoning), m.reasoningPct > 0.15 ? "warn" : "", barFill(m.reasoning / maxInput, "var(--yellow)"))
       + metricItem("Cache Read", fmt(m.cacheRead), "", "")
       + metricItem("Avg/Session", fmt(m.avgPerSession), "", "")
-      + metricItem("Cost", fmtCost(m.totalCost), "", "");
+      + (m.avgStepMs !== null ? metricItem("Avg Step", fmtMs(m.avgStepMs), "", "") : "")
+      + (m.avgStepInput !== null ? metricItem("Step Tokens", fmt(m.avgStepInput) + " in / " + fmt(m.avgStepOutput) + " out", "", "") : "")
+      + metricItem("Cost", fmtCost(m.totalCost), "", "", true);
   }
 
   function buildTable(data) {
-    var models = data ? data.by_model.slice().sort(function(a,b) { return b.session_count - a.session_count; }) : [];
+    var models = data ? data.by_model.slice().sort(function(a,b) { return (b.tokens_input + b.tokens_output + b.tokens_reasoning + b.tokens_cache_read + b.tokens_cache_write) - (a.tokens_input + a.tokens_output + a.tokens_reasoning + a.tokens_cache_read + a.tokens_cache_write); }) : [];
     var html = "";
     if (models.length === 0) {
       html = '<tr><td class="muted" colspan="8">no sessions</td></tr>';

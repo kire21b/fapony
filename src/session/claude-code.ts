@@ -9,10 +9,13 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parseTimeMs, summarizeTiming, type TimingInput } from "./helpers.js";
 import {
   EMPTY_RESULT,
   type ModelBreakdown,
   type PassiveUsageResult,
+  type SessionDetail,
+  type UsageDetail,
 } from "./types.js";
 
 const PROJECTS_DIR = join(homedir(), ".claude", "projects");
@@ -29,6 +32,12 @@ function encodePath(p: string): string {
 interface UsageLine {
   message?: {
     model?: string;
+    content?: Array<{
+      type?: string;
+      id?: string;
+      name?: string;
+      tool_use_id?: string;
+    }>;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -55,11 +64,17 @@ interface ModelAcc {
 /**
  * Read passive usage from Claude Code JSONL session files.
  * Returns EMPTY_RESULT when the projects dir or matching project subdir doesn't exist.
+ *
+ * detail:true adds a UsageDetail: tool_breakdown from tool_use blocks,
+ * steps = usage-line count, per-file by_session, plus timing (turn gaps as
+ * step durations, tool_use→tool_result latency matched by tool_use_id,
+ * per-turn usage as per-step tokens). Averages only — never summed.
  */
 export function readClaudeCodeUsage(
   worktree?: string,
   since?: number,
   until?: number,
+  detail?: boolean,
 ): PassiveUsageResult {
   const projectsDir = resolveProjectsDir();
 
@@ -102,6 +117,25 @@ export function readClaudeCodeUsage(
   let totalCacheRead = 0;
   let totalCacheWrite = 0;
 
+  // Detail accumulators (only filled when detail:true).
+  const toolBreakdown: Record<string, number> = {};
+  const bySession: SessionDetail[] = [];
+  const timingInput: TimingInput = {
+    durationsMs: [],
+    stepTokens: [],
+    toolLatencies: [],
+    steps: 0,
+  };
+
+  /** Same since/until gate as the main loop — detail must match totals. */
+  function inRange(ts: number | null): boolean {
+    if (ts === null) return true;
+    const s = ts / 1000;
+    if (since !== undefined && s < since) return false;
+    if (until !== undefined && s > until) return false;
+    return true;
+  }
+
   for (const projectDir of projectDirs) {
     let files: string[];
     try {
@@ -113,6 +147,17 @@ export function readClaudeCodeUsage(
     }
 
     for (const filePath of files) {
+      // ponytail: skip files untouched since `since` before reading them —
+      // a JSONL session file is append-only, so mtime < since means every
+      // line in it is out of range. Avoids paying full-file read+parse cost
+      // (the real bottleneck) on old history when a time window is given.
+      if (since !== undefined) {
+        try {
+          if (statSync(filePath).mtimeMs / 1000 < since) continue;
+        } catch {
+          continue;
+        }
+      }
       let content: string;
       try {
         content = readFileSync(filePath, "utf-8");
@@ -197,6 +242,86 @@ export function readClaudeCodeUsage(
           }
         }
       }
+
+      // Detail pass: tool_use blocks, per-turn usage, tool_use→tool_result
+      // latency (matched by tool_use_id), turn gaps as step durations.
+      if (detail && fileSessions > 0) {
+        const fileTools: Record<string, number> = {};
+        const turnTs: Array<number | null> = [];
+        const useTs = new Map<string, { name: string; ts: number | null }>();
+        let fileSteps = 0;
+        let fileModel: string | null = null;
+        for (const line of lines) {
+          if (!line) continue;
+          let parsed: UsageLine;
+          try {
+            parsed = JSON.parse(line) as UsageLine;
+          } catch {
+            continue;
+          }
+          const ts = parseTimeMs(parsed.timestamp ?? null);
+          if (!inRange(ts)) continue;
+          const blocks = parsed.message?.content;
+          if (Array.isArray(blocks)) {
+            for (const b of blocks) {
+              if (b?.type === "tool_use" && typeof b.id === "string") {
+                const name =
+                  typeof b.name === "string" && b.name ? b.name : "(unknown)";
+                useTs.set(b.id, { name, ts });
+                fileTools[name] = (fileTools[name] ?? 0) + 1;
+                toolBreakdown[name] = (toolBreakdown[name] ?? 0) + 1;
+              } else if (
+                b?.type === "tool_result" &&
+                typeof b.tool_use_id === "string"
+              ) {
+                const use = useTs.get(b.tool_use_id);
+                if (use && use.ts !== null && ts !== null && ts >= use.ts)
+                  timingInput.toolLatencies.push({
+                    tool: use.name,
+                    ms: ts - use.ts,
+                  });
+              }
+            }
+          }
+          const usage = parsed.message?.usage;
+          if (usage) {
+            fileSteps++;
+            turnTs.push(ts);
+            timingInput.steps++;
+            timingInput.stepTokens.push({
+              input:
+                typeof usage.input_tokens === "number"
+                  ? usage.input_tokens
+                  : null,
+              output:
+                typeof usage.output_tokens === "number"
+                  ? usage.output_tokens
+                  : null,
+              cost: null, // Claude Code JSONL has no cost field
+            });
+            if (!fileModel && typeof parsed.message?.model === "string")
+              fileModel = parsed.message.model;
+          }
+        }
+        // Turn gaps within this file only (cross-file gaps are meaningless).
+        for (let i = 1; i < turnTs.length; i++) {
+          const a = turnTs[i - 1];
+          const b = turnTs[i];
+          timingInput.durationsMs.push(
+            a !== null && b !== null && b >= a ? b - a : null,
+          );
+        }
+        if (fileSteps > 0) {
+          bySession.push({
+            // Use project-relative path as session_id to avoid collisions
+            // across project directories with same-named files.
+            session_id: filePath.slice(projectDir.length + 1),
+            model: fileModel ?? "(unknown)",
+            steps: fileSteps,
+            tools: fileTools,
+          });
+        }
+      }
     }
   }
 
@@ -224,5 +349,16 @@ export function readClaudeCodeUsage(
     total_cost: 0, // Claude Code JSONL has no cost field
     session_count: totalSessions,
     by_model,
+    ...(detail
+      ? {
+          detail: {
+            tool_breakdown: toolBreakdown,
+            steps: timingInput.steps,
+            by_session: bySession.sort((a, b) => b.steps - a.steps),
+            note: "per-turn usage overlaps like per-step tokens — steps is a count only",
+            timing: summarizeTiming(timingInput),
+          } satisfies UsageDetail,
+        }
+      : {}),
   };
 }

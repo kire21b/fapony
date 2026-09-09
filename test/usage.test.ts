@@ -178,6 +178,15 @@ export function testRenderHtmlSummaryCards(): void {
   console.log("  ✓ renderUsageHtml → summary cards with all metrics");
 }
 
+export function testRenderHtmlCostWide(): void {
+  const html = renderUsageHtml(sampleData, null, null, null, 3000);
+  // Cost metric should have the "wide" class to span 2 columns
+  assert.ok(html.includes("card-metric wide"), "cost metric has wide class");
+  // Verify the CSS rule exists
+  assert.ok(html.includes("card-metric.wide"), "wide CSS rule defined");
+  console.log("  ✓ renderUsageHtml → Cost metric spans 2 columns");
+}
+
 export function testRenderHtmlPollInterval(): void {
   const html = renderUsageHtml(sampleData, null, null, null, 5000);
   assert.ok(html.includes("5"), "poll interval in seconds shown");

@@ -8,8 +8,8 @@
 // ZCode: s.directory) — callers supply the column name.
 
 import type { Database } from "bun:sqlite";
-import type { SessionDetail, UsageDetail } from "./types.js";
-import { STEP_TOKENS_NOTE } from "./types.js";
+import type { SessionDetail, StepTimingSummary, UsageDetail } from "./types.js";
+import { STEP_TOKENS_NOTE, TIMING_NOTE } from "./types.js";
 
 // ─── WHERE clause builder ──────────────────────────────────────────────
 
@@ -253,5 +253,290 @@ export function readDetailFromDb(
     perSessionSteps,
     perSessionTools,
     fallbackModelLookup,
+  );
+}
+
+// ─── Timing extraction (PLAN-project-health-context step 3) ────────────
+//
+// Parses fields the clients already write — no client-side change:
+// - OpenCode part.data.time.start/end (tool, reasoning parts) → duration
+// - OpenCode part.data.state.time.start/end (tool parts) → tool latency
+// - OpenCode part.data.tokens.{input,output} + data.cost (step-finish) → per-step tokens
+// - Claude Code JSONL timestamp diffs + message.usage (via summarizeTiming)
+// Row time_created/time_updated is the fallback when embedded time is absent
+// (spec §1 risk row). Only aggregates leave this module — never raw I/O.
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** ISO string, epoch-ms, or epoch-s → ms epoch. Null when unparseable. */
+export function parseTimeMs(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) {
+    if (v > 1e13 || v < 0) return null;
+    return v >= 1e12 ? v : v * 1000;
+  }
+  if (typeof v === "string" && v) {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+}
+
+export interface ExtractedPartTiming {
+  partType: string | null;
+  durationMs: number | null;
+  toolName: string | null;
+  toolLatencyMs: number | null;
+  stepInput: number | null;
+  stepOutput: number | null;
+  stepCost: number | null;
+}
+
+/** Pull timing/token signals out of one part.data JSON blob. */
+export function extractPartTiming(dataJson: string): ExtractedPartTiming {
+  const out: ExtractedPartTiming = {
+    partType: null,
+    durationMs: null,
+    toolName: null,
+    toolLatencyMs: null,
+    stepInput: null,
+    stepOutput: null,
+    stepCost: null,
+  };
+  let d: Record<string, unknown>;
+  try {
+    d = JSON.parse(dataJson) as Record<string, unknown>;
+  } catch {
+    return out;
+  }
+  if (!d || typeof d !== "object") return out;
+  if (typeof d.type === "string") out.partType = d.type;
+
+  // Duration: data.time.start/end (tool, reasoning parts).
+  const t = d.time as Record<string, unknown> | undefined;
+  if (t && typeof t === "object") {
+    const start = parseTimeMs(t.start);
+    const end = parseTimeMs(t.end);
+    if (start !== null && end !== null && end >= start)
+      out.durationMs = end - start;
+  }
+
+  // Tool latency: data.state.time.start/end, grouped by data.tool.
+  if (typeof d.tool === "string" && d.tool) out.toolName = d.tool;
+  const st = d.state as Record<string, unknown> | undefined;
+  const stt =
+    st && typeof st === "object"
+      ? (st.time as Record<string, unknown> | undefined)
+      : undefined;
+  if (stt && typeof stt === "object") {
+    const start = parseTimeMs(stt.start);
+    const end = parseTimeMs(stt.end);
+    if (start !== null && end !== null && end >= start)
+      out.toolLatencyMs = end - start;
+  }
+
+  // Per-step tokens: data.tokens + data.cost on step-finish rows.
+  const tok = d.tokens as Record<string, unknown> | undefined;
+  if (tok && typeof tok === "object") {
+    out.stepInput = numOrNull(tok.input ?? tok.input_tokens);
+    out.stepOutput = numOrNull(tok.output ?? tok.output_tokens);
+  }
+  out.stepCost = numOrNull(d.cost);
+  return out;
+}
+
+export interface TimingInput {
+  /** Per-part durations in ms (null = no time signal on that part). */
+  durationsMs: Array<number | null>;
+  /** One entry per step-finish row. */
+  stepTokens: Array<{
+    input: number | null;
+    output: number | null;
+    cost: number | null;
+  }>;
+  /** One entry per tool call with a measured latency. */
+  toolLatencies: Array<{ tool: string; ms: number }>;
+  /** step-finish row count (mirrors UsageDetail.steps). */
+  steps: number;
+}
+
+function avgOrNull(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
+}
+
+/**
+ * Summarize provider-extracted timing arrays. Shared by the SQLite readers
+ * (OpenCode/ZCode) and the JSONL readers (Claude Code) so the shape never
+ * drifts per provider. Averages only — per-step tokens are never summed.
+ */
+export function summarizeTiming(input: TimingInput): StepTimingSummary {
+  const measured = input.durationsMs.filter((x): x is number => x !== null);
+  const latByTool = new Map<string, number[]>();
+  for (const l of input.toolLatencies) {
+    let arr = latByTool.get(l.tool);
+    if (!arr) {
+      arr = [];
+      latByTool.set(l.tool, arr);
+    }
+    arr.push(l.ms);
+  }
+  const toolLatencyMsByType: StepTimingSummary["toolLatencyMsByType"] = {};
+  for (const [tool, arr] of latByTool) {
+    const avg = avgOrNull(arr);
+    if (avg !== null)
+      toolLatencyMsByType[tool] = { count: arr.length, avgMs: avg };
+  }
+  return {
+    steps: input.steps,
+    avgStepMs: avgOrNull(measured),
+    stepSamples: measured.length,
+    avgStepInput: avgOrNull(
+      input.stepTokens
+        .map((s) => s.input)
+        .filter((x): x is number => x !== null),
+    ),
+    avgStepOutput: avgOrNull(
+      input.stepTokens
+        .map((s) => s.output)
+        .filter((x): x is number => x !== null),
+    ),
+    avgStepCost: avgOrNull(
+      input.stepTokens
+        .map((s) => s.cost)
+        .filter((x): x is number => x !== null),
+    ),
+    toolLatencyMsByType,
+    note: TIMING_NOTE,
+  };
+}
+
+export interface TimingRow {
+  data: string;
+  time_created: number | null;
+  /** Null when the provider's part table has no time_updated column (ZCode). */
+  time_updated: number | null;
+}
+
+/**
+ * Row-timestamp fallback for one part. Unit comes from the magnitude of the
+ * stamps themselves (epoch-s vs epoch-ms), not the diff — a 500 diff is 500s
+ * in seconds-stamps but 500ms in ms-stamps. Null when the pair is missing
+ * or inverted — never throws, never negative.
+ */
+export function rowFallbackMs(
+  created: number | null,
+  updated: number | null,
+): number | null {
+  if (created === null || updated === null) return null;
+  if (
+    !Number.isFinite(created) ||
+    !Number.isFinite(updated) ||
+    updated < created
+  )
+    return null;
+  const diff = updated - created;
+  return created >= 1e12 ? diff : diff * 1000;
+}
+
+/** Fold extracted part rows into a TimingInput (embedded + row fallback). */
+export function collectTiming(rows: TimingRow[]): TimingInput {
+  const durationsMs: Array<number | null> = [];
+  const stepTokens: TimingInput["stepTokens"] = [];
+  const toolLatencies: TimingInput["toolLatencies"] = [];
+  let steps = 0;
+  for (const r of rows) {
+    const t = extractPartTiming(r.data);
+    // Step count mirrors UsageDetail.steps: every step-finish row counts,
+    // even when it carries no tokens (tokens stay null, never summed).
+    if (t.partType === "step-finish") {
+      steps++;
+      stepTokens.push({
+        input: t.stepInput,
+        output: t.stepOutput,
+        cost: t.stepCost,
+      });
+    }
+    if (t.toolName !== null && t.toolLatencyMs !== null)
+      toolLatencies.push({ tool: t.toolName, ms: t.toolLatencyMs });
+    durationsMs.push(
+      t.durationMs ?? rowFallbackMs(r.time_created, r.time_updated),
+    );
+  }
+  return { durationsMs, stepTokens, toolLatencies, steps };
+}
+
+/**
+ * Run the timing query against a SQLite DB and return a StepTimingSummary.
+ *
+ * Same join/filter as readDetailFromDb. `hasTimeUpdated` is false for
+ * providers whose part table has no time_updated column (ZCode) — the row
+ * fallback then degrades to embedded-only. Read-only like all session
+ * readers (caller holds PRAGMA query_only).
+ */
+/** Default row cap for readTimingFromDb sampling — recent parts only, not a full scan. */
+export const DEFAULT_TIMING_SAMPLE_LIMIT = 20_000;
+
+export function readTimingFromDb(
+  db: Database,
+  worktreeCol: string,
+  opts?: {
+    worktree?: string;
+    since?: number;
+    until?: number;
+    hasTimeUpdated?: boolean;
+    /** Cap rows scanned, most recent first. `false`/omitted disables the cap (full scan). */
+    limit?: number | false;
+  },
+): StepTimingSummary {
+  const needsProject = worktreeCol.startsWith("pr.");
+  const join = joinClause(needsProject);
+  const filter = buildWhereClause(
+    worktreeCol,
+    opts?.worktree,
+    opts?.since,
+    opts?.until,
+  );
+  const updatedCol =
+    opts?.hasTimeUpdated === false
+      ? "NULL AS time_updated"
+      : "p.time_updated AS time_updated";
+  // ponytail: sampling caps JS-side JSON.parse cost (the real bottleneck on
+  // large part tables) — ORDER BY + LIMIT keeps it a fast index scan, not a
+  // full table scan. Pass limit:false for an exact full-scan run.
+  const limitClause =
+    opts?.limit === false ? "" : "ORDER BY p.time_created DESC LIMIT ?";
+  const limitParams =
+    opts?.limit === false ? [] : [opts?.limit ?? DEFAULT_TIMING_SAMPLE_LIMIT];
+  const rows = db
+    .prepare(
+      `
+      SELECT p.data AS data, p.time_created AS time_created, ${updatedCol}
+      FROM part p
+      JOIN session s ON s.id = p.session_id
+      ${join}
+      WHERE (json_extract(p.data, '$.type') = 'tool'
+         OR json_extract(p.data, '$.type') = 'step-finish'
+         OR json_extract(p.data, '$.type') = 'reasoning')
+      ${filter.clause}
+      ${limitClause}
+    `,
+    )
+    .all(...filter.params, ...limitParams) as Array<{
+    data: string;
+    time_created: number | null;
+    time_updated: number | null;
+  }>;
+  return summarizeTiming(
+    collectTiming(
+      rows.map((r) => ({
+        data: typeof r.data === "string" ? r.data : "",
+        time_created:
+          typeof r.time_created === "number" ? r.time_created : null,
+        time_updated:
+          typeof r.time_updated === "number" ? r.time_updated : null,
+      })),
+    ),
   );
 }

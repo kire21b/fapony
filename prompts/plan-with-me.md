@@ -52,6 +52,20 @@ Ask:
 Ask:
 > "If this is going to fail, where do you think it will fail — 2–3 points? Do you have backup plans?"
 
+## Phase 1.5 — Known patterns (fapony history, if available)
+
+When all answers are in, **before writing the file**, check past-run history:
+
+- If the `project_health_context` MCP tool is available, call it (no args for
+  the global view, or `worktree` scoped to this project) and paste the returned
+  block into the conversation under "Known patterns from past runs".
+- If fapony isn't wired up (no MCP tool) or the block says "not enough history
+  yet", skip silently — never block drafting on this.
+- Show the block to the dev and ask which watch-fors (if any) should carry
+  into the new plan's constraints. **What wasn't discussed = not in the plan**
+  (hard rule #5) — the block is input to the conversation, never auto-injected
+  into `.fapony/plan/*.md`.
+
 ## Phase 2 — Draft (1 round)
 
 When all answers are in, **before writing the file**: `ls .fapony/plan/` and check

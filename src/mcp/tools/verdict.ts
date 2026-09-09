@@ -14,7 +14,7 @@ import {
 // --- Tool implementation ---
 
 export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
-  const { run_id, verdict, reason_code, note } = args;
+  const { run_id, verdict, reason_code, note, worktree, plan } = args;
 
   if (typeof verdict !== "string" || !VERDICT_GRADES.has(verdict)) {
     return errorResult(
@@ -42,8 +42,16 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     }
     resolvedRunId = run_id;
   } else {
-    // Auto-create a run entry for external agents
-    resolvedRunId = newRun(db, "mcp-external", null, null, "mcp");
+    // Auto-create a run entry for external agents. worktree/plan let callers
+    // (e.g. move-to-done) attribute the verdict so byReasonCode/bestPassing
+    // aggregate correctly instead of collapsing into "mcp-external".
+    resolvedRunId = newRun(
+      db,
+      typeof worktree === "string" && worktree ? worktree : "mcp-external",
+      typeof plan === "string" && plan ? plan : null,
+      null,
+      "mcp",
+    );
   }
 
   // Route through gateOnce for consistent status/round/memory handling.

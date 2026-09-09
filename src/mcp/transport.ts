@@ -7,6 +7,7 @@ import {
   toolHandoffCheck,
   toolHandoffCollect,
   toolPassiveUsage,
+  toolProjectHealthContext,
   toolVerdictSubmit,
   toolVerificationReport,
 } from "./tools/index.js";
@@ -63,6 +64,8 @@ function dispatchToolCall(params: {
       return toolFaponyStats(args);
     case "fapony_usage":
       return toolPassiveUsage(args);
+    case "project_health_context":
+      return toolProjectHealthContext(args);
     case "verification_report":
       return toolVerificationReport(args);
     default:
