@@ -76,6 +76,7 @@ export interface Config {
     port?: number;
     hostname?: string;
     pollInterval?: number;
+    ownerName?: string;
   } | null;
 }
 

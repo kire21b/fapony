@@ -77,6 +77,33 @@ export function formatStatsText(data: StatsData): string {
     }
   }
 
+  if (data.byReasonCode.length > 0) {
+    lines.push("\nby reason_code (non-pass gates only):");
+    lines.push("  worktree | reason | count");
+    lines.push("  ---------|--------|------");
+    for (const r of data.byReasonCode.slice(0, 3)) {
+      lines.push(
+        `  ${r.worktree.padEnd(8)} | ${r.reason.padEnd(14)} | ${String(r.count).padStart(5)}`,
+      );
+    }
+  }
+
+  if (data.escalatedRuns.length > 0) {
+    lines.push("\nescalated runs (round past cap — likely plan signal):");
+    for (const e of data.escalatedRuns.slice(0, 3)) {
+      lines.push(
+        `  run ${e.id} (${e.worktree}, plan ${e.plan ?? "—"}): round ${e.round}`,
+      );
+    }
+  }
+
+  if (data.bestPassing.length > 0) {
+    lines.push("\nplans passed at round 1 (reuse this shape):");
+    for (const b of data.bestPassing.slice(0, 3)) {
+      lines.push(`  ${b.plan} (${b.worktree})`);
+    }
+  }
+
   const effShown = data.efficiency.filter((e) => e.quality !== null);
   if (effShown.length > 0) {
     lines.push(

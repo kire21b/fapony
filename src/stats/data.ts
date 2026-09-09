@@ -2,8 +2,10 @@
 
 import { sumSpawnCost } from "../cost.js";
 import { type Event, openDb, type Run } from "../db/index.js";
+import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
+import { REASON_CODES } from "../mcp/types.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "../parse.js";
 import {
   type PassiveUsageResult,
@@ -156,7 +158,173 @@ export function computeEfficiency(
   return out.sort((a, b) => a.runId - b.runId);
 }
 
-// --- StatsData shape (SPEC-verdict-stats §StatsData) ---
+// --- Cross-run knowledge queries (PLAN-project-health-context §2) ---
+//
+// Pure functions over already-loaded runs/events — no extra SQL, read-only.
+// reason_code comes from gate event data: `reason_code` field (patched by
+// verdict_submit) with fallback to the `[reason_code]` note prefix that
+// gateOnce writes. Only non-pass gates count (recurring failure signature).
+
+export interface ReasonCodeCount {
+  worktree: string;
+  reason: string;
+  count: number;
+}
+
+export interface PlanBreakdown {
+  plan: string;
+  runs: number;
+  passed: number;
+  escalated: number;
+  /** Worktrees that have at least one run with this plan (sorted). */
+  worktrees: string[];
+}
+
+export interface EscalatedRun {
+  id: number;
+  worktree: string;
+  plan: string | null;
+  round: number;
+}
+
+export interface BestPassing {
+  plan: string;
+  worktree: string;
+}
+
+/** maxRounds from config (default 2) — the round-cap signal (CLAUDE.md #2). */
+export function resolveMaxRounds(): number {
+  try {
+    const mr = loadConfig().review?.maxRounds;
+    return typeof mr === "number" && mr >= 0 ? mr : 2;
+  } catch {
+    return 2;
+  }
+}
+
+function gateReason(data: string | null): string | null {
+  if (!data) return null;
+  try {
+    const d = JSON.parse(data) as {
+      reason_code?: unknown;
+      verdict?: unknown;
+      note?: unknown;
+    };
+    if (
+      typeof d.verdict === "string" &&
+      (d.verdict === "pass" || d.verdict.startsWith("pass-"))
+    )
+      return null;
+    if (
+      typeof d.reason_code === "string" &&
+      (REASON_CODES as readonly string[]).includes(d.reason_code)
+    )
+      return d.reason_code;
+    // Fallback: gateOnce writes `[reason_code]` note prefix via verdict_submit.
+    if (typeof d.note === "string") {
+      const m = /^\[([a-z_]+)\]/.exec(d.note);
+      if (m && (REASON_CODES as readonly string[]).includes(m[1])) return m[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Top reason_code per worktree, sorted by count desc (spec §2 query). */
+export function getReasonCodeBreakdown(
+  runs: Run[],
+  events: Event[],
+): ReasonCodeCount[] {
+  const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+  const counts = new Map<string, Map<string, number>>();
+  for (const e of events) {
+    if (e.kind !== "gate") continue;
+    const reason = gateReason(e.data);
+    if (!reason) continue;
+    const wt = wtByRun.get(e.run_id) ?? "(unknown)";
+    let inner = counts.get(wt);
+    if (!inner) {
+      inner = new Map();
+      counts.set(wt, inner);
+    }
+    inner.set(reason, (inner.get(reason) ?? 0) + 1);
+  }
+  const out: ReasonCodeCount[] = [];
+  for (const [worktree, inner] of counts)
+    for (const [reason, count] of inner) out.push({ worktree, reason, count });
+  return out.sort((a, b) => b.count - a.count);
+}
+
+/** Per-plan totals with pass + escalation counts. */
+export function getPlanBreakdown(
+  runs: Run[],
+  maxRounds: number,
+): PlanBreakdown[] {
+  const map = new Map<
+    string,
+    { runs: number; passed: number; escalated: number; worktrees: Set<string> }
+  >();
+  for (const r of runs) {
+    const plan = r.plan ?? "(no plan)";
+    let b = map.get(plan);
+    if (!b) {
+      b = { runs: 0, passed: 0, escalated: 0, worktrees: new Set() };
+      map.set(plan, b);
+    }
+    b.runs++;
+    if (r.status === "passed") b.passed++;
+    if (r.round > maxRounds) b.escalated++;
+    b.worktrees.add(r.worktree);
+  }
+  return [...map.entries()]
+    .map(([plan, b]) => ({
+      plan,
+      runs: b.runs,
+      passed: b.passed,
+      escalated: b.escalated,
+      worktrees: [...b.worktrees].sort(),
+    }))
+    .sort((a, b) => b.runs - a.runs);
+}
+
+/** Runs past the round cap — plan-quality signal, not code (CLAUDE.md #2). */
+export function getEscalatedRuns(
+  runs: Run[],
+  maxRounds: number,
+): EscalatedRun[] {
+  return runs
+    .filter((r) => r.round > maxRounds)
+    .map((r) => ({
+      id: r.id,
+      worktree: r.worktree,
+      plan: r.plan,
+      round: r.round,
+    }))
+    .sort((a, b) => a.id - b.id);
+}
+
+/** Plans that passed at round 1 — worth reusing as a template (spec §2). */
+export function getBestPassing(runs: Run[], events: Event[]): BestPassing[] {
+  const passRunIds = new Set<number>();
+  for (const e of events) {
+    if (e.kind !== "gate" || !e.data) continue;
+    try {
+      const d = JSON.parse(e.data) as { verdict?: unknown };
+      if (
+        typeof d.verdict === "string" &&
+        (d.verdict === "pass" || d.verdict.startsWith("pass-"))
+      )
+        passRunIds.add(e.run_id);
+    } catch {
+      // unparseable — skip
+    }
+  }
+  return runs
+    .filter((r) => r.round <= 1 && r.plan !== null && passRunIds.has(r.id))
+    .map((r) => ({ plan: r.plan as string, worktree: r.worktree }))
+    .sort((a, b) => (a.plan < b.plan ? -1 : 1));
+}
 
 export interface StatsData {
   runs: {
@@ -197,6 +365,11 @@ export interface StatsData {
   }>;
   /** Derived ES/CPQ per run (PLAN-usage-depth §3) — additive, always present. */
   efficiency: RunEfficiency[];
+  /** Cross-run knowledge (PLAN-project-health-context §2) — additive, always present. */
+  byReasonCode: ReasonCodeCount[];
+  byPlan: PlanBreakdown[];
+  escalatedRuns: EscalatedRun[];
+  bestPassing: BestPassing[];
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -326,6 +499,8 @@ export function getStatsData(): StatsData {
 
     const efficiency = computeEfficiency(runs, eventsByRun);
 
+    const maxRounds = resolveMaxRounds();
+
     // Latest run creation timestamp (for freshness display in reports)
     const latestRunAt = runs.length
       ? runs.reduce((a, b) => (a.created_at > b.created_at ? a : b)).created_at
@@ -349,6 +524,10 @@ export function getStatsData(): StatsData {
       byGrade,
       byWorktree,
       efficiency,
+      byReasonCode: getReasonCodeBreakdown(runs, events),
+      byPlan: getPlanBreakdown(runs, maxRounds),
+      escalatedRuns: getEscalatedRuns(runs, maxRounds),
+      bestPassing: getBestPassing(runs, events),
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:

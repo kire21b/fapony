@@ -73,8 +73,9 @@ export function testVerificationReportToolCount(): void {
     require("../../src/mcp/tools/index.js") as typeof import("../../src/mcp/tools/index.js");
   const names = TOOLS.map((t: { name: string }) => t.name);
   assert.ok(names.includes("verification_report"));
-  assert.equal(TOOLS.length, 6);
-  console.log("  ✓ verification_report registered in TOOLS (6 tools total)");
+  assert.ok(names.includes("project_health_context"));
+  assert.equal(TOOLS.length, 7);
+  console.log("  ✓ verification_report registered in TOOLS (7 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

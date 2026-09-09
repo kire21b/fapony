@@ -2,9 +2,18 @@
 
 export { cmdStats } from "./cli.js";
 export {
+  type BestPassing,
   computeEfficiency,
+  type EscalatedRun,
+  getBestPassing,
+  getEscalatedRuns,
+  getPlanBreakdown,
+  getReasonCodeBreakdown,
   getStatsData,
+  type PlanBreakdown,
+  type ReasonCodeCount,
   type RunEfficiency,
+  resolveMaxRounds,
   type StatsData,
 } from "./data.js";
 export { formatStatsText } from "./format.js";

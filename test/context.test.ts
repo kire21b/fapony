@@ -1,0 +1,142 @@
+// test/context.test.ts — project-health context block (PLAN-project-health-context step 4)
+
+import assert from "node:assert";
+import { buildProjectHealthContext } from "../src/context/index.js";
+import {
+  addEvent,
+  incrementRound,
+  newRun,
+  setStatus,
+} from "../src/db/index.js";
+import { toolProjectHealthContext } from "../src/mcp/tools/context.js";
+import { EMPTY_RESULT } from "../src/session/index.js";
+import { getStatsData, type StatsData } from "../src/stats.js";
+import { withTmpDb } from "./helpers.js";
+
+function statsFixture(): StatsData {
+  return {
+    runs: {
+      total: 23,
+      byStatus: { passed: 20, stopped: 3 },
+      passRate: 0.87,
+      stallRate: 0,
+      avgRounds: 1.2,
+      avgMinutes: 30,
+    },
+    cost: { spawns: 0, bytes_in: 0, bytes_out: 0, usd_estimate: null },
+    stages: {
+      exec: { avg: 0, count: 0 },
+      review: { avg: 0, count: 0 },
+    },
+    byModel: [],
+    byGrade: [],
+    byWorktree: [{ worktree: "wt1", runs: 23, passed: 20, stalled: 0 }],
+    efficiency: [],
+    byReasonCode: [
+      { worktree: "wt1", reason: "scope_mismatch", count: 7 },
+      { worktree: "wt1", reason: "missing_test", count: 4 },
+      { worktree: "wt1", reason: "spec_gap", count: 2 },
+      { worktree: "wt1", reason: "other", count: 1 },
+    ],
+    byPlan: [],
+    escalatedRuns: [
+      { id: 7, worktree: "wt1", plan: "auth-refactor", round: 3 },
+      { id: 9, worktree: "wt1", plan: "auth-refactor", round: 4 },
+    ],
+    bestPassing: [{ plan: "usage-web-cli", worktree: "wt1" }],
+    usage: EMPTY_RESULT,
+    latestRunAt: "",
+  };
+}
+
+export function testContextBlockSnapshot(): void {
+  const block = buildProjectHealthContext(statsFixture());
+  assert.equal(
+    block,
+    [
+      "## Known patterns for this project (from fapony history, N=23 runs, all worktrees)",
+      "- Recurring fail reasons (non-pass gates): scope_mismatch (7×), missing_test (4×), spec_gap (2×) — watch for these in the new plan.",
+      '- 2 runs escalated past the round cap (e.g. plan "auth-refactor", round 3) — likely the plan was underspecified, not the code.',
+      '- Passed round 1 before: "usage-web-cli" — shapes worth reusing when they fit.',
+    ].join("\n"),
+  );
+  console.log("  ✓ context block matches spec §3 shape");
+}
+
+export function testContextBlockLowHistory(): void {
+  const data = statsFixture();
+  data.runs.total = 2;
+  data.byWorktree = [{ worktree: "wt1", runs: 2, passed: 2, stalled: 0 }];
+  const block = buildProjectHealthContext(data);
+  assert.ok(block.includes("Not enough history yet (2 runs, need 5+)"));
+  assert.ok(!block.includes("scope_mismatch"), "no reason noise on n=2");
+  console.log("  ✓ context block guards low sample size");
+}
+
+export function testContextBlockWorktreeScope(): void {
+  const data = statsFixture();
+  const block = buildProjectHealthContext(data, { worktree: "wt-empty" });
+  // Unknown worktree → 0 runs → low-history line, never another tree's trends.
+  assert.ok(block.includes("N=0 runs, wt-empty"));
+  assert.ok(!block.includes("scope_mismatch"));
+  console.log("  ✓ context block scopes to worktree");
+}
+
+export function testContextBlockNoPatterns(): void {
+  const data = statsFixture();
+  data.byReasonCode = [];
+  data.escalatedRuns = [];
+  data.bestPassing = [];
+  const block = buildProjectHealthContext(data);
+  assert.ok(block.includes("No recurring failure or escalation patterns"));
+  console.log("  ✓ context block handles clean history");
+}
+
+export function testContextBlockLineCap(): void {
+  const data = statsFixture();
+  data.byReasonCode = Array.from({ length: 30 }, (_, i) => ({
+    worktree: "wt1",
+    reason: `reason_${i}`,
+    count: 30 - i,
+  }));
+  const block = buildProjectHealthContext(data);
+  assert.ok(block.split("\n").length <= 15, "capped at ~15 lines");
+  assert.ok(!block.includes("reason_3"), "top-3 reasons only");
+  console.log("  ✓ context block caps reasons and total lines");
+}
+
+export function testContextToolEndToEnd(): void {
+  withTmpDb((db) => {
+    for (let i = 0; i < 5; i++) {
+      const r = newRun(db, "wt1", `plan-${i}`, null, "abc");
+      addEvent(db, r, "gate", {
+        verdict: "fail",
+        reason_code: "scope_mismatch",
+        note: "",
+        round: 0,
+      });
+      setStatus(db, r, "fixing");
+    }
+    const esc = newRun(db, "wt1", "big-plan", null, "abc");
+    incrementRound(db, esc);
+    incrementRound(db, esc);
+    incrementRound(db, esc);
+
+    const data = getStatsData();
+    const expected = buildProjectHealthContext(data, { worktree: "wt1" });
+    const result = toolProjectHealthContext({ worktree: "wt1" });
+    assert.equal(result.isError, undefined);
+    assert.equal(result.content[0].text, expected);
+    assert.ok(expected.includes("scope_mismatch (5×)"));
+    assert.ok(expected.includes("1 run escalated past the round cap"));
+  });
+  console.log("  ✓ project_health_context tool returns block from real events");
+}
+
+export function testContextToolEmptyDb(): void {
+  withTmpDb(() => {
+    const result = toolProjectHealthContext({});
+    assert.ok(result.content[0].text.includes("Not enough history yet"));
+  });
+  console.log("  ✓ project_health_context on empty db → low-history line");
+}

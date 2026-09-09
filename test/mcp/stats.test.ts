@@ -190,3 +190,113 @@ export function testStatsEfficiencyTextFailCensored(): void {
   });
   console.log("  ✓ fapony_stats efficiency text censors fail CPQ");
 }
+
+export function testStatsToolGroupByReasonCode(): void {
+  withTempDb(() => {
+    const db = openDb();
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    const r2 = newRun(db, "wt1", "plan-a", null, "abc");
+    addEvent(db, r1, "gate", {
+      verdict: "fail",
+      reason_code: "scope_mismatch",
+      note: "",
+      round: 0,
+    });
+    addEvent(db, r2, "gate", {
+      verdict: "fail",
+      reason_code: "scope_mismatch",
+      note: "",
+      round: 0,
+    });
+    addEvent(db, r2, "gate", {
+      verdict: "fail",
+      reason_code: "missing_test",
+      note: "",
+      round: 1,
+    });
+
+    const result = toolFaponyStats({ group_by: "reason_code" });
+    assert.equal(result.isError, undefined);
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.group_by, "reason_code");
+    assert.equal(data.rows[0].reason, "scope_mismatch");
+    assert.equal(data.rows[0].count, 2);
+    assert.equal(data.rows[1].reason, "missing_test");
+
+    // top-N cap
+    const capped = JSON.parse(
+      toolFaponyStats({ group_by: "reason_code", top: 1 }).content[0].text,
+    );
+    assert.equal(capped.rows.length, 1);
+
+    // worktree scope
+    const scoped = JSON.parse(
+      toolFaponyStats({ group_by: "reason_code", worktree: "wt-other" })
+        .content[0].text,
+    );
+    assert.deepEqual(scoped.rows, []);
+  });
+  console.log("  ✓ fapony_stats group_by=reason_code returns top-N counts");
+}
+
+export function testStatsToolGroupByPlan(): void {
+  withTempDb(() => {
+    const db = openDb();
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    newRun(db, "wt1", "plan-a", null, "abc");
+    setStatus(db, r1, "passed");
+
+    const result = toolFaponyStats({ group_by: "plan" });
+    assert.equal(result.isError, undefined);
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.group_by, "plan");
+    const row = data.rows.find((r: { plan: string }) => r.plan === "plan-a");
+    assert(row, "plan-a present");
+    assert.equal(row.runs, 2);
+    assert.equal(row.passed, 1);
+  });
+  console.log("  ✓ fapony_stats group_by=plan returns per-plan totals");
+}
+
+export function testStatsToolGroupByPlanWorktreeScoped(): void {
+  withTempDb(() => {
+    const db = openDb();
+    // plan-a spans 2 worktrees: 1 run in wt1, 1 in wt2
+    const r1 = newRun(db, "wt1", "plan-a", null, "abc");
+    const r2 = newRun(db, "wt2", "plan-a", null, "abc");
+    setStatus(db, r1, "passed");
+    setStatus(db, r2, "passed");
+
+    // Global: plan-a has 2 runs
+    const global = JSON.parse(
+      toolFaponyStats({ group_by: "plan" }).content[0].text,
+    );
+    const gRow = global.rows.find((r: { plan: string }) => r.plan === "plan-a");
+    assert.equal(gRow.runs, 2, "global count is 2");
+
+    // Scoped to wt1: plan-a should have 1 run
+    const scoped = JSON.parse(
+      toolFaponyStats({ group_by: "plan", worktree: "wt1" }).content[0].text,
+    );
+    const sRow = scoped.rows.find((r: { plan: string }) => r.plan === "plan-a");
+    assert.equal(sRow.runs, 1, "scoped count is 1");
+    assert.equal(sRow.passed, 1);
+
+    // Scoped to nonexistent worktree: empty
+    const empty = JSON.parse(
+      toolFaponyStats({ group_by: "plan", worktree: "wt-none" }).content[0]
+        .text,
+    );
+    assert.deepEqual(empty.rows, []);
+  });
+  console.log("  ✓ fapony_stats group_by=plan worktree returns scoped counts");
+}
+
+export function testStatsToolGroupByInvalid(): void {
+  withTempDb(() => {
+    const result = toolFaponyStats({ group_by: "bogus" });
+    assert.equal(result.isError, true);
+    assert.ok(result.content[0].text.includes("group_by"));
+  });
+  console.log("  ✓ fapony_stats rejects unknown group_by");
+}
