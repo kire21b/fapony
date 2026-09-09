@@ -53,6 +53,19 @@ import {
   testInitNoArgs,
 } from "./init.test.js";
 import {
+  testClaudeAddUsesAbsolutePath,
+  testClaudeGetPointsToFapony,
+  testCmdInstallDispatchesClaude,
+  testCmdInstallRejectsUnknownPlatform,
+  testInstallClaudeAbsentAdds,
+  testInstallClaudeAddFailureHintsHelp,
+  testInstallClaudeAlreadyConfiguredNoOp,
+  testInstallClaudeDifferentCommandRefusesOverwrite,
+  testInstallClaudeDryRunNeverAdds,
+  testInstallClaudeMissingBinary,
+  testInstallRootIsRepoRoot,
+} from "./install.test.js";
+import {
   testKickoffMultiplePending,
   testKickoffNoPending,
   testKickoffShippedFiltered,
@@ -477,6 +490,17 @@ export async function cmdTest(): Promise<void> {
   await testCmdUpdateAlreadyUpToDate();
   await testCmdUpdateLockfileTriggersInstall();
   await testCmdUpdateInstallFailureWarns();
+  testInstallRootIsRepoRoot();
+  testClaudeAddUsesAbsolutePath();
+  testClaudeGetPointsToFapony();
+  testInstallClaudeAbsentAdds();
+  testInstallClaudeAlreadyConfiguredNoOp();
+  testInstallClaudeDifferentCommandRefusesOverwrite();
+  testInstallClaudeDryRunNeverAdds();
+  testInstallClaudeMissingBinary();
+  testInstallClaudeAddFailureHintsHelp();
+  testCmdInstallDispatchesClaude();
+  testCmdInstallRejectsUnknownPlatform();
   // MCP handcheck tests
   testMcpInitialize();
   testMcpToolsList();
