@@ -1,96 +1,26 @@
 // src/report/render.ts — HTML report rendering
 
-import { minutesBetween } from "../math.js";
-import type { ReportData } from "./data.js";
+import type { StatsData } from "../stats/data.js";
+import { esc } from "../web/html.js";
 import {
-  esc,
   fmtMinutes,
   fmtRate,
   fmtUsd,
   insufficientData,
-  latestRunDate,
+  latestRunFreshness,
   MIN_SAMPLE_SIZE,
 } from "./format.js";
 
-/** Render report data as HTML. Exported for tests. */
-export function renderReportHtml(data: ReportData): string {
-  const { runs, gates, total_cost_usd, generated_at } = data;
+/** Render StatsData as HTML. Exported for tests. */
+export function renderReportHtml(
+  stats: StatsData,
+  generated_at: string,
+): string {
+  const { runs, gates, total_cost_usd } = statsToRender(stats);
 
-  // Summary stats
-  const totalRuns = runs.length;
-  const terminal = runs.filter((r) =>
-    ["passed", "stopped", "stalled"].includes(r.status),
-  );
-  const passed = runs.filter((r) => r.status === "passed");
-  const passRate = terminal.length ? passed.length / terminal.length : 0;
-  const stallRate = terminal.length
-    ? runs.filter((r) => r.status === "stalled").length / terminal.length
-    : 0;
-  const avgRounds = passed.length
-    ? passed.reduce((s, r) => s + r.round, 0) / passed.length
-    : 0;
-  const avgMinutes = passed.length
-    ? passed.reduce(
-        (s, r) => s + minutesBetween(r.created_at, r.updated_at),
-        0,
-      ) / passed.length
-    : 0;
-
-  // By model (quality carried from the shared gate helper — canonical)
-  const modelBuckets: Record<
-    string,
-    { count: number; qualities: number[]; costs: number[] }
-  > = {};
-  for (const g of gates) {
-    const b = (modelBuckets[g.model] ??= {
-      count: 0,
-      qualities: [],
-      costs: [],
-    });
-    b.count++;
-    if (g.quality !== null) b.qualities.push(g.quality);
-    if (g.cost_usd !== null) b.costs.push(g.cost_usd);
-  }
-  const byModel = Object.entries(modelBuckets)
-    .map(([model, b]) => ({
-      model,
-      count: b.count,
-      avgQuality: b.qualities.length
-        ? b.qualities.reduce((s, x) => s + x, 0) / b.qualities.length
-        : 0,
-      avgCost: b.costs.length
-        ? b.costs.reduce((s, x) => s + x, 0) / b.costs.length
-        : null,
-    }))
-    .sort((a, b) => b.count - a.count);
-
-  // By grade
-  const gradeBuckets: Record<string, number> = {};
-  for (const g of gates)
-    gradeBuckets[g.verdict] = (gradeBuckets[g.verdict] ?? 0) + 1;
-  const byGrade = Object.entries(gradeBuckets)
-    .map(([grade, count]) => ({ grade, count }))
-    .sort((a, b) => b.count - a.count);
-
-  // By worktree (basenames — see methodology note on collisions)
-  const wtBuckets: Record<
-    string,
-    { runs: number; passed: number; stalled: number }
-  > = {};
-  for (const r of runs) {
-    const name = r.worktree.split("/").pop() ?? r.worktree;
-    const b = (wtBuckets[name] ??= { runs: 0, passed: 0, stalled: 0 });
-    b.runs++;
-    if (r.status === "passed") b.passed++;
-    if (r.status === "stalled") b.stalled++;
-  }
-  const byWorktree = Object.entries(wtBuckets)
-    .map(([worktree, b]) => ({ worktree, ...b }))
-    .sort((a, b) => b.runs - a.runs);
-
-  const models = [...new Set(byModel.map((m) => m.model))];
-  const grades = [...new Set(byGrade.map((g) => g.grade))];
-  const worktrees = [...new Set(byWorktree.map((w) => w.worktree))];
+  const models = [...new Set(stats.byModel.map((m) => m.model))];
+  const grades = [...new Set(stats.byGrade.map((g) => g.grade))];
+  const worktrees = [...new Set(stats.byWorktree.map((w) => w.worktree))];
 
   const optionAll = `<option value="">all</option>`;
   const options = (xs: string[]) =>
@@ -136,17 +66,17 @@ export function renderReportHtml(data: ReportData): string {
 
 <h1>fapony verification report</h1>
 <div class="meta">
-  Generated: ${generated_at} · Latest data: ${latestRunDate(runs)} · Schema v2
+  Generated: ${generated_at} · Latest data: ${latestRunFreshness(stats.latestRunAt)} · Schema v2
 </div>
 
 <h2>Summary</h2>
-${insufficientData(totalRuns, "runs")}
+${insufficientData(stats.runs.total, "runs")}
 <div class="summary">
-  <div class="stat"><div class="value">${totalRuns}</div><div class="label">total runs</div></div>
-  <div class="stat"><div class="value ${passRate >= 0.8 ? "pass" : passRate >= 0.5 ? "warn" : "fail"}">${fmtRate(passRate)}</div><div class="label">pass rate</div></div>
-  <div class="stat"><div class="value ${stallRate <= 0.1 ? "pass" : "fail"}">${fmtRate(stallRate)}</div><div class="label">stall rate</div></div>
-  <div class="stat"><div class="value">${avgRounds.toFixed(1)}</div><div class="label">avg rounds</div></div>
-  <div class="stat"><div class="value">${fmtMinutes(avgMinutes)}</div><div class="label">avg time</div></div>
+  <div class="stat"><div class="value">${stats.runs.total}</div><div class="label">total runs</div></div>
+  <div class="stat"><div class="value ${stats.runs.passRate >= 0.8 ? "pass" : stats.runs.passRate >= 0.5 ? "warn" : "fail"}">${fmtRate(stats.runs.passRate)}</div><div class="label">pass rate</div></div>
+  <div class="stat"><div class="value ${stats.runs.stallRate <= 0.1 ? "pass" : "fail"}">${fmtRate(stats.runs.stallRate)}</div><div class="label">stall rate</div></div>
+  <div class="stat"><div class="value">${stats.runs.avgRounds.toFixed(1)}</div><div class="label">avg rounds</div></div>
+  <div class="stat"><div class="value">${fmtMinutes(stats.runs.avgMinutes)}</div><div class="label">avg time</div></div>
   <div class="stat"><div class="value">${total_cost_usd > 0 ? fmtUsd(total_cost_usd) : "—"}</div><div class="label">total cost</div></div>
 </div>
 
@@ -156,33 +86,31 @@ ${insufficientData(totalRuns, "runs")}
   <label>worktree <select id="f-worktree">${options(worktrees)}</select></label>
 </div>
 
-<h2>By Model <span class="sample">(n=${gates.length})</span></h2>
-${insufficientData(gates.length, "gates")}
+<h2>By Model <span class="sample">(n=${gates})</span></h2>
+${insufficientData(gates, "gates")}
 <table id="t-model">
   <thead><tr><th>Model</th><th>Gates</th><th>Avg Quality</th><th>Avg Cost</th></tr></thead>
   <tbody>
-${byModel
+${stats.byModel
   .map(
     (m) => `    <tr data-model="${esc(m.model)}">
       <td>${esc(m.model)}</td>
-      <td>${m.count}</td>
+      <td>${m.gateCount}</td>
       <td>${m.avgQuality.toFixed(1)} <span class="sample">/ 5</span></td>
-      <td>${fmtUsd(m.avgCost)}</td>
+      <td>${fmtUsd(m.avgCostUSD)}</td>
     </tr>`,
   )
   .join("\n")}
   </tbody>
 </table>
 
-<h2>By Grade <span class="sample">(n=${gates.length})</span></h2>
+<h2>By Grade <span class="sample">(n=${gates})</span></h2>
 <table id="t-grade">
   <thead><tr><th>Grade</th><th>Count</th><th>%</th></tr></thead>
   <tbody>
-${byGrade
+${stats.byGrade
   .map((g) => {
-    const pct = gates.length
-      ? ((g.count / gates.length) * 100).toFixed(0)
-      : "0";
+    const pct = gates ? ((g.count / gates) * 100).toFixed(0) : "0";
     const cls = g.grade.startsWith("pass")
       ? "pass"
       : g.grade === "fail"
@@ -198,11 +126,11 @@ ${byGrade
   </tbody>
 </table>
 
-<h2>By Worktree <span class="sample">(n=${runs.length})</span></h2>
+<h2>By Worktree <span class="sample">(n=${runs})</span></h2>
 <table id="t-worktree">
   <thead><tr><th>Worktree</th><th>Runs</th><th>Passed</th><th>Stalled</th><th>Pass Rate</th></tr></thead>
   <tbody>
-${byWorktree
+${stats.byWorktree
   .map((w) => {
     const rate = w.runs ? w.passed / w.runs : 0;
     return `    <tr data-worktree="${esc(w.worktree)}">
@@ -255,4 +183,18 @@ ${byWorktree
 
 </body>
 </html>`;
+}
+
+// --- Helpers: extract only what renderReportHtml needs from StatsData ---
+
+function statsToRender(stats: StatsData): {
+  runs: number;
+  gates: number;
+  total_cost_usd: number;
+} {
+  return {
+    runs: stats.runs.total,
+    gates: stats.byModel.reduce((s, m) => s + m.gateCount, 0),
+    total_cost_usd: stats.cost.usd_estimate ?? 0,
+  };
 }
