@@ -224,7 +224,7 @@ export function renderUsageHtml(
   .card { background: #161b22; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.8rem 1rem; }
   .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
   .card-empty { color: var(--muted); font-size: 0.85rem; }
-  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.4rem 1rem; }
+  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
   .card-metric { font-size: 0.8rem; }
   .metric-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em; }
   .metric-value { font-size: 0.95rem; font-weight: 700; color: var(--fg); }
