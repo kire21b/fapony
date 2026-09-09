@@ -101,7 +101,7 @@ export function testLegacyDbStampedWithoutDataLoss(): void {
 
 export function testMigrateDbRejectsNewerSchema(): void {
   withTmpDb((db) => {
-    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
+    db.run(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
     assert.throws(() => migrateDb(db), /newer than supported/);
   });
 

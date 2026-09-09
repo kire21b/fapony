@@ -49,7 +49,9 @@ function getUserVersion(db: Database): number {
 function tableExists(db: Database, name: string): boolean {
   const row = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(name) as { name: string } | null;
+    .get(name) as {
+    name: string;
+  } | null;
   return row !== null;
 }
 
@@ -64,12 +66,12 @@ export function migrateDb(db: Database): void {
   if (current === SCHEMA_VERSION) return;
   if (current === 0 && tableExists(db, "runs")) {
     // Legacy DB from before versioning — schema matches v1, just stamp it.
-    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+    db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     return;
   }
   for (let v = current; v < SCHEMA_VERSION; v++) {
-    for (const stmt of MIGRATIONS[v] ?? []) db.exec(stmt);
-    db.exec(`PRAGMA user_version = ${v + 1}`);
+    for (const stmt of MIGRATIONS[v] ?? []) db.run(stmt);
+    db.run(`PRAGMA user_version = ${v + 1}`);
   }
 }
 
@@ -78,7 +80,7 @@ export function openDb(config?: Config): Database {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
   const db = new Database(`${dir}/state.db`);
-  db.exec("PRAGMA journal_mode=WAL");
+  db.run("PRAGMA journal_mode=WAL");
 
   migrateDb(db);
 
