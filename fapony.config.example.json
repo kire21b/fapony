@@ -4,68 +4,27 @@
   },
   "roles": {
     "executor": {
-      "cmd": [
-        "opencode",
-        "run",
-        "--model",
-        "{model}",
-        "--print-logs",
-        "--log-level",
-        "WARN"
-      ],
-      "model": "opencode/mimo-v2.5-free",
-      "timeoutMin": 45
+      "model": "opencode/mimo-v2.5-free"
     },
     "gate": {
-      "cmd": ["claude", "-p", "{model}"],
       "model": "sonnet"
     },
     "planner": {
-      "cmd": ["claude", "-p", "{model}"],
       "model": "opus"
-    },
-    "bigFixer": {
-      "cmd": ["claude", "-p", "{model}"],
-      "model": "opus"
-    },
-    "scrutinizeFix": {
-      "cmd": ["claude", "-p", "{model}"],
-      "model": "haiku",
-      "timeoutMin": 15
     }
   },
   "review": {
-    "bigDiff": { "files": 15, "lines": 400 },
-    "maxRounds": 2,
-    "gate": ["claude", "-p", "/code-review high"],
-    "prefilter": null,
-    "autoLoop": false
+    "maxRounds": 2
   },
   "memory": null,
-  "prompts": {
-    "executor": "prompts/execute.md",
-    "gate": null,
-    "planner": null,
-    "bigFixer": null,
-    "scrutinizeFix": "prompts/scrutinize-fix.md"
+  "pricing": {
+    "executor": { "inputPer1k": 3.0, "outputPer1k": 15.0 }
   },
-  "spec": {
-    "maxLines": 200,
-    "sourceMarker": "^>\\s*\\*\\*Source spec:\\*\\*\\s*(.+)$"
-  },
-  "markers": {
-    "handoff": "## HANDOFF",
-    "verdict": "^VERDICT:\\s*(pass-excellent|pass-good|pass-adequate|pass|fail|uncertain)\\s*$",
-    "nextPrompt": "## NEXT-PROMPT",
-    "fileDone": "## FILE_DONE",
-    "shipped": "^>\\s*✅\\s*\\*\\*.*shipped.*\\*\\*"
-  },
+  "telemetry": null,
   "paths": {
     "planDir": ".fapony/plan",
     "specDir": ".fapony/spec",
-    "memoryEntry": ".fapony/.memory/mem.ts",
-    "doneDir": "done",
-    "linkScanDirs": [".fapony/plan/", ".fapony/spec/", "docs/"]
+    "memoryEntry": ".fapony/.memory/mem.ts"
   },
   "safety": {
     "deny": [
@@ -74,11 +33,5 @@
       "checkout\\s+--\\s",
       "git\\s+stash"
     ]
-  },
-  "plan": { "extensions": [".md"] },
-  "planmv": {
-    "archiveMsg": "chore(plan): archive {file} (shipped {hash})",
-    "inboundWarnAt": 5
-  },
-  "display": { "dirtyPreview": 10, "shortSha": 8 }
+  }
 }

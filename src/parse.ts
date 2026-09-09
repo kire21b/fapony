@@ -1,12 +1,7 @@
-// src/parse.ts — parse structured markers from agent stdout.
-// §0 rule: orchestrator ไม่อ่านข้อความอื่นเป็นคำสั่ง — marker เท่านั้น
-
-import {
-  type Config,
-  fileDoneMarker,
-  nextPromptMarker,
-  verdictRE,
-} from "./db/index.js";
+// src/parse.ts — grades, scores, and gate-event JSON parsing.
+// Marker-text parsers (parseGateVerdict/parsePlanUpdate) were removed with the
+// CLI loop: nothing produces VERDICT:/NEXT-PROMPT/FILE_DONE stdout anymore —
+// gate events are JSON, read via parseGateEventData.
 
 /** Locked grade vocabulary — additive-only (append, never rename/remove). */
 export type VerdictGrade =
@@ -53,73 +48,10 @@ export interface GateVerdict {
   note: string;
 }
 
-export interface PlanUpdate {
-  kind: "next_prompt" | "file_done";
-  text: string;
-}
-
-/**
- * Parse gate verdict from reviewer stdout.
- * Looks for `VERDICT: <grade>` as a standalone line where <grade> is one of
- * the 6 locked grades.  Everything after the verdict line is captured as
- * `note` (trimmed).  §0.4: if no VERDICT marker found → returns null.
- * Custom regex without a matching capture group also yields null (fail-safe).
- */
-export function parseGateVerdict(
-  stdout: string,
-  config?: Config,
-): GateVerdict | null {
-  const re = verdictRE(config);
-  const match = stdout.match(re);
-  if (!match) return null;
-
-  const raw = match[1];
-  // Validate against locked set — reject custom regex returning garbage.
-  if (!raw || !VERDICT_GRADES.has(raw)) return null;
-
-  const idx = stdout.indexOf(match[0]);
-  const note = stdout.slice(idx + match[0].length).trim();
-
-  return { verdict: raw as VerdictGrade, note };
-}
-
-/**
- * Parse plan update from planner stdout.
- * Looks for the LAST occurrence of `## NEXT-PROMPT` or `## FILE_DONE`.
- * §0 rule: orchestrator ไม่อ่านข้อความอื่น — marker เท่านั้น
- * Returns null if neither marker found (§0.4 fail-safe)
- */
-export function parsePlanUpdate(
-  stdout: string,
-  config?: Config,
-): PlanUpdate | null {
-  const nextMarker = nextPromptMarker(config);
-  const doneMarker = fileDoneMarker(config);
-  const nextPromptIdx = stdout.lastIndexOf(nextMarker);
-  const fileDoneIdx = stdout.lastIndexOf(doneMarker);
-
-  // Use whichever marker appears last (the "most final" output)
-  if (nextPromptIdx === -1 && fileDoneIdx === -1) return null;
-
-  const laterIdx = Math.max(nextPromptIdx, fileDoneIdx);
-  const isNextPrompt = nextPromptIdx > fileDoneIdx;
-
-  const marker = isNextPrompt ? nextMarker : doneMarker;
-  const text = stdout.slice(laterIdx + marker.length).trim();
-
-  if (!text) return null;
-
-  return {
-    kind: isNextPrompt ? "next_prompt" : "file_done",
-    text,
-  };
-}
-
 /**
  * Read a verdict back from a stored gate event (`kind='gate'`).
  * Gate events are JSON (`{verdict, note, round}` from gateOnce) — NOT
- * reviewer stdout, so parseGateVerdict's `VERDICT:` marker never matches
- * them. Returns null for missing/unparseable data or unknown grades.
+ * reviewer stdout. Returns null for missing/unparseable data or unknown grades.
  */
 export function parseGateEventData(data: string | null): GateVerdict | null {
   if (!data) return null;

@@ -1,60 +1,10 @@
-import { join } from "node:path";
 import {
-  DEFAULT_ARCHIVE_MSG,
-  DEFAULT_DIRTY_PREVIEW,
-  DEFAULT_DONE_DIR,
-  DEFAULT_FILE_DONE_MARKER,
-  DEFAULT_HANDOFF_MARKER,
-  DEFAULT_INBOUND_WARN_AT,
-  DEFAULT_LINK_SCAN_DIRS,
   DEFAULT_MEMORY_ENTRY,
-  DEFAULT_NEXT_PROMPT_MARKER,
   DEFAULT_PLAN_DIR,
-  DEFAULT_PLAN_EXTENSIONS,
-  DEFAULT_PLAN_MAX_LINES,
-  DEFAULT_RESILIENCE,
-  DEFAULT_ROLE_TIMEOUTS,
   DEFAULT_SAFETY_DENY,
-  DEFAULT_SHIPPED_RE,
-  DEFAULT_SHORT_SHA,
-  DEFAULT_SOURCE_MARKER,
   DEFAULT_SPEC_DIR,
-  DEFAULT_SPEC_MAX_LINES,
-  DEFAULT_VERDICT_RE,
 } from "./defaults.js";
 import type { Config, RolePricing } from "./types.js";
-
-export function specMaxLines(config: Config): number {
-  return config.spec?.maxLines ?? DEFAULT_SPEC_MAX_LINES;
-}
-
-export function planMaxLines(config?: Config): number {
-  return config?.plan?.maxLines ?? DEFAULT_PLAN_MAX_LINES;
-}
-
-export function sourceSpecRE(config?: Config): RegExp {
-  return new RegExp(config?.spec?.sourceMarker ?? DEFAULT_SOURCE_MARKER, "m");
-}
-
-export function handoffMarker(config?: Config): string {
-  return config?.markers?.handoff ?? DEFAULT_HANDOFF_MARKER;
-}
-
-export function verdictRE(config?: Config): RegExp {
-  return new RegExp(config?.markers?.verdict ?? DEFAULT_VERDICT_RE, "m");
-}
-
-export function nextPromptMarker(config?: Config): string {
-  return config?.markers?.nextPrompt ?? DEFAULT_NEXT_PROMPT_MARKER;
-}
-
-export function fileDoneMarker(config?: Config): string {
-  return config?.markers?.fileDone ?? DEFAULT_FILE_DONE_MARKER;
-}
-
-export function shippedRE(config?: Config): RegExp {
-  return new RegExp(config?.markers?.shipped ?? DEFAULT_SHIPPED_RE, "m");
-}
 
 export function safetyDeny(config?: Config): string[] {
   return config?.safety?.deny ?? DEFAULT_SAFETY_DENY;
@@ -72,35 +22,6 @@ export function memoryEntry(config?: Config): string {
   return config?.paths?.memoryEntry ?? DEFAULT_MEMORY_ENTRY;
 }
 
-export function doneDirName(config?: Config): string {
-  return config?.paths?.doneDir ?? DEFAULT_DONE_DIR;
-}
-
-export function linkScanDirs(config?: Config): string[] {
-  return config?.paths?.linkScanDirs ?? DEFAULT_LINK_SCAN_DIRS;
-}
-
-export function planExtensions(config?: Config): string[] {
-  return config?.plan?.extensions ?? DEFAULT_PLAN_EXTENSIONS;
-}
-
-export function archiveMsg(config: Config, file: string, hash: string): string {
-  const tpl = config.planmv?.archiveMsg ?? DEFAULT_ARCHIVE_MSG;
-  return tpl.replaceAll("{file}", file).replaceAll("{hash}", hash);
-}
-
-export function inboundWarnAt(config?: Config): number {
-  return config?.planmv?.inboundWarnAt ?? DEFAULT_INBOUND_WARN_AT;
-}
-
-export function dirtyPreviewLines(config?: Config): number {
-  return config?.display?.dirtyPreview ?? DEFAULT_DIRTY_PREVIEW;
-}
-
-export function shortShaLen(config?: Config): number {
-  return config?.display?.shortSha ?? DEFAULT_SHORT_SHA;
-}
-
 /** Model attribution for a role: roles.<name>.model or "" when unset. */
 export function roleModel(config: Config, role: string): string {
   return config.roles?.[role]?.model ?? "";
@@ -116,61 +37,4 @@ export function pricingFor(config: Config, role: string): RolePricing | null {
   if (typeof p.inputPer1k !== "number" || typeof p.outputPer1k !== "number")
     return null;
   return { inputPer1k: p.inputPer1k, outputPer1k: p.outputPer1k };
-}
-
-/** Role spawn timeout (minutes): roles.<name>.timeoutMin > defaults.timeoutMin > builtin. */
-export function roleTimeoutMin(config: Config, role: string): number {
-  return (
-    config.roles?.[role]?.timeoutMin ??
-    config.defaults?.timeoutMin ??
-    DEFAULT_ROLE_TIMEOUTS[role] ??
-    10
-  );
-}
-
-/**
- * Resolve a prompt template file for a role.
- * Returns null when the role has no configured/file prompt (caller uses inline fallback).
- * Relative paths resolve against the fapony repo root (two levels up from src/db/).
- */
-export function promptFileFor(
-  config: Config,
-  role: "executor" | "gate" | "planner" | "bigFixer" | "scrutinizeFix",
-): string | null {
-  const p = config.prompts?.[role];
-  if (!p) return null;
-  if (p.startsWith("/")) return p;
-  return join(import.meta.dir, "..", "..", p);
-}
-
-/** Returns true if resilience retry is enabled (config.resilience !== null). */
-export function resilienceEnabled(config: Config): boolean {
-  return config.resilience !== null;
-}
-
-/** Resolve retry policy from config, falling back to defaults. */
-export function retryPolicy(config: Config) {
-  const r = config.resilience?.retry ?? DEFAULT_RESILIENCE.retry!;
-  return {
-    maxAttempts: r.maxAttempts ?? DEFAULT_RESILIENCE.retry!.maxAttempts!,
-    limitBaseMs: r.limitBaseMs ?? DEFAULT_RESILIENCE.retry!.limitBaseMs!,
-    crashBaseMs: r.crashBaseMs ?? DEFAULT_RESILIENCE.retry!.crashBaseMs!,
-    maxMs: r.maxMs ?? DEFAULT_RESILIENCE.retry!.maxMs!,
-  };
-}
-
-/** Resolve regex patterns for classify, falling back to defaults. */
-export function resiliencePatterns(config: Config): {
-  limit: RegExp[];
-  auth: RegExp[];
-} {
-  const p = config.resilience?.patterns ?? DEFAULT_RESILIENCE.patterns!;
-  return {
-    limit: (p.limit ?? DEFAULT_RESILIENCE.patterns!.limit!).map(
-      (s) => new RegExp(s, "i"),
-    ),
-    auth: (p.auth ?? DEFAULT_RESILIENCE.patterns!.auth!).map(
-      (s) => new RegExp(s, "i"),
-    ),
-  };
 }

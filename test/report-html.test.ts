@@ -30,7 +30,7 @@ function withTestDb(fn: (db: ReturnType<typeof openDb>) => void): void {
 function seedTwoRounds(db: ReturnType<typeof openDb>): void {
   const config: Config = {
     ...baseConfig(),
-    roles: { executor: { cmd: ["x"], model: "m" } },
+    roles: { executor: { model: "m" } },
     pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
   };
   const run = newRun(db, "/Users/test/project", null, null, "abc");

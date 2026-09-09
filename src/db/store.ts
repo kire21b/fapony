@@ -215,42 +215,6 @@ export function getPendingFeedback(
 }
 
 /**
- * Pulls the most recent planner output (NEXT-PROMPT or FILE_DONE) for a worktree+mem_id pair.
- * Used by loop.ts to resolve {{PLAN}} from planner events when no plan file is specified.
- * Returns { kind, text } or null if no plan event exists.
- */
-export function getLastPlanUpdate(
-  db: Database,
-  worktree: string,
-  memId: string,
-): { kind: "next_prompt" | "file_done"; text: string } | null {
-  const run = db
-    .prepare(
-      `SELECT id FROM runs WHERE worktree = ? AND mem_id = ? ORDER BY id DESC LIMIT 1`,
-    )
-    .get(worktree, memId) as { id: number } | null;
-  if (!run) return null;
-
-  const event = db
-    .prepare(
-      `SELECT data FROM events WHERE run_id = ? AND kind = 'plan' ORDER BY id DESC LIMIT 1`,
-    )
-    .get(run.id) as { data: string | null } | null;
-  if (!event?.data) return null;
-
-  try {
-    const parsed = JSON.parse(event.data) as { kind?: string; text?: string };
-    if (parsed.kind && parsed.text) {
-      return {
-        kind: parsed.kind as "next_prompt" | "file_done",
-        text: parsed.text,
-      };
-    }
-  } catch {}
-  return null;
-}
-
-/**
  * Merge extra fields into the most recent gate event's data JSON.
  * Used by MCP verdict_submit to add reason_code / source after gateOnce
  * has already written the gate event with {verdict, note, round}.

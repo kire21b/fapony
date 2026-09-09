@@ -75,12 +75,8 @@ export async function withTmpDbAsync<T>(fn: () => Promise<T>): Promise<T> {
 export function baseConfig(): Config {
   return {
     worktrees: { test: "/tmp/test" },
-    executor: { cmd: ["opencode", "run"], timeoutMin: 45 },
     review: {
-      bigDiff: { files: 15, lines: 400 },
       maxRounds: 2,
-      gate: ["claude", "-p", "/code-review high"],
-      prefilter: null,
     },
     memory: null,
   };

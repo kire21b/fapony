@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   addEvent,
-  getLastPlanUpdate,
   getRun,
   migrateDb,
   newRun,
@@ -44,38 +43,6 @@ export function testDbLifecycle(): void {
   });
 
   console.log("  ✓ db lifecycle");
-}
-
-export function testGetLastPlanUpdate(): void {
-  withTmpDb((db) => {
-    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
-
-    let result = getLastPlanUpdate(db, "test-wt", "mem-1");
-    assert.equal(result, null, "no plan event should return null");
-
-    addEvent(db, runId, "plan", {
-      kind: "next_prompt",
-      text: "Implement auth flow",
-    });
-    result = getLastPlanUpdate(db, "test-wt", "mem-1");
-    assert(result !== null, "should find plan event");
-    assert.equal(result?.kind, "next_prompt");
-    assert.equal(result?.text, "Implement auth flow");
-
-    addEvent(db, runId, "plan", { kind: "file_done", text: "All done." });
-    result = getLastPlanUpdate(db, "test-wt", "mem-1");
-    assert(result !== null, "should find latest plan event");
-    assert.equal(result?.kind, "file_done");
-    assert.equal(result?.text, "All done.");
-
-    result = getLastPlanUpdate(db, "test-wt", "mem-999");
-    assert.equal(result, null, "different mem_id should return null");
-
-    result = getLastPlanUpdate(db, "other-wt", "mem-1");
-    assert.equal(result, null, "different worktree should return null");
-  });
-
-  console.log("  ✓ getLastPlanUpdate");
 }
 
 function userVersion(db: ReturnType<typeof openDb>): number {

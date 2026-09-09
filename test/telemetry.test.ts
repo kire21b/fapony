@@ -105,7 +105,7 @@ export function testTelemetryAggregatesFromRuns(): void {
   withTestDb((db) => {
     const config: Config = {
       ...baseConfig(),
-      roles: { executor: { cmd: ["x"], model: "mimo-v2" } },
+      roles: { executor: { model: "mimo-v2" } },
     };
 
     // Create 2 runs: one passed, one stalled
@@ -222,7 +222,7 @@ export function testTelemetryPerRoundCostMultiRound(): void {
   withTestDb((db) => {
     const config: Config = {
       ...baseConfig(),
-      roles: { executor: { cmd: ["x"], model: "m" } },
+      roles: { executor: { model: "m" } },
       pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
     };
     const run = newRun(db, "/Users/test/project", null, null, "abc");

@@ -199,7 +199,7 @@ export function testStatsModelFromExecutorSpawn(): void {
   withTmpDb((db) => {
     const config: Config = {
       ...baseConfig(),
-      roles: { executor: { cmd: ["x"], model: "mimo-v2" } },
+      roles: { executor: { model: "mimo-v2" } },
     };
     const runId = newRun(db, "wt1", null, null, "abc");
 

@@ -2,11 +2,9 @@
 
 import {
   testConfigDefaults,
-  testConfigDriftWarning,
   testConfigFileOverrides,
-  testCustomMarkersParse,
+  testConfigUnknownKeysRideAlong,
   testCustomSafetyDeny,
-  testSourceAndShippedRE,
   testTemplateArgsReplaceAll,
 } from "./config.test.js";
 import {
@@ -19,7 +17,6 @@ import {
 } from "./cost.test.js";
 import {
   testDbLifecycle,
-  testGetLastPlanUpdate,
   testLegacyDbStampedWithoutDataLoss,
   testMigrateDbRejectsNewerSchema,
   testSchemaVersionStamped,
@@ -152,8 +149,6 @@ import {
 import {
   testFixtureGuard,
   testParseGateEventData,
-  testParseGateVerdict,
-  testParsePlanUpdate,
   testQualityScore,
 } from "./parse.test.js";
 import {
@@ -233,12 +228,9 @@ export async function cmdTest(): Promise<void> {
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
   testMigrateDbRejectsNewerSchema();
-  await testParseGateVerdict();
   testParseGateEventData();
-  testParsePlanUpdate();
   testFixtureGuard();
   testQualityScore();
-  testGetLastPlanUpdate();
   testGateOncePass();
   testGateOnceFail();
   testGateOnceAlreadyPassed();
@@ -260,11 +252,9 @@ export async function cmdTest(): Promise<void> {
   else console.log("  ⏭ claimMemory timeout prevents hang (SKIP_SLOW)");
   testConfigDefaults();
   testConfigFileOverrides();
-  testCustomMarkersParse();
+  testConfigUnknownKeysRideAlong();
   testCustomSafetyDeny();
   testTemplateArgsReplaceAll();
-  testSourceAndShippedRE();
-  testConfigDriftWarning();
   testCostAttributionAndBytes();
   testCostUsdEstimate();
   testCostPricingNullKeepsBytes();

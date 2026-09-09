@@ -204,8 +204,8 @@ export function toolVerificationReport(
   const evidence_summary = computeEvidenceSummary(evidence);
 
   // --- Verdict ---
-  // Gate events store JSON ({verdict, note, round}) — parseGateVerdict's
-  // `VERDICT:` marker never matches them, so read the JSON shape directly.
+  // Gate events store JSON ({verdict, note, round}), so read the JSON
+  // shape directly via parseGateEventData.
   let verdict: VerificationReport["verdict"] = null;
   if (resolvedRunId) {
     const db = openDb();

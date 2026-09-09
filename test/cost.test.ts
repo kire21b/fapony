@@ -77,7 +77,7 @@ export function testCostPricingNullKeepsBytes(): void {
 
   const withRole: Config = {
     ...config,
-    roles: { gate: { cmd: ["claude", "-p"], model: "sonnet" } },
+    roles: { gate: { model: "sonnet" } },
   };
   assert.equal(roleModel(withRole, "gate"), "sonnet");
   const c = buildSpawnCost(
@@ -102,7 +102,7 @@ export function testCostBeginEndRoundTrip(): void {
     const runId = newRun(db, "fapony", null, null, "abc");
     const config: Config = {
       ...baseConfig(),
-      roles: { executor: { cmd: ["x"], model: "mimo" } },
+      roles: { executor: { model: "mimo" } },
       pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
     };
     const id = beginSpawn(db, runId, config, "executor", "hello", {

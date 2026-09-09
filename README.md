@@ -123,10 +123,10 @@ fapony test                              # self-check
 `fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
-- `executor.cmd` — command to spawn (receives the prompt via stdin); `roles.executor` overrides it per-role with `{model}` support
-- `review.bigDiff` / `review.maxRounds` / `review.gate` — routing, round cap, reviewer command
+- `roles.<name>.model` — model attribution per role (used for cost/KPI breakdowns; nothing spawns agents — the CLI loop is gone, measurement is via MCP)
+- `review.maxRounds` — round cap enforced by the gate
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
-- `prompts` / `markers` / `paths` / `safety` — override prompt files, output markers, directory layout, and the dangerous-command deny-list
+- `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
@@ -144,7 +144,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 
 **Not supported (yet):**
 - Cross-agent usage — `fapony_usage` reads OpenCode's session DB only; Claude Code and other agents keep their own session logs, not wired in
-- DeepSeek prefilter (a slot exists in config; the code path is not wired)
+- DeepSeek prefilter (not wired; no config slot — the loop-era `review.prefilter` key was removed)
 - Distributed runs across multiple machines
 - Memory migration from `.fapony/.memory/log.jsonl`
 
