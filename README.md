@@ -18,6 +18,7 @@ bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
 fapony install --platform opencode        # adds mcp.fapony to your opencode config
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
 fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
+fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
 # …or add it manually to any MCP client (e.g. Claude Desktop):
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
@@ -50,7 +51,7 @@ verify:   handoff_check ── verdict_submit ── verification_report
 |------|------|---------|
 | `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
 | `fapony_stats` | measure | KPIs across runs: by-model, by-grade, by-value |
-| `fapony_usage` | measure | Passive usage from OpenCode sessions (tokens, cost, by-model) — other agents' session logs aren't wired in yet |
+| `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model) |
 | `handoff_check` | verify | Check the agent's handoff claims against those facts |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
@@ -105,7 +106,7 @@ Example plans produced by it live in [examples/](examples/).
 fapony mcp                               # MCP server (stdio JSON-RPC — 6 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
-fapony usage-web [port]                  # live usage comparison dashboard (OpenCode / ZCode / Claude Code)
+fapony usage-web [port]                  # live usage comparison dashboard (OpenCode / ZCode / Claude Code / Codex)
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
 # Setup & maintenance
@@ -113,6 +114,7 @@ fapony init <path>                       # scaffold .fapony/ (plan/spec/memory/e
 fapony install --platform opencode       # add mcp.fapony to opencode config
 fapony install --platform claude         # add fapony to Claude Code (user scope)
 fapony install --platform zcode          # add fapony to ZCode (user scope)
+fapony install --platform codex          # add fapony to Codex (edits ~/.codex/config.toml)
 fapony setup                             # interactive wizard: config + scaffold in one step
 fapony update                            # self-update via git pull
 fapony telemetry show|send               # opt-in only, default off — see TELEMETRY.md

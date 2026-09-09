@@ -38,13 +38,14 @@ fapony/
     parse.ts          # parseGateVerdict() + qualityScore()
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
-    session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL)
+    session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
       index.ts         # re-exports (backward compat)
       types.ts         # ModelBreakdown, SessionDetail, UsageDetail, PassiveUsageResult
       helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb()
       opencode.ts      # readPassiveUsage() — OpenCode session DB
       zcode.ts         # readZcodeUsage() — ZCode session DB
       claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
+      codex.ts         # readCodexUsage() — Codex JSONL files
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
     init-mem.ts        # init-mem command (legacy, superseded by init)
@@ -68,7 +69,7 @@ fapony/
       index.ts            # barrel re-export
     telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
-    install.ts          # fapony install --platform opencode|claude|zcode — wire the MCP server into a client
+    install.ts          # fapony install --platform opencode|claude|zcode|codex — wire the MCP server into a client
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 6 tools
@@ -193,7 +194,7 @@ events(
 | `fapony init` ซ้ำ | เช็คทุก dir (plan/spec/memory/evidence.json) → error ถ้าเจอของเก่า ห้ามทับ |
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
-| AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls plan/` เช็คชื่อชนก่อนเขียนเสมอ |
+| AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -246,7 +247,7 @@ fapony report-web [file]            # static HTML report page
 fapony usage-web [port]             # live usage comparison dashboard (OpenCode / ZCode / Claude Code)
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
-fapony install --platform opencode|claude|zcode  # wire mcp.fapony into an MCP client
+fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client
 fapony setup                        # interactive wizard: config + scaffold in one step
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
@@ -264,7 +265,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `fapony_stats` | Query KPIs: by-model, by-grade, by-value |
-| `fapony_usage` | Query passive usage from opencode sessions (tokens, cost, by-model) |
+| `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
