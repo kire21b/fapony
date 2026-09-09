@@ -148,5 +148,22 @@ export function formatStatsText(data: StatsData): string {
     }
   }
 
+  // Codex usage (JSONL files)
+  if (data.codexUsage && data.codexUsage.session_count > 0) {
+    const cx = data.codexUsage;
+    lines.push("\ncodex usage:");
+    lines.push(
+      `  total: ${cx.total_tokens_input.toLocaleString()} in / ${cx.total_tokens_output.toLocaleString()} out / ${cx.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${cx.session_count} sessions`,
+    );
+    if (cx.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of cx.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out`,
+        );
+      }
+    }
+  }
+
   return lines.join("\n");
 }

@@ -4,6 +4,7 @@
 // will resolve here after src/session.ts is deleted.
 
 export { readClaudeCodeUsage } from "./claude-code.js";
+export { readCodexUsage } from "./codex.js";
 export {
   aggregateDetail,
   buildWhereClause,

@@ -8,6 +8,7 @@ import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "../parse.js";
 import {
   type PassiveUsageResult,
   readClaudeCodeUsage,
+  readCodexUsage,
   readPassiveUsage,
   readZcodeUsage,
 } from "../session/index.js";
@@ -201,6 +202,8 @@ export interface StatsData {
   zcodeUsage?: PassiveUsageResult | null;
   /** Claude Code passive usage (when ~/.claude/projects/ exists). */
   claudeCodeUsage?: PassiveUsageResult | null;
+  /** Codex passive usage (when ~/.codex/sessions/ exists). */
+  codexUsage?: PassiveUsageResult | null;
   /** ISO timestamp of the most recent run creation (for freshness display). */
   latestRunAt: string;
 }
@@ -319,6 +322,7 @@ export function getStatsData(): StatsData {
     const usage = readPassiveUsage();
     const zcodeUsage = readZcodeUsage();
     const claudeCodeUsage = readClaudeCodeUsage();
+    const codexUsage = readCodexUsage();
 
     const efficiency = computeEfficiency(runs, eventsByRun);
 
@@ -349,6 +353,7 @@ export function getStatsData(): StatsData {
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:
         claudeCodeUsage.session_count > 0 ? claudeCodeUsage : null,
+      codexUsage: codexUsage.session_count > 0 ? codexUsage : null,
       latestRunAt,
     };
   } finally {

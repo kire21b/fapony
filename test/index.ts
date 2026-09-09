@@ -175,6 +175,10 @@ import {
   testReadClaudeCodeUsageNoDir,
   testReadClaudeCodeUsagePrimaryPath,
   testReadClaudeCodeUsageSkipsMalformedLines,
+  testReadCodexUsageFilterByWorktree,
+  testReadCodexUsageNoDir,
+  testReadCodexUsagePrimaryPath,
+  testReadCodexUsageSkipsMalformedLines,
   testReadZcodeUsageDetail,
   testReadZcodeUsageFilterByWorktree,
   testReadZcodeUsageNoDb,
@@ -472,6 +476,10 @@ export async function cmdTest(): Promise<void> {
   testReadClaudeCodeUsagePrimaryPath();
   testReadClaudeCodeUsageFilterByWorktree();
   testReadClaudeCodeUsageSkipsMalformedLines();
+  testReadCodexUsageNoDir();
+  testReadCodexUsagePrimaryPath();
+  testReadCodexUsageFilterByWorktree();
+  testReadCodexUsageSkipsMalformedLines();
   // Telemetry tests
   testTelemetrySchemaVersion();
   testTelemetryPayloadShape();

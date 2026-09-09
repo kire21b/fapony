@@ -127,28 +127,30 @@ const sampleData: PassiveUsageResult = {
 };
 
 export function testRenderHtmlStructure(): void {
-  const html = renderUsageHtml(sampleData, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, 3000);
   assert.ok(html.includes("<!DOCTYPE html>"), "has doctype");
   assert.ok(html.includes("OpenCode"), "has OpenCode title");
   assert.ok(html.includes("ZCode"), "has ZCode title");
   assert.ok(html.includes("Claude Code"), "has Claude Code title");
+  assert.ok(html.includes("Codex"), "has Codex title");
   assert.ok(html.includes('id="t-opencode"'), "has opencode table id");
   assert.ok(html.includes('id="t-zcode"'), "has zcode table id");
   assert.ok(html.includes('id="t-claude"'), "has claude table id");
+  assert.ok(html.includes('id="t-codex"'), "has codex table id");
   assert.ok(html.includes("<script>"), "has client-side JS");
   assert.ok(html.includes("setInterval"), "has polling logic");
   console.log("  ✓ renderUsageHtml → correct HTML structure");
 }
 
 export function testRenderHtmlModelNames(): void {
-  const html = renderUsageHtml(sampleData, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, 3000);
   assert.ok(html.includes("mimo-v2.5"), "renders model name");
   assert.ok(html.includes("deepseek-v4-flash"), "renders model name");
   console.log("  ✓ renderUsageHtml → model names present");
 }
 
 export function testRenderHtmlTokenValues(): void {
-  const html = renderUsageHtml(sampleData, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, 3000);
   assert.ok(html.includes("1K"), "renders input tokens (1000)");
   assert.ok(
     html.includes("200") || html.includes("200"),
@@ -159,13 +161,13 @@ export function testRenderHtmlTokenValues(): void {
 }
 
 export function testRenderHtmlNoData(): void {
-  const html = renderUsageHtml(EMPTY_RESULT, null, null, 3000);
+  const html = renderUsageHtml(EMPTY_RESULT, null, null, null, 3000);
   assert.ok(html.includes("no sessions"), "shows no sessions for empty data");
   console.log("  ✓ renderUsageHtml → handles empty data");
 }
 
 export function testRenderHtmlSummaryCards(): void {
-  const html = renderUsageHtml(sampleData, sampleData, null, 3000);
+  const html = renderUsageHtml(sampleData, sampleData, null, null, 3000);
   assert.ok(html.includes("summary-cards"), "has summary cards container");
   assert.ok(html.includes("Cache Hit"), "has cache hit metric");
   assert.ok(html.includes("Reasoning"), "has reasoning metric");
@@ -177,7 +179,7 @@ export function testRenderHtmlSummaryCards(): void {
 }
 
 export function testRenderHtmlPollInterval(): void {
-  const html = renderUsageHtml(sampleData, null, null, 5000);
+  const html = renderUsageHtml(sampleData, null, null, null, 5000);
   assert.ok(html.includes("5"), "poll interval in seconds shown");
   assert.ok(
     html.includes("5000") || html.includes("POLL_MS"),

@@ -3,6 +3,7 @@
 import {
   type PassiveUsageResult,
   readClaudeCodeUsage,
+  readCodexUsage,
   readPassiveUsage,
   readZcodeUsage,
 } from "../../session/index.js";
@@ -28,11 +29,15 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   // Claude Code data is always fetched when the projects dir exists
   const claudeCodeData = readClaudeCodeUsage(worktree, since, until);
 
+  // Codex data is always fetched when the sessions dir exists
+  const codexData = readCodexUsage(worktree, since, until);
+
   if (args.json === true) {
     return jsonResult({
       ...data,
       zcode: zcodeData.session_count > 0 ? zcodeData : null,
       claude_code: claudeCodeData.session_count > 0 ? claudeCodeData : null,
+      codex: codexData.session_count > 0 ? codexData : null,
     });
   }
 
@@ -130,6 +135,26 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     if (claudeCodeData.by_model.length > 0) {
       lines.push("  by model:");
       for (const m of claudeCodeData.by_model) {
+        lines.push(
+          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+        );
+      }
+    }
+  }
+
+  // Codex usage section
+  if (codexData.session_count > 0) {
+    lines.push("");
+    lines.push("codex usage:");
+    lines.push(
+      `  total: ${codexData.total_tokens_input.toLocaleString()} in / ${codexData.total_tokens_output.toLocaleString()} out / ${codexData.total_tokens_reasoning.toLocaleString()} reasoning tokens over ${codexData.session_count} sessions`,
+    );
+    lines.push(
+      `  cache: ${codexData.total_tokens_cache_read.toLocaleString()} read / ${codexData.total_tokens_cache_write.toLocaleString()} write`,
+    );
+    if (codexData.by_model.length > 0) {
+      lines.push("  by model:");
+      for (const m of codexData.by_model) {
         lines.push(
           `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
         );

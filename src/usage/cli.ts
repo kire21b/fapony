@@ -3,6 +3,7 @@
 import { loadConfig } from "../db/index.js";
 import {
   readClaudeCodeUsage,
+  readCodexUsage,
   readPassiveUsage,
   readZcodeUsage,
 } from "../session/index.js";
@@ -18,14 +19,17 @@ function fetchAllUsage(): {
   opencode: PassiveUsageResult;
   zcode: PassiveUsageResult | null;
   claude_code: PassiveUsageResult | null;
+  codex: PassiveUsageResult | null;
 } {
   const opencode = readPassiveUsage();
   const zcode = readZcodeUsage();
   const claude_code = readClaudeCodeUsage();
+  const codex = readCodexUsage();
   return {
     opencode,
     zcode: zcode.session_count > 0 ? zcode : null,
     claude_code: claude_code.session_count > 0 ? claude_code : null,
+    codex: codex.session_count > 0 ? codex : null,
   };
 }
 
@@ -59,6 +63,7 @@ export function cmdUsageWeb(args: string[]): void {
           initialData.opencode,
           initialData.zcode,
           initialData.claude_code,
+          initialData.codex,
           pollInterval,
         );
         return new Response(html, {

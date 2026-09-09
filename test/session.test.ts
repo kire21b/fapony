@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   readClaudeCodeUsage,
+  readCodexUsage,
   readPassiveUsage,
   readZcodeUsage,
 } from "../src/session/index.js";
@@ -495,6 +496,221 @@ export function testReadClaudeCodeUsageSkipsMalformedLines(): void {
   } finally {
     if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
     else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// --- codex usage tests ---
+
+function withCodexFixture(fn: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-codex-"));
+  const sessionsDir = join(dir, "2026", "09", "09");
+  const { mkdirSync } = require("node:fs");
+  mkdirSync(sessionsDir, { recursive: true });
+
+  // Session 1: 2 token_usage_record lines, 1 model
+  const session1 = [
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:01.413Z",
+      ordinal: 0,
+      type: "session_meta",
+      payload: {
+        session_id: "01a085d2-34b5-7b03-946a-8e8de8a5d775",
+        cwd: "/tmp/test-worktree",
+        timestamp: "2026-09-09T10:59:00.948Z",
+        model_provider: "openai",
+        model: "gpt-5.6-terra",
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:09.677Z",
+      ordinal: 1,
+      type: "token_usage_record",
+      payload: {
+        session_id: "01a085d2-34b5-7b03-946a-8e8de8a5d775",
+        usage: {
+          input_tokens: 29949,
+          output_tokens: 186,
+          reasoning_output_tokens: 79,
+          cached_input_tokens: 16128,
+          cache_write_input_tokens: 0,
+        },
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:13.421Z",
+      ordinal: 2,
+      type: "token_usage_record",
+      payload: {
+        session_id: "01a085d2-34b5-7b03-946a-8e8de8a5d775",
+        usage: {
+          input_tokens: 32267,
+          output_tokens: 84,
+          reasoning_output_tokens: 0,
+          cached_input_tokens: 29440,
+          cache_write_input_tokens: 0,
+        },
+      },
+    }),
+  ].join("\n");
+
+  // Session 2: 1 token_usage_record line
+  const session2 = [
+    JSON.stringify({
+      timestamp: "2026-09-09T11:00:00.000Z",
+      ordinal: 0,
+      type: "session_meta",
+      payload: {
+        session_id: "02b196e3-45c6-8c14-a57b-9f9ef9b6e886",
+        cwd: "/tmp/test-worktree",
+        timestamp: "2026-09-09T11:00:00.000Z",
+        model_provider: "openai",
+        model: "gpt-5.6-terra",
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T11:00:05.000Z",
+      ordinal: 1,
+      type: "token_usage_record",
+      payload: {
+        session_id: "02b196e3-45c6-8c14-a57b-9f9ef9b6e886",
+        usage: {
+          input_tokens: 15000,
+          output_tokens: 500,
+          reasoning_output_tokens: 100,
+          cached_input_tokens: 5000,
+          cache_write_input_tokens: 200,
+        },
+      },
+    }),
+  ].join("\n");
+
+  writeFileSync(
+    join(sessionsDir, "rollout-2026-09-09T10-59-00-01a085d2.jsonl"),
+    session1,
+  );
+  writeFileSync(
+    join(sessionsDir, "rollout-2026-09-09T11-00-00-02b196e3.jsonl"),
+    session2,
+  );
+
+  try {
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export function testReadCodexUsageNoDir(): void {
+  const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
+  try {
+    process.env.FAPONY_CODEX_SESSIONS_DIR = "/nonexistent/codex/sessions";
+    const result = readCodexUsage();
+    assert.equal(result.session_count, 0);
+    assert.equal(result.total_tokens_input, 0);
+    console.log("  ✓ readCodexUsage no dir → empty result");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
+    else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
+  }
+}
+
+export function testReadCodexUsagePrimaryPath(): void {
+  withCodexFixture((dir) => {
+    const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
+    try {
+      process.env.FAPONY_CODEX_SESSIONS_DIR = dir;
+      const result = readCodexUsage("/tmp/test-worktree");
+      assert.equal(
+        result.session_count,
+        2,
+        `got ${result.session_count} sessions`,
+      );
+      assert.equal(result.total_tokens_input, 77216); // 29949 + 32267 + 15000
+      assert.equal(result.total_tokens_output, 770); // 186 + 84 + 500
+      assert.equal(result.total_tokens_reasoning, 179); // 79 + 0 + 100
+      assert.equal(result.total_tokens_cache_read, 50568); // 16128 + 29440 + 5000
+      assert.equal(result.total_tokens_cache_write, 200); // 0 + 0 + 200
+      assert.equal(result.total_cost, 0, "Codex has no cost");
+      assert.ok(result.by_model.length >= 1);
+      const terra = result.by_model.find((m) => m.model === "gpt-5.6-terra");
+      assert.ok(terra, "gpt-5.6-terra found");
+      assert.equal(terra!.tokens_input, 77216);
+      console.log("  ✓ readCodexUsage primary path → reads JSONL files");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
+      else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
+    }
+  });
+}
+
+export function testReadCodexUsageFilterByWorktree(): void {
+  withCodexFixture((dir) => {
+    const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
+    try {
+      process.env.FAPONY_CODEX_SESSIONS_DIR = dir;
+      // Matching worktree → finds data
+      const result = readCodexUsage("/tmp/test-worktree");
+      assert.equal(result.session_count, 2);
+      // Non-existent worktree → empty
+      const empty = readCodexUsage("/nonexistent/wt");
+      assert.equal(empty.session_count, 0);
+      console.log("  ✓ readCodexUsage filter by worktree");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
+      else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
+    }
+  });
+}
+
+export function testReadCodexUsageSkipsMalformedLines(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-codex-malformed-"));
+  const sessionsDir = join(dir, "2026", "09", "09");
+  const { mkdirSync } = require("node:fs");
+  mkdirSync(sessionsDir, { recursive: true });
+
+  const content = [
+    "not valid json at all",
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:01.413Z",
+      type: "session_meta",
+      payload: {
+        session_id: "test-session",
+        cwd: "/tmp/test-worktree",
+        model: "gpt-5.6-terra",
+      },
+    }),
+    "{ broken json",
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:09.677Z",
+      type: "token_usage_record",
+      payload: {
+        session_id: "test-session",
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 50,
+          reasoning_output_tokens: 10,
+          cached_input_tokens: 200,
+          cache_write_input_tokens: 0,
+        },
+      },
+    }),
+    JSON.stringify({ type: "some_other_event" }), // not token_usage_record
+  ].join("\n");
+
+  writeFileSync(join(sessionsDir, "rollout-test.jsonl"), content);
+
+  const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
+  try {
+    process.env.FAPONY_CODEX_SESSIONS_DIR = dir;
+    const result = readCodexUsage("/tmp/test-worktree");
+    assert.equal(result.session_count, 1, "skips malformed lines");
+    assert.equal(result.total_tokens_input, 1000);
+    assert.equal(result.total_tokens_output, 50);
+    console.log("  ✓ readCodexUsage skips malformed lines");
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
+    else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
 }
