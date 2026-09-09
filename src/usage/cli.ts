@@ -15,16 +15,31 @@ const FAVICON_GIF = Buffer.from(
   "base64",
 );
 
-function fetchAllUsage(): {
+/**
+ * Default lookback window for Claude Code / Codex — those readers have no
+ * SQL to aggregate in, every call fully reads+parses every JSONL session
+ * file on disk. A `since` cutoff lets the file loop skip whole files by
+ * mtime (see claude-code.ts/codex.ts) instead of reading years of history
+ * on every poll. --full lifts it for an exact all-time total.
+ */
+const DEFAULT_JSONL_LOOKBACK_DAYS = 30;
+
+function fetchAllUsage(full: boolean): {
   opencode: PassiveUsageResult;
   zcode: PassiveUsageResult | null;
   claude_code: PassiveUsageResult | null;
   codex: PassiveUsageResult | null;
 } {
-  const opencode = readPassiveUsage();
-  const zcode = readZcodeUsage();
-  const claude_code = readClaudeCodeUsage();
-  const codex = readCodexUsage();
+  const since = full
+    ? undefined
+    : Date.now() / 1000 - DEFAULT_JSONL_LOOKBACK_DAYS * 86400;
+  const opencode = readPassiveUsage(undefined, undefined, undefined, {
+    detail: true,
+    full,
+  });
+  const zcode = readZcodeUsage(undefined, undefined, undefined, true, full);
+  const claude_code = readClaudeCodeUsage(undefined, since);
+  const codex = readCodexUsage(undefined, since);
   return {
     opencode,
     zcode: zcode.session_count > 0 ? zcode : null,
@@ -33,7 +48,9 @@ function fetchAllUsage(): {
   };
 }
 
-export function cmdUsageWeb(args: string[]): void {
+export function cmdUsageWeb(rawArgs: string[]): void {
+  const full = rawArgs.includes("--full");
+  const args = rawArgs.filter((a) => a !== "--full");
   const config = loadConfig();
   const uw = config.usageWeb ?? {};
 
@@ -44,13 +61,16 @@ export function cmdUsageWeb(args: string[]): void {
   const pollInterval = Number.isNaN(intervalArg)
     ? (uw.pollInterval ?? 3000)
     : intervalArg;
+  const ownerName = uw.ownerName?.trim() ? uw.ownerName.trim() : undefined;
 
   if (args[0] && Number.isNaN(parseInt(args[0], 10))) {
-    console.error("usage: fapony usage-web [port] [hostname] [pollInterval]");
+    console.error(
+      "usage: fapony usage-web [port] [hostname] [pollInterval] [--full]",
+    );
     process.exit(1);
   }
 
-  const initialData = fetchAllUsage();
+  const initialData = fetchAllUsage(full);
 
   const server = Bun.serve({
     hostname,
@@ -65,6 +85,8 @@ export function cmdUsageWeb(args: string[]): void {
           initialData.claude_code,
           initialData.codex,
           pollInterval,
+          ownerName,
+          full,
         );
         return new Response(html, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -72,7 +94,7 @@ export function cmdUsageWeb(args: string[]): void {
       }
 
       if (url.pathname === "/data") {
-        const data = fetchAllUsage();
+        const data = fetchAllUsage(full);
         return Response.json(data);
       }
 

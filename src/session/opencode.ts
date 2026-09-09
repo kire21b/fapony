@@ -7,7 +7,11 @@ import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildWhereClause, readDetailFromDb } from "./helpers.js";
+import {
+  buildWhereClause,
+  readDetailFromDb,
+  readTimingFromDb,
+} from "./helpers.js";
 import {
   EMPTY_RESULT,
   type ModelBreakdown,
@@ -28,10 +32,13 @@ export function readPassiveUsage(
   worktree?: string,
   since?: number,
   until?: number,
-  detailOrOpts?: boolean | { detail?: boolean; dbPath?: string },
+  detailOrOpts?:
+    | boolean
+    | { detail?: boolean; dbPath?: string; full?: boolean },
 ): PassiveUsageResult {
   const detail =
     typeof detailOrOpts === "boolean" ? detailOrOpts : !!detailOrOpts?.detail;
+  const full = typeof detailOrOpts === "object" && !!detailOrOpts?.full;
   const dbPath =
     typeof detailOrOpts === "object"
       ? resolveDbPath(detailOrOpts.dbPath)
@@ -87,7 +94,7 @@ export function readPassiveUsage(
       .prepare(
         `
         SELECT
-          s.model AS model,
+          CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.id'), s.model) ELSE s.model END AS model,
           COUNT(*) AS session_count,
           SUM(s.tokens_input) AS tokens_input,
           SUM(s.tokens_output) AS tokens_output,
@@ -98,8 +105,8 @@ export function readPassiveUsage(
         FROM session s
         JOIN project p ON s.project_id = p.id
         ${filter.clause}
-        GROUP BY s.model
-        ORDER BY cost DESC
+        GROUP BY CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.id'), s.model) ELSE s.model END
+        ORDER BY (tokens_input + tokens_output + tokens_reasoning + tokens_cache_read + tokens_cache_write) DESC
       `,
       )
       .all(...filter.params) as ModelBreakdown[];
@@ -124,6 +131,18 @@ export function readPassiveUsage(
         since,
         until,
       );
+      try {
+        result.detail.timing = readTimingFromDb(db, "pr.worktree", {
+          worktree,
+          since,
+          until,
+          limit: full ? false : undefined,
+        });
+      } catch {
+        // Timing is additive signal — a part-table shape mismatch must
+        // never break totals/detail that already succeeded.
+        result.detail.timing = null;
+      }
     }
 
     return result;

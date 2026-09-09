@@ -132,6 +132,16 @@ export function readCodexUsage(
   let totalCacheWrite = 0;
 
   for (const filePath of files) {
+    // ponytail: skip files untouched since `since` before reading them —
+    // see claude-code.ts for the rationale (append-only JSONL, mtime gate
+    // avoids full-file read+parse on old history).
+    if (since !== undefined) {
+      try {
+        if (statSync(filePath).mtimeMs / 1000 < since) continue;
+      } catch {
+        continue;
+      }
+    }
     let content: string;
     try {
       content = readFileSync(filePath, "utf-8");
