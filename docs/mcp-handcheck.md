@@ -1,7 +1,7 @@
 # MCP Handcheck Protocol — Usage Guide
 
-> For external agents (Claude Code / OpenCode / Codex / any MCP client) that want to
-> verify work before submitting, without adopting fapony's loop.
+> For external agents (Claude Code / OpenCode / Codex / any MCP client) that want
+> machine facts about their work before submitting, without adopting fapony's loop.
 
 ## Quick Start
 

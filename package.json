@@ -1,7 +1,7 @@
 {
   "name": "fapony",
   "version": "0.1.0",
-  "description": "Multi-agent dev loop orchestrator",
+  "description": "Measurement layer for coding agents — measure what agents do, verify what they claim. 6 MCP tools, any agent, no loop required",
   "license": "MIT",
   "bin": {
     "fapony": "./fapony.ts"
