@@ -1,7 +1,8 @@
-// src/install.ts — `fapony install --platform opencode|claude|zcode` command.
+// src/install.ts — `fapony install --platform opencode|claude|zcode|codex` command.
 // opencode: adds mcp.fapony config to ~/.config/opencode/opencode.json or opencode.jsonc.
 // claude: shells out to `claude mcp add` (never parses/writes ~/.claude.json directly).
 // zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly.
+// codex: reads/writes ~/.codex/config.toml directly.
 // All platforms are idempotent + support --dry-run.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -132,11 +133,16 @@ export function cmdInstall(args: string[], deps: InstallDeps = {}): void {
     return;
   }
 
+  if (platform === "codex") {
+    cmdInstallCodex(dryRun, deps);
+    return;
+  }
+
   if (platform !== "opencode") {
     console.error(
-      `usage: fapony install --platform opencode|claude|zcode [--dry-run]`,
+      `usage: fapony install --platform opencode|claude|zcode|codex [--dry-run]`,
     );
-    console.error(`  supported platforms: opencode, claude, zcode`);
+    console.error(`  supported platforms: opencode, claude, zcode, codex`);
     (deps.exit ?? defaultExit)(1);
   }
 
@@ -437,4 +443,65 @@ export function cmdInstallClaude(
     exitFn(1);
   }
   console.error(`✓ mcp.fapony configured for Claude Code (user scope)`);
+}
+
+// --- codex platform (reads/writes TOML directly; Codex has no CLI for MCP config) ---
+
+const CODEX_MCP_ENTRY = `[mcp_servers.fapony]
+command = "bun"
+args = ["run", "${INSTALL_ROOT}/fapony.ts", "mcp"]
+type = "stdio"
+`;
+
+function findCodexConfig(): string | null {
+  const p = join(homedir(), ".codex", "config.toml");
+  return existsSync(p) ? p : null;
+}
+
+function isCodexConfigured(content: string): boolean {
+  // Check if [mcp_servers.fapony] section exists with our command
+  const sectionRegex = /\[mcp_servers\.fapony\]/;
+  if (!sectionRegex.test(content)) return false;
+  // Verify it points to fapony
+  return content.includes("fapony.ts") && content.includes("mcp");
+}
+
+export function cmdInstallCodex(dryRun: boolean, deps: InstallDeps = {}): void {
+  const exitFn = deps.exit ?? defaultExit;
+  const configPath = findCodexConfig();
+
+  if (!configPath) {
+    console.error(
+      `Codex config not found — open Codex at least once to create ~/.codex/config.toml`,
+    );
+    exitFn(1);
+    return;
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(configPath, "utf-8");
+  } catch (e) {
+    console.error(`failed to read ${configPath}: ${(e as Error).message}`);
+    exitFn(1);
+    return;
+  }
+
+  if (isCodexConfigured(content)) {
+    console.error(`✓ mcp_servers.fapony already configured — no change needed`);
+    console.error(`  (${configPath})`);
+    return;
+  }
+
+  if (dryRun) {
+    console.error(`── dry-run: would append to ${configPath} ──`);
+    console.log(CODEX_MCP_ENTRY);
+    return;
+  }
+
+  // Append the fapony MCP server entry to the end of the config file
+  const newContent = `${content.trimEnd()}\n\n${CODEX_MCP_ENTRY}`;
+  writeFileSync(configPath, newContent);
+  console.error(`✓ added mcp_servers.fapony to ${configPath}`);
+  console.error(`  restart Codex to load the MCP server`);
 }

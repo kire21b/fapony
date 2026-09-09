@@ -1,7 +1,5 @@
 // src/report/format.ts — pure formatting helpers for the HTML report
 
-import type { RunRow } from "./data.js";
-
 export const MIN_SAMPLE_SIZE = 5;
 
 export function fmtRate(r: number): string {
@@ -17,7 +15,15 @@ export function fmtMinutes(m: number): string {
   return `${m.toFixed(0)}m`;
 }
 
-export function freshness(createdAt: string): string {
+export function insufficientData(total: number, label: string): string {
+  if (total < MIN_SAMPLE_SIZE) {
+    return `<div class="insufficient">⚠ Insufficient data: ${total} ${label} (need ≥${MIN_SAMPLE_SIZE} for meaningful comparison)</div>`;
+  }
+  return "";
+}
+
+/** Freshness label from an ISO-like timestamp. */
+function freshness(createdAt: string): string {
   const now = Date.now();
   const then = new Date(`${createdAt.replace(" ", "T")}Z`).getTime();
   const days = Math.floor((now - then) / 86400000);
@@ -28,23 +34,8 @@ export function freshness(createdAt: string): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-export function latestRunDate(runs: RunRow[]): string {
-  if (!runs.length) return "never";
-  const latest = runs.reduce((a, b) => (a.created_at > b.created_at ? a : b));
-  return freshness(latest.created_at);
-}
-
-export function insufficientData(total: number, label: string): string {
-  if (total < MIN_SAMPLE_SIZE) {
-    return `<div class="insufficient">⚠ Insufficient data: ${total} ${label} (need ≥${MIN_SAMPLE_SIZE} for meaningful comparison)</div>`;
-  }
-  return "";
-}
-
-export function esc(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+/** Freshness label from a StatsData.latestRunAt string. */
+export function latestRunFreshness(latestRunAt: string): string {
+  if (!latestRunAt) return "never";
+  return freshness(latestRunAt);
 }

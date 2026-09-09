@@ -5,7 +5,7 @@ import { resolve, sep } from "node:path";
 import { loadConfig } from "../db/index.js";
 import { toolVerificationReport } from "../mcp/tools/report.js";
 import { parseToolResult } from "../mcp/types.js";
-import { collectReportData } from "./data.js";
+import { getStatsData } from "../stats/data.js";
 import { renderReportHtml } from "./render.js";
 
 export function cmdReport(args: string[]): void {
@@ -43,8 +43,8 @@ export function cmdReportWeb(args: string[]): void {
     }
   }
 
-  const data = collectReportData();
-  const html = renderReportHtml(data);
+  const stats = getStatsData();
+  const html = renderReportHtml(stats, new Date().toISOString());
 
   if (outFile) {
     writeFileSync(outFile, html, "utf-8");

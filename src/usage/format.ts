@@ -1,8 +1,6 @@
 // src/usage/format.ts — pure formatting helpers for usage-web
 
-import { esc } from "../report/format.js";
-
-export { esc };
+export { esc } from "../web/html.js";
 
 export function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

@@ -184,11 +184,13 @@ export function renderUsageHtml(
   opencode: PassiveUsageResult,
   zcode: PassiveUsageResult | null,
   claude_code: PassiveUsageResult | null,
+  codex: PassiveUsageResult | null,
   pollInterval: number,
 ): string {
   const oc = calcMetrics(opencode);
   const zc = calcMetrics(zcode);
   const cc = calcMetrics(claude_code);
+  const cx = calcMetrics(codex);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -224,7 +226,7 @@ export function renderUsageHtml(
   .card { background: #161b22; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.8rem 1rem; }
   .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
   .card-empty { color: var(--muted); font-size: 0.85rem; }
-  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.4rem 1rem; }
+  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
   .card-metric { font-size: 0.8rem; }
   .metric-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em; }
   .metric-value { font-size: 0.95rem; font-weight: 700; color: var(--fg); }
@@ -247,11 +249,13 @@ export function renderUsageHtml(
 ${summaryCard("OpenCode", "var(--green)", oc)}
 ${summaryCard("ZCode", "var(--accent)", zc)}
 ${summaryCard("Claude Code", "var(--yellow)", cc)}
+${summaryCard("Codex", "var(--accent)", cx)}
 </div>
 
 ${clientTable("t-opencode", "OpenCode", "var(--green)", opencode)}
 ${clientTable("t-zcode", "ZCode", "var(--accent)", zcode)}
 ${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
+${clientTable("t-codex", "Codex", "var(--accent)", codex)}
 
 <div class="footer">
   Tokens are approximate (byte proxy). Cost is estimate from static pricing, never a real charge.
@@ -315,7 +319,7 @@ ${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
   function updateCard(name, data) {
     var cards = document.getElementById("summary-cards");
     var cards_els = cards.querySelectorAll(".card");
-    var idx = name === "opencode" ? 0 : name === "zcode" ? 1 : 2;
+    var idx = name === "opencode" ? 0 : name === "zcode" ? 1 : name === "claude_code" ? 2 : 3;
     var card = cards_els[idx];
     if (!card) return;
     var m = calcMetrics(data);
@@ -326,6 +330,7 @@ ${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
     }
     var title = name.charAt(0).toUpperCase() + name.slice(1).replace("_", " ");
     if (name === "claude_code") title = "Claude Code";
+    if (name === "codex") title = "Codex";
     card.querySelector(".card-title").innerHTML = title + ' <span class="sample">(' + m.sessions + ' sessions)</span>';
     var maxInput = Math.max(m.input, m.output, m.reasoning, 1);
     card.querySelector(".card-metrics").innerHTML =
@@ -402,9 +407,11 @@ ${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
       updateSection("t-opencode", data.opencode);
       updateSection("t-zcode", data.zcode);
       updateSection("t-claude", data.claude_code);
+      updateSection("t-codex", data.codex);
       updateCard("opencode", data.opencode);
       updateCard("zcode", data.zcode);
       updateCard("claude_code", data.claude_code);
+      updateCard("codex", data.codex);
       document.getElementById("last-updated").textContent = new Date().toISOString();
     }).catch(function() {
       document.getElementById("status-dot").className = "status off";

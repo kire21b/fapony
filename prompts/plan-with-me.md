@@ -54,7 +54,7 @@ Ask:
 
 ## Phase 2 — Draft (1 round)
 
-When all answers are in, **before writing the file**: `ls plan/` (or `.fapony/plan/`) and check
+When all answers are in, **before writing the file**: `ls .fapony/plan/` and check
 `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite it — pick a more specific
 name (e.g. `PLAN-<feature>-v2.md`) or ask the dev which one is stale.
 
@@ -62,7 +62,7 @@ Then write the plan according to **Plan Core template** (templates/PLAN.md) and 
 > "This is the draft plan based on what you told me.
 > - Is there anything I misunderstood?
 > - Is there anything you said that I didn't include?
-> - If you're happy, I'll commit it as plan/PLAN-<feature>.md"
+> - If you're happy, I'll commit it as .fapony/plan/PLAN-<feature>.md"
 
 ## Phase 3 — Spec (optional, if needed)
 

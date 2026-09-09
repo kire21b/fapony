@@ -8,7 +8,8 @@ import {
   openDb,
   setStatus,
 } from "../src/db/index.js";
-import { collectReportData, renderReportHtml } from "../src/report/index.js";
+import { renderReportHtml } from "../src/report/index.js";
+import { getStatsData } from "../src/stats/index.js";
 
 function baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
@@ -47,9 +48,8 @@ export function testReportHtmlTotalCostCountsEachSpawnOnce(): void {
   // Two $8 rounds → total $16, not the per-gate window sum 8+(8+8) = $24.
   withTestDb((db) => {
     seedTwoRounds(db);
-    const data = collectReportData();
-    assert.equal(data.total_cost_usd, 16);
-    const html = renderReportHtml(data);
+    const stats = getStatsData();
+    const html = renderReportHtml(stats, new Date().toISOString());
     assert.ok(
       html.includes("~$16.0000 est."),
       "total cost rendered once per spawn",
@@ -63,7 +63,7 @@ export function testReportHtmlCanonicalQuality(): void {
   // pass-good = 4 via the shared helper — never a local score map.
   withTestDb((db) => {
     seedTwoRounds(db);
-    const html = renderReportHtml(collectReportData());
+    const html = renderReportHtml(getStatsData(), new Date().toISOString());
     assert.ok(html.includes("4.0"), "canonical quality rendered");
   });
 
@@ -72,7 +72,7 @@ export function testReportHtmlCanonicalQuality(): void {
 
 export function testReportHtmlFiltersAndMethodology(): void {
   withTestDb((_db) => {
-    const html = renderReportHtml(collectReportData());
+    const html = renderReportHtml(getStatsData(), new Date().toISOString());
     assert.ok(html.includes('id="f-model"'), "model filter present");
     assert.ok(html.includes('id="f-grade"'), "grade filter present");
     assert.ok(html.includes('id="f-worktree"'), "worktree filter present");
@@ -90,11 +90,9 @@ export function testReportHtmlFiltersAndMethodology(): void {
 
 export function testReportHtmlEscapesContent(): void {
   // Worktree basenames are interpolated into HTML — must not break markup.
-  // (Basenames never contain "/" — that is the path separator — so the
-  // payload uses an unclosed tag.)
   withTestDb((db) => {
     newRun(db, "/x/<b>pwn", null, null, "abc");
-    const html = renderReportHtml(collectReportData());
+    const html = renderReportHtml(getStatsData(), new Date().toISOString());
     assert.ok(!html.includes("<b>pwn"), "raw worktree markup must not appear");
     assert.ok(html.includes("&lt;b&gt;pwn"), "worktree markup escaped");
   });
