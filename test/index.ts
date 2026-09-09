@@ -168,15 +168,7 @@ import {
   testCmdSetupOverwriteNoKeepsFile,
   testCmdSetupOverwriteYesWritesThrough,
   testCmdSetupScaffoldAlreadyExists,
-  testParseTimeoutMinutes,
   testShouldOverwriteConfig,
-  testSplitCmdEmptyQuotedString,
-  testSplitCmdEmptyString,
-  testSplitCmdMultipleQuotedArgs,
-  testSplitCmdNoQuotes,
-  testSplitCmdQuotedArg,
-  testSplitCmdSimpleArgs,
-  testSplitCmdSingleQuotedArg,
   testValidateWorktreePath,
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
@@ -261,19 +253,11 @@ export async function cmdTest(): Promise<void> {
   testCostBeginEndRoundTrip();
   testCostHandoffAndFormat();
   testCostTelemetryAllowlist();
-  testSplitCmdSimpleArgs();
-  testSplitCmdQuotedArg();
-  testSplitCmdMultipleQuotedArgs();
-  testSplitCmdEmptyString();
-  testSplitCmdNoQuotes();
-  testSplitCmdEmptyQuotedString();
-  testSplitCmdSingleQuotedArg();
   testBuildSetupConfigNoMemory();
   testBuildSetupConfigWithMemory();
   testValidateWorktreePath();
   testValidateWorktreePathRejectsFile();
   testShouldOverwriteConfig();
-  testParseTimeoutMinutes();
   await testCmdSetupGitMissing();
   await testCmdSetupBunMissing();
   await testCmdSetupInvalidPath();

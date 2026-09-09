@@ -34,12 +34,6 @@ function defaultDetectGitRoot(): string | null {
   }
 }
 
-export function splitCmd(input: string): string[] {
-  return (input.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((s) =>
-    s.replace(/^"(.*)"$/s, "$1").replace(/^'(.*)'$/s, "$1"),
-  );
-}
-
 function defaultCheckCmd(cmd: string): boolean {
   // Allowlist first: cmd names are hardcoded at every call site, so anything
   // outside [word chars, dot, dash] is rejected before touching a shell.
@@ -66,25 +60,18 @@ export interface SetupDeps {
 export interface SetupAnswers {
   worktreeName: string;
   worktreePath: string;
-  executorCmd: string[];
-  executorTimeout: number;
-  gateCmd: string[];
-  autoLoop: boolean;
   enableMemory: boolean;
 }
 
-/** Pure config builder — the config-write path of cmdSetup, minus prompting. */
+/** Pure config builder — the config-write path of cmdSetup, minus prompting.
+ *  No executor/gate/auto-loop keys — nothing spawns agents anymore, the CLI
+ *  loop was removed in Wave 2. Model attribution (`roles.<name>.model`) and
+ *  pricing are advanced/optional, left for the user to hand-edit — see
+ *  fapony.config.example.json. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   const config: Record<string, unknown> = {
     worktrees: { [a.worktreeName]: a.worktreePath },
-    executor: { cmd: a.executorCmd, timeoutMin: a.executorTimeout },
-    review: {
-      bigDiff: { files: 15, lines: 400 },
-      maxRounds: 2,
-      gate: a.gateCmd,
-      prefilter: null,
-      autoLoop: a.autoLoop,
-    },
+    review: { maxRounds: 2 },
     memory: null,
   };
 
@@ -117,20 +104,6 @@ export function validateWorktreePath(worktreePath: string): string | null {
 /** Overwrite guard — only an affirmative answer proceeds with the write. */
 export function shouldOverwriteConfig(answer: string): boolean {
   return isAffirmative(answer);
-}
-
-/** Executor timeout in minutes; garbage input falls back to 45 (with a warning). */
-export function parseTimeoutMinutes(input: string, fallback = 45): number {
-  const n = Number.parseInt(input.trim(), 10);
-  if (Number.isNaN(n) || n <= 0) {
-    if (input.trim() !== "") {
-      console.error(
-        `⚠  Invalid timeout "${input.trim()}" — using ${fallback} minutes.`,
-      );
-    }
-    return fallback;
-  }
-  return n;
 }
 
 export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
@@ -185,40 +158,11 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
       defaultName,
     );
 
-    // --- executor ---
-    console.log();
-    const defaultExecutor = "opencode run";
-    const executorInput = await askFn("Executor command", defaultExecutor);
-    const executorCmd = splitCmd(executorInput);
-    const executorTimeout = parseTimeoutMinutes(
-      await askFn("Executor timeout (minutes)", "45"),
-    );
-
-    // --- gate ---
-    console.log();
-    const defaultGate = 'claude -p "/code-review high"';
-    const gateInput = await askFn("Review gate command", defaultGate);
-    const gateCmd = splitCmd(gateInput);
-
-    // --- auto-loop ---
-    console.log();
-    const autoLoop = isAffirmative(await askFn("Enable auto-loop? (y/n)", "n"));
-
     // --- memory ---
+    console.log();
     const enableMemory = isAffirmative(
       await askFn("Enable project memory? (y/n)", "n"),
     );
-
-    // --- detect agents ---
-    console.log("\n  Checking installed agents...");
-    const hasOpencode = checkCmdFn("opencode");
-    const hasClaude = checkCmdFn("claude");
-    if (!hasOpencode)
-      console.log("    ⚠  opencode not found on PATH (needed for executor)");
-    if (!hasClaude)
-      console.log("    ⚠  claude not found on PATH (needed for review gate)");
-    if (hasOpencode && hasClaude)
-      console.log("    ✓  opencode + claude detected");
 
     // --- write config ---
     // loadConfig() resolves to FAPONY_CONFIG or cwd/fapony.config.json, so a
@@ -234,10 +178,6 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
     const config = buildSetupConfig({
       worktreeName,
       worktreePath,
-      executorCmd,
-      executorTimeout,
-      gateCmd,
-      autoLoop,
       enableMemory,
     });
 
@@ -274,14 +214,15 @@ export async function cmdSetup(deps: SetupDeps = {}): Promise<void> {
   ┌─────────────────────────────────────────┐
   │  Setup complete! Next steps:             │
   │                                         │
-  │  1. Write a plan:                       │
-  │     cp templates/PLAN.md ${worktreePath}/.fapony/plan/PLAN-my-feature.md  │
+  │  1. Wire fapony into your MCP client:    │
+  │     fapony install --platform opencode  │
+  │     fapony install --platform claude    │
   │                                         │
-  │  2. Run:                                │
-  │     fapony kickoff ${worktreeName}                  │
+  │  2. Ask your agent:                     │
+  │     "Run fapony_stats and fapony_usage" │
   │                                         │
-  │  3. Check status:                       │
-  │     fapony status                       │
+  │  3. Verify a change:                    │
+  │     "Run verification_report on this repo" │
   └─────────────────────────────────────────┘
 `);
   } finally {
