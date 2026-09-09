@@ -33,5 +33,10 @@
       "checkout\\s+--\\s",
       "git\\s+stash"
     ]
+  },
+  "usageWeb": {
+    "port": 1710,
+    "hostname": "127.0.0.1",
+    "pollInterval": 1771
   }
 }

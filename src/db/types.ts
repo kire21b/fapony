@@ -72,6 +72,11 @@ export interface Config {
     // regex sources tested against the joined argv; default = the 4 git patterns.
     deny?: string[];
   } | null;
+  usageWeb?: {
+    port?: number;
+    hostname?: string;
+    pollInterval?: number;
+  } | null;
 }
 
 export interface RolePricing {

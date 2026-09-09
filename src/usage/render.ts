@@ -1,0 +1,421 @@
+// src/usage/render.ts — HTML generator for usage-web
+
+import type { ModelBreakdown, PassiveUsageResult } from "../session/types.js";
+import { esc, fmtCost, fmtTokens, shortModel } from "./format.js";
+
+const FIELDS: (keyof ModelBreakdown)[] = [
+  "tokens_input",
+  "tokens_output",
+  "tokens_cache_read",
+  "tokens_cache_write",
+  "tokens_reasoning",
+  "session_count",
+  "cost",
+];
+
+const HEADERS = ["In", "Out", "Cache R", "Cache W", "Reason", "Sess", "Cost"];
+
+interface SummaryMetrics {
+  sessions: number;
+  cacheHitRate: number;
+  reasoningPct: number;
+  outputRatio: number;
+  avgPerSession: number;
+  totalCost: number;
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+}
+
+function calcMetrics(d: PassiveUsageResult | null): SummaryMetrics {
+  if (!d || d.session_count === 0)
+    return {
+      sessions: 0,
+      cacheHitRate: 0,
+      reasoningPct: 0,
+      outputRatio: 0,
+      avgPerSession: 0,
+      totalCost: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cacheRead: 0,
+    };
+  const totalCache = d.total_tokens_cache_read + d.total_tokens_cache_write;
+  const contextTokens = d.total_tokens_input + d.total_tokens_output;
+  return {
+    sessions: d.session_count,
+    cacheHitRate: totalCache > 0 ? d.total_tokens_cache_read / totalCache : 0,
+    reasoningPct:
+      contextTokens > 0 ? d.total_tokens_reasoning / contextTokens : 0,
+    outputRatio:
+      d.total_tokens_input + d.total_tokens_output > 0
+        ? d.total_tokens_output / (d.total_tokens_input + d.total_tokens_output)
+        : 0,
+    avgPerSession:
+      d.session_count > 0
+        ? Math.round(
+            (d.total_tokens_input +
+              d.total_tokens_output +
+              d.total_tokens_reasoning) /
+              d.session_count,
+          )
+        : 0,
+    totalCost: d.total_cost,
+    input: d.total_tokens_input,
+    output: d.total_tokens_output,
+    reasoning: d.total_tokens_reasoning,
+    cacheRead: d.total_tokens_cache_read,
+  };
+}
+
+function pct(n: number): string {
+  return `${(n * 100).toFixed(1)}%`;
+}
+
+function barHtml(value: number, max: number, color: string): string {
+  const w = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return `<div class="bar"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div>`;
+}
+
+function metric(
+  label: string,
+  value: string,
+  cls: string,
+  bar: string,
+): string {
+  return `<div class="card-metric">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value ${cls}">${value}</div>
+    ${bar}
+  </div>`;
+}
+
+function summaryCard(name: string, color: string, m: SummaryMetrics): string {
+  if (m.sessions === 0)
+    return `<div class="card" style="border-left-color:${color}">
+      <div class="card-title" style="color:${color}">${name}</div>
+      <div class="card-empty">no sessions</div>
+    </div>`;
+  const maxInput = Math.max(m.input, m.output, m.reasoning, 1);
+  return `<div class="card" style="border-left-color:${color}">
+  <div class="card-title" style="color:${color}">${name} <span class="sample">(${m.sessions} sessions)</span></div>
+  <div class="card-metrics">
+    ${metric("Cache Hit", pct(m.cacheHitRate), m.cacheHitRate > 0.7 ? "pass" : "warn", barHtml(m.cacheHitRate, 1, m.cacheHitRate > 0.7 ? "var(--green)" : "var(--yellow)"))}
+    ${metric("Reasoning", pct(m.reasoningPct), m.reasoningPct > 0.15 ? "warn" : "pass", barHtml(m.reasoningPct, 1, m.reasoningPct > 0.15 ? "var(--red)" : "var(--green)"))}
+    ${metric("Output", pct(m.outputRatio), "", barHtml(m.outputRatio, 1, m.outputRatio > 0.3 ? "var(--green)" : "var(--yellow)"))}
+    ${metric("Input", fmtTokens(m.input), "", barHtml(m.input, maxInput, "var(--accent)"))}
+    ${metric("Output", fmtTokens(m.output), "", barHtml(m.output, maxInput, "var(--green)"))}
+    ${metric("Reasoning", fmtTokens(m.reasoning), m.reasoningPct > 0.15 ? "warn" : "", barHtml(m.reasoning, maxInput, "var(--yellow)"))}
+    ${metric("Cache Read", fmtTokens(m.cacheRead), "", "")}
+    ${metric("Avg/Session", fmtTokens(m.avgPerSession), "", "")}
+    ${metric("Cost", fmtCost(m.totalCost), "", "")}
+  </div>
+</div>`;
+}
+
+function cell(
+  d: ModelBreakdown | undefined,
+  field: keyof ModelBreakdown,
+): string {
+  if (!d) return '<td class="muted">—</td>';
+  const v = d[field];
+  if (typeof v !== "number") return '<td class="muted">—</td>';
+  if (field === "cost") return `<td>${fmtCost(v)}</td>`;
+  return `<td>${fmtTokens(v)}</td>`;
+}
+
+function modelRows(data: PassiveUsageResult | null): string {
+  if (!data || data.by_model.length === 0)
+    return '    <tr><td class="muted" colspan="8">no sessions</td></tr>';
+  return data.by_model
+    .sort((a, b) => b.session_count - a.session_count)
+    .map(
+      (m) =>
+        `    <tr data-model="${esc(m.model)}">
+      <td class="model-name">${esc(shortModel(m.model))}</td>
+      ${FIELDS.map((f) => cell(m, f)).join("")}
+    </tr>`,
+    )
+    .join("\n");
+}
+
+function totalsRow(data: PassiveUsageResult | null): string {
+  if (!data || data.session_count === 0)
+    return '    <tr class="totals"><td>Totals</td><td class="muted" colspan="7">no data</td></tr>';
+  return `    <tr class="totals">
+      <td>Totals</td>
+      <td>${fmtTokens(data.total_tokens_input)}</td>
+      <td>${fmtTokens(data.total_tokens_output)}</td>
+      <td>${fmtTokens(data.total_tokens_cache_read)}</td>
+      <td>${fmtTokens(data.total_tokens_cache_write)}</td>
+      <td>${fmtTokens(data.total_tokens_reasoning)}</td>
+      <td>${data.session_count}</td>
+      <td>${fmtCost(data.total_cost)}</td>
+    </tr>`;
+}
+
+function clientTable(
+  id: string,
+  name: string,
+  color: string,
+  data: PassiveUsageResult | null,
+): string {
+  return `
+<h2 style="color:${color}">${name} <span class="sample">(${data?.session_count ?? 0} sessions)</span></h2>
+<table id="${id}">
+  <thead>
+    <tr>
+      <th>Model</th>
+      ${HEADERS.map((h) => `<th>${h}</th>`).join("")}
+    </tr>
+  </thead>
+  <tbody>
+${modelRows(data)}
+  </tbody>
+  <tfoot>
+${totalsRow(data)}
+  </tfoot>
+</table>`;
+}
+
+export function renderUsageHtml(
+  opencode: PassiveUsageResult,
+  zcode: PassiveUsageResult | null,
+  claude_code: PassiveUsageResult | null,
+  pollInterval: number,
+): string {
+  const oc = calcMetrics(opencode);
+  const zc = calcMetrics(zcode);
+  const cc = calcMetrics(claude_code);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fapony usage — live comparison</title>
+<style>
+  :root { --bg: #0d1117; --fg: #c9d1d9; --border: #30363d; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; --muted: #8b949e; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; padding: 2rem; max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .status.on { background: var(--green); }
+  .status.off { background: var(--red); }
+  .sample { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; font-size: 0.85rem; }
+  th, td { padding: 0.4rem 0.6rem; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; position: sticky; top: 0; background: var(--bg); }
+  td:first-child, th:first-child { text-align: left; }
+  td.model-name { font-weight: 600; color: var(--fg); }
+  tr:hover { background: #161b22; }
+  .muted { color: var(--muted); }
+  .totals { font-weight: 700; background: #161b22; }
+  .totals td { border-top: 2px solid var(--border); }
+  .flash { animation: flash 0.6s ease-out; }
+  @keyframes flash { 0% { background: rgba(63,185,80,0.3); } 100% { background: transparent; } }
+  .pass { color: var(--green); }
+  .warn { color: var(--yellow); }
+  .cards { display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.5rem; }
+  .card { background: #161b22; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.8rem 1rem; }
+  .card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .card-empty { color: var(--muted); font-size: 0.85rem; }
+  .card-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.4rem 1rem; }
+  .card-metric { font-size: 0.8rem; }
+  .metric-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .metric-value { font-size: 0.95rem; font-weight: 700; color: var(--fg); }
+  .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.15rem; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .footer { margin-top: 1.5rem; font-size: 0.8rem; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>fapony usage — live comparison</h1>
+<div class="meta">
+  <span class="status on" id="status-dot"></span>
+  <span id="status-text">polling every ${pollInterval / 1000}s</span>
+  <span>·</span>
+  <span id="last-updated">${new Date().toISOString()}</span>
+</div>
+
+<div class="cards" id="summary-cards">
+${summaryCard("OpenCode", "var(--green)", oc)}
+${summaryCard("ZCode", "var(--accent)", zc)}
+${summaryCard("Claude Code", "var(--yellow)", cc)}
+</div>
+
+${clientTable("t-opencode", "OpenCode", "var(--green)", opencode)}
+${clientTable("t-zcode", "ZCode", "var(--accent)", zcode)}
+${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
+
+<div class="footer">
+  Tokens are approximate (byte proxy). Cost is estimate from static pricing, never a real charge.
+</div>
+
+<script>
+(function() {
+  var POLL_MS = ${pollInterval};
+
+  function fmt(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + "K";
+    return String(n);
+  }
+
+  function fmtCost(n) {
+    return n > 0 ? "~$" + n.toFixed(4) + " est." : "—";
+  }
+
+  function shortModel(raw) {
+    try {
+      var obj = JSON.parse(raw);
+      if (obj && typeof obj === "object" && typeof obj.id === "string") return obj.id;
+    } catch(e) {}
+    return raw;
+  }
+
+  function calcMetrics(d) {
+    if (!d || d.session_count === 0) return null;
+    var totalCache = d.total_tokens_cache_read + d.total_tokens_cache_write;
+    var context = d.total_tokens_input + d.total_tokens_output;
+    return {
+      sessions: d.session_count,
+      cacheHitRate: totalCache > 0 ? d.total_tokens_cache_read / totalCache : 0,
+      reasoningPct: context > 0 ? d.total_tokens_reasoning / context : 0,
+      outputRatio: context > 0 ? d.total_tokens_output / context : 0,
+      avgPerSession: Math.round(context / d.session_count),
+      totalCost: d.total_cost,
+      input: d.total_tokens_input,
+      output: d.total_tokens_output,
+      reasoning: d.total_tokens_reasoning,
+      cacheRead: d.total_tokens_cache_read
+    };
+  }
+
+  function pct(n) { return (n * 100).toFixed(1) + "%"; }
+
+  function barFill(pct, color) {
+    var w = Math.min(100, Math.round(pct * 100));
+    return '<div class="bar"><div class="bar-fill" style="width:' + w + '%;background:' + color + '"></div></div>';
+  }
+
+  function metricItem(label, value, cls, bar) {
+    return '<div class="card-metric">'
+      + '<div class="metric-label">' + label + '</div>'
+      + '<div class="metric-value ' + cls + '">' + value + '</div>'
+      + bar
+      + '</div>';
+  }
+
+  function updateCard(name, data) {
+    var cards = document.getElementById("summary-cards");
+    var cards_els = cards.querySelectorAll(".card");
+    var idx = name === "opencode" ? 0 : name === "zcode" ? 1 : 2;
+    var card = cards_els[idx];
+    if (!card) return;
+    var m = calcMetrics(data);
+    if (!m) {
+      card.querySelector(".card-title").innerHTML = name.charAt(0).toUpperCase() + name.slice(1) + ' <span class="sample">(0 sessions)</span>';
+      card.querySelector(".card-metrics").innerHTML = '<div class="card-empty">no sessions</div>';
+      return;
+    }
+    var title = name.charAt(0).toUpperCase() + name.slice(1).replace("_", " ");
+    if (name === "claude_code") title = "Claude Code";
+    card.querySelector(".card-title").innerHTML = title + ' <span class="sample">(' + m.sessions + ' sessions)</span>';
+    var maxInput = Math.max(m.input, m.output, m.reasoning, 1);
+    card.querySelector(".card-metrics").innerHTML =
+      metricItem("Cache Hit", pct(m.cacheHitRate), m.cacheHitRate > 0.7 ? "pass" : "warn", barFill(m.cacheHitRate, m.cacheHitRate > 0.7 ? "var(--green)" : "var(--yellow)"))
+      + metricItem("Reasoning", pct(m.reasoningPct), m.reasoningPct > 0.15 ? "warn" : "pass", barFill(m.reasoningPct, m.reasoningPct > 0.15 ? "var(--red)" : "var(--green)"))
+      + metricItem("Output", pct(m.outputRatio), "", barFill(m.outputRatio, m.outputRatio > 0.3 ? "var(--green)" : "var(--yellow)"))
+      + metricItem("Input", fmt(m.input), "", barFill(m.input / maxInput, "var(--accent)"))
+      + metricItem("Output", fmt(m.output), "", barFill(m.output / maxInput, "var(--green)"))
+      + metricItem("Reasoning", fmt(m.reasoning), m.reasoningPct > 0.15 ? "warn" : "", barFill(m.reasoning / maxInput, "var(--yellow)"))
+      + metricItem("Cache Read", fmt(m.cacheRead), "", "")
+      + metricItem("Avg/Session", fmt(m.avgPerSession), "", "")
+      + metricItem("Cost", fmtCost(m.totalCost), "", "");
+  }
+
+  function buildTable(data) {
+    var models = data ? data.by_model.slice().sort(function(a,b) { return b.session_count - a.session_count; }) : [];
+    var html = "";
+    if (models.length === 0) {
+      html = '<tr><td class="muted" colspan="8">no sessions</td></tr>';
+    } else {
+      models.forEach(function(m) {
+        html += '<tr data-model="' + m.model.replace(/"/g,"&quot;") + '">'
+          + '<td class="model-name">' + shortModel(m.model).replace(/</g,"&lt;") + '</td>'
+          + '<td>' + fmt(m.tokens_input) + '</td>'
+          + '<td>' + fmt(m.tokens_output) + '</td>'
+          + '<td>' + fmt(m.tokens_cache_read) + '</td>'
+          + '<td>' + fmt(m.tokens_cache_write) + '</td>'
+          + '<td>' + fmt(m.tokens_reasoning) + '</td>'
+          + '<td>' + m.session_count + '</td>'
+          + '<td>' + fmtCost(m.cost) + '</td>'
+          + '</tr>';
+      });
+    }
+    if (!data || data.session_count === 0) {
+      html += '<tr class="totals"><td>Totals</td><td class="muted" colspan="7">no data</td></tr>';
+    } else {
+      html += '<tr class="totals">'
+        + '<td>Totals</td>'
+        + '<td>' + fmt(data.total_tokens_input) + '</td>'
+        + '<td>' + fmt(data.total_tokens_output) + '</td>'
+        + '<td>' + fmt(data.total_tokens_cache_read) + '</td>'
+        + '<td>' + fmt(data.total_tokens_cache_write) + '</td>'
+        + '<td>' + fmt(data.total_tokens_reasoning) + '</td>'
+        + '<td>' + data.session_count + '</td>'
+        + '<td>' + fmtCost(data.total_cost) + '</td>'
+        + '</tr>';
+    }
+    return html;
+  }
+
+  function updateSection(tableId, data) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var html = buildTable(data);
+    var split = html.split('<tr class="totals">');
+    table.querySelector("tbody").innerHTML = split[0];
+    var tfoot = table.querySelector("tfoot");
+    tfoot.innerHTML = split[1] ? '<tr class="totals">' + split[1] : "";
+    var h2 = table.previousElementSibling;
+    if (h2 && h2.tagName === "H2") {
+      var count = data ? data.session_count : 0;
+      var span = h2.querySelector("span.sample");
+      if (span) span.textContent = "(" + count + " sessions)";
+    }
+  }
+
+  function fetchData() {
+    fetch("/data").then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function(data) {
+      document.getElementById("status-dot").className = "status on";
+      document.getElementById("status-text").textContent = "polling every " + (POLL_MS/1000) + "s";
+      updateSection("t-opencode", data.opencode);
+      updateSection("t-zcode", data.zcode);
+      updateSection("t-claude", data.claude_code);
+      updateCard("opencode", data.opencode);
+      updateCard("zcode", data.zcode);
+      updateCard("claude_code", data.claude_code);
+      document.getElementById("last-updated").textContent = new Date().toISOString();
+    }).catch(function() {
+      document.getElementById("status-dot").className = "status off";
+      document.getElementById("status-text").textContent = "offline — retrying";
+    });
+  }
+
+  setInterval(fetchData, POLL_MS);
+})();
+</script>
+
+</body>
+</html>`;
+}
