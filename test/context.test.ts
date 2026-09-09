@@ -44,6 +44,7 @@ function statsFixture(): StatsData {
       { id: 9, worktree: "wt1", plan: "auth-refactor", round: 4 },
     ],
     bestPassing: [{ plan: "usage-web-cli", worktree: "wt1" }],
+    recentFailNotes: [],
     usage: EMPTY_RESULT,
     latestRunAt: "",
   };
@@ -131,6 +132,44 @@ export function testContextToolEndToEnd(): void {
     assert.ok(expected.includes("1 run escalated past the round cap"));
   });
   console.log("  ✓ project_health_context tool returns block from real events");
+}
+
+export function testContextBlockRecentNotes(): void {
+  const data = statsFixture();
+  data.recentFailNotes = [
+    {
+      worktree: "wt1",
+      reason: "scope_mismatch",
+      note: "used old API shape",
+      ts: "",
+    },
+  ];
+  const block = buildProjectHealthContext(data);
+  assert.ok(
+    block.includes("Recent verdict notes: [scope_mismatch] used old API shape"),
+  );
+  console.log("  ✓ context block surfaces recent verdict note text");
+}
+
+export function testContextBlockLowHistoryStillShowsNotes(): void {
+  const data = statsFixture();
+  data.runs.total = 1;
+  data.byWorktree = [{ worktree: "wt1", runs: 1, passed: 0, stalled: 0 }];
+  data.recentFailNotes = [
+    {
+      worktree: "wt1",
+      reason: "spec_gap",
+      note: "spec missed edge case",
+      ts: "",
+    },
+  ];
+  const block = buildProjectHealthContext(data);
+  assert.ok(block.includes("Not enough history yet"));
+  assert.ok(
+    block.includes("Recent verdict notes: [spec_gap] spec missed edge case"),
+    "note text surfaces even below minRuns — signal from N=1",
+  );
+  console.log("  ✓ context block shows notes even below minRuns threshold");
 }
 
 export function testContextToolEmptyDb(): void {

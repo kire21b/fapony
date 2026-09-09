@@ -10,7 +10,9 @@ import {
 import {
   testContextBlockLineCap,
   testContextBlockLowHistory,
+  testContextBlockLowHistoryStillShowsNotes,
   testContextBlockNoPatterns,
+  testContextBlockRecentNotes,
   testContextBlockSnapshot,
   testContextBlockWorktreeScope,
   testContextToolEmptyDb,
@@ -388,6 +390,8 @@ export async function cmdTest(): Promise<void> {
   testContextBlockWorktreeScope();
   testContextBlockNoPatterns();
   testContextBlockLineCap();
+  testContextBlockRecentNotes();
+  testContextBlockLowHistoryStillShowsNotes();
   testContextToolEndToEnd();
   testContextToolEmptyDb();
   testParseDirtyLines();

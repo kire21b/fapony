@@ -35,11 +35,25 @@ export function buildProjectHealthContext(
   const scope = worktree ?? "all worktrees";
   const header = `## Known patterns for this project (from fapony history, N=${total} runs, ${scope})`;
 
+  // Recent free-text notes carry signal from N=1 (a specific "worked around
+  // X" beats a count) — unlike the trend lines below, not gated by minRuns.
+  const notes = (
+    worktree
+      ? data.recentFailNotes.filter((n) => n.worktree === worktree)
+      : data.recentFailNotes
+  ).slice(0, 3);
+
   if (total < minRuns) {
-    return [
+    const lines = [
       header,
-      `- Not enough history yet (${total} runs, need ${minRuns}+) — no recurring patterns to report; draft freely.`,
-    ].join("\n");
+      `- Not enough history yet (${total} runs, need ${minRuns}+) for recurring patterns; draft freely.`,
+    ];
+    if (notes.length > 0) {
+      lines.push(
+        `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
+      );
+    }
+    return lines.join("\n");
   }
 
   const reasons = (
@@ -77,6 +91,11 @@ export function buildProjectHealthContext(
     const list = passing.map((b) => `"${b.plan}"`).join(", ");
     lines.push(
       `- Passed round 1 before: ${list} — shapes worth reusing when they fit.`,
+    );
+  }
+  if (notes.length > 0) {
+    lines.push(
+      `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
     );
   }
   if (lines.length === 1) {

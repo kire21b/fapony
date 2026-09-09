@@ -256,6 +256,52 @@ export function getReasonCodeBreakdown(
   return out.sort((a, b) => b.count - a.count);
 }
 
+export interface RecentFailNote {
+  worktree: string;
+  reason: string;
+  note: string;
+  ts: string;
+}
+
+/**
+ * Most recent non-pass gate notes with actual text (spec §2 knowledge-
+ * accumulation extra). Unlike byReasonCode counts, this is useful from a
+ * single run — a specific "worked around X" note carries signal that a
+ * count never does. Sorted newest first, capped at `limit`.
+ */
+export function getRecentFailNotes(
+  runs: Run[],
+  events: Event[],
+  limit = 3,
+): RecentFailNote[] {
+  const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+  const out: RecentFailNote[] = [];
+  // events is oldest→first per typical read order; walk backwards for recency.
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (e.kind !== "gate") continue;
+    const reason = gateReason(e.data);
+    if (!reason) continue; // null = pass family, or no recognizable reason_code
+    let note = "";
+    try {
+      const d = JSON.parse(e.data ?? "{}") as { note?: unknown };
+      if (typeof d.note === "string") note = d.note;
+    } catch {
+      // unparseable — skip note text, keep looking
+    }
+    note = note.replace(/^\[[a-z_]+\]\s*/, "").trim();
+    if (!note) continue; // no free-text note beyond the reason_code tag
+    out.push({
+      worktree: wtByRun.get(e.run_id) ?? "(unknown)",
+      reason,
+      note,
+      ts: e.ts,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /** Per-plan totals with pass + escalation counts. */
 export function getPlanBreakdown(
   runs: Run[],
@@ -370,6 +416,7 @@ export interface StatsData {
   byPlan: PlanBreakdown[];
   escalatedRuns: EscalatedRun[];
   bestPassing: BestPassing[];
+  recentFailNotes: RecentFailNote[];
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -528,6 +575,7 @@ export function getStatsData(): StatsData {
       byPlan: getPlanBreakdown(runs, maxRounds),
       escalatedRuns: getEscalatedRuns(runs, maxRounds),
       bestPassing: getBestPassing(runs, events),
+      recentFailNotes: getRecentFailNotes(runs, events),
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:
