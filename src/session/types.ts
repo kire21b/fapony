@@ -18,6 +18,27 @@ export interface SessionDetail {
   tools: Record<string, number>;
 }
 
+export interface ToolLatencyStat {
+  count: number;
+  avgMs: number;
+}
+
+export interface StepTimingSummary {
+  /** step-finish row count (mirrors UsageDetail.steps for SQLite providers). */
+  steps: number;
+  /** Mean per-part duration from embedded data.time (row-timestamp fallback when absent). */
+  avgStepMs: number | null;
+  /** How many durations were actually measured (vs. steps with no time signal). */
+  stepSamples: number;
+  /** Mean per-step tokens — averages only, never summed (sums overlap). */
+  avgStepInput: number | null;
+  avgStepOutput: number | null;
+  avgStepCost: number | null;
+  /** Mean tool latency grouped by tool name (from data.state.time). */
+  toolLatencyMsByType: Record<string, ToolLatencyStat>;
+  note: string;
+}
+
 export interface UsageDetail {
   /** Global tool-call counts across the filtered sessions (activity signal, not quality). */
   tool_breakdown: Record<string, number>;
@@ -31,6 +52,8 @@ export interface UsageDetail {
    * Verified on real data — see testSessionDetailStepTokensNotSummed.
    */
   note: string;
+  /** Per-step timing/token/latency signal — present only when detail:true was requested. */
+  timing?: StepTimingSummary | null;
 }
 
 export interface PassiveUsageResult {
@@ -63,3 +86,6 @@ export const EMPTY_RESULT: PassiveUsageResult = {
 
 export const STEP_TOKENS_NOTE =
   "step tokens overlap (per-step context window) — SUM(step tokens) != session tokens; steps is a count only";
+
+export const TIMING_NOTE =
+  "timing from embedded part fields only (data.time/data.state.time/step-finish tokens) with row-timestamp fallback; averages, never raw I/O";

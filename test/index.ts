@@ -8,6 +8,15 @@ import {
   testTemplateArgsReplaceAll,
 } from "./config.test.js";
 import {
+  testContextBlockLineCap,
+  testContextBlockLowHistory,
+  testContextBlockNoPatterns,
+  testContextBlockSnapshot,
+  testContextBlockWorktreeScope,
+  testContextToolEmptyDb,
+  testContextToolEndToEnd,
+} from "./context.test.js";
+import {
   testCostAttributionAndBytes,
   testCostBeginEndRoundTrip,
   testCostHandoffAndFormat,
@@ -126,6 +135,10 @@ import {
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
   testStatsToolEmptyDb,
+  testStatsToolGroupByInvalid,
+  testStatsToolGroupByPlan,
+  testStatsToolGroupByPlanWorktreeScoped,
+  testStatsToolGroupByReasonCode,
   testStatsToolJsonMode,
   testStatsToolTextMode,
 } from "./mcp/stats.test.js";
@@ -204,6 +217,7 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
+  testStatsBestPassing,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
   testStatsEfficiencyFailIsInfinite,
@@ -211,11 +225,14 @@ import {
   testStatsEfficiencyNoGateIsNull,
   testStatsEfficiencyUsd,
   testStatsEmptyDb,
+  testStatsEscalatedRuns,
   testStatsGateWithoutSpawnsInWindow,
   testStatsLegacyPassMergedWithPassAdequate,
   testStatsModelFromExecutorSpawn,
   testStatsMultiRoundSeparateGates,
   testStatsNoPricingValueIsNull,
+  testStatsPlanBreakdown,
+  testStatsReasonCodeBreakdown,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -248,6 +265,20 @@ import {
   testTelemetrySelfReportedRoundTrip,
 } from "./telemetry/self-reported.test.js";
 import {
+  testClaudeCodeTimingDetail,
+  testCollectTimingStepCountMirrorsDetail,
+  testExtractPartTimingMalformed,
+  testExtractPartTimingStepFinish,
+  testExtractPartTimingToolPart,
+  testOpenCodeTimingFromEmbedded,
+  testOpenCodeTimingNeverLeaksIO,
+  testParseTimeMsUnits,
+  testRowFallbackMsVariants,
+  testSummarizeTimingAverages,
+  testSummarizeTimingEmpty,
+  testZcodeTimingEmbeddedOnly,
+} from "./timing.test.js";
+import {
   testCmdUpdateAlreadyUpToDate,
   testCmdUpdateDirtyDeclined,
   testCmdUpdateDirtyPullOk,
@@ -273,6 +304,7 @@ import {
   testFmtTokensMillions,
   testFmtTokensThousands,
   testFmtTokensZero,
+  testRenderHtmlCostWide,
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlPollInterval,
@@ -339,6 +371,25 @@ export async function cmdTest(): Promise<void> {
   await testCmdSetupHappyPathScaffolds();
   await testCmdSetupScaffoldAlreadyExists();
   testIsAffirmative();
+  testParseTimeMsUnits();
+  testExtractPartTimingToolPart();
+  testExtractPartTimingStepFinish();
+  testExtractPartTimingMalformed();
+  testRowFallbackMsVariants();
+  testSummarizeTimingAverages();
+  testSummarizeTimingEmpty();
+  testOpenCodeTimingFromEmbedded();
+  testOpenCodeTimingNeverLeaksIO();
+  testCollectTimingStepCountMirrorsDetail();
+  testZcodeTimingEmbeddedOnly();
+  testClaudeCodeTimingDetail();
+  testContextBlockSnapshot();
+  testContextBlockLowHistory();
+  testContextBlockWorktreeScope();
+  testContextBlockNoPatterns();
+  testContextBlockLineCap();
+  testContextToolEndToEnd();
+  testContextToolEmptyDb();
   testParseDirtyLines();
   testFormatDirtyBlock();
   testShouldProceedAfterDirty();
@@ -381,6 +432,10 @@ export async function cmdTest(): Promise<void> {
   testStatsToolTextMode();
   testStatsTextMatchesCli();
   testStatsToolByGradeSeparation();
+  testStatsToolGroupByReasonCode();
+  testStatsToolGroupByPlan();
+  testStatsToolGroupByPlanWorktreeScoped();
+  testStatsToolGroupByInvalid();
   testStatsEfficiencyTextFailCensored();
   testUsageDefaultRegression();
   testUsageDetailJson();
@@ -457,6 +512,10 @@ export async function cmdTest(): Promise<void> {
   testStatsGateWithoutSpawnsInWindow();
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
+  testStatsReasonCodeBreakdown();
+  testStatsEscalatedRuns();
+  testStatsPlanBreakdown();
+  testStatsBestPassing();
   testStatsModelFromExecutorSpawn();
   testStatsEfficiencyUsd();
   testStatsEfficiencyBytesProxy();
@@ -522,6 +581,7 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlTokenValues();
   testRenderHtmlNoData();
   testRenderHtmlSummaryCards();
+  testRenderHtmlCostWide();
   testRenderHtmlPollInterval();
   console.log("\nall tests passed ✓");
 }
