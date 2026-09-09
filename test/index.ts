@@ -259,6 +259,27 @@ import {
   testUpdateReadVersionResolves,
   testUpdateRootIsRepoRoot,
 } from "./update.test.js";
+import {
+  testFmtCostNull,
+  testFmtCostPositive,
+  testFmtCostZero,
+  testFmtDeltaNegative,
+  testFmtDeltaPositive,
+  testFmtDeltaZero,
+  testFmtTokensMillions,
+  testFmtTokensThousands,
+  testFmtTokensZero,
+  testRenderHtmlModelNames,
+  testRenderHtmlNoData,
+  testRenderHtmlPollInterval,
+  testRenderHtmlStructure,
+  testRenderHtmlSummaryCards,
+  testRenderHtmlTokenValues,
+  testShortModelEmptyString,
+  testShortModelJsonId,
+  testShortModelJsonNoId,
+  testShortModelPlainText,
+} from "./usage.test.js";
 import { testIsAffirmative } from "./util.test.js";
 
 export async function cmdTest(): Promise<void> {
@@ -474,5 +495,25 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
   testReportHtmlEscapesContent();
+  // Usage-web tests
+  testFmtTokensZero();
+  testFmtTokensThousands();
+  testFmtTokensMillions();
+  testFmtCostNull();
+  testFmtCostZero();
+  testFmtCostPositive();
+  testFmtDeltaZero();
+  testFmtDeltaPositive();
+  testFmtDeltaNegative();
+  testShortModelJsonId();
+  testShortModelJsonNoId();
+  testShortModelPlainText();
+  testShortModelEmptyString();
+  testRenderHtmlStructure();
+  testRenderHtmlModelNames();
+  testRenderHtmlTokenValues();
+  testRenderHtmlNoData();
+  testRenderHtmlSummaryCards();
+  testRenderHtmlPollInterval();
   console.log("\nall tests passed ✓");
 }
