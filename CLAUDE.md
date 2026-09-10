@@ -2,7 +2,7 @@
 
 ## What is fapony
 
-Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 7 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
+Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 8 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
 **North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **project health + knowledge accumulation ข้าม run/client/project** — reason_code ที่ fail ซ้ำ, plan ที่ escalate เกิน round cap, pattern ที่ผ่าน round แรก — สะสมใน `runs`+`events` แล้วป้อนกลับเข้า `plan-with-me` เป็น context (`project_health_context` tool, ดู [.fapony/plan/PLAN-project-health-context.md](.fapony/plan/PLAN-project-health-context.md)) fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
@@ -77,7 +77,7 @@ fapony/
     install.ts          # fapony install --platform opencode|claude|zcode|codex — wire the MCP server into a client
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
-    mcp/                   # MCP server — stdio JSON-RPC, 7 tools
+    mcp/                   # MCP server — stdio JSON-RPC, 8 tools
       index.ts             # MCP entry point + tool registration
       transport.ts         # JSON-RPC framing (stdin/stdout)
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
@@ -248,7 +248,7 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 ## CLI Commands
 
 ```bash
-fapony mcp                          # MCP server — stdio JSON-RPC, 7 tools
+fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
 fapony usage-web [port] [--full]    # live usage comparison dashboard (OpenCode / ZCode / Claude Code) — default samples (last 30d + last 20k parts), --full for exact all-time
@@ -264,10 +264,11 @@ fapony test                         # self-check
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: fapony
 
-fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 7 tools:
+fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime dependency. 8 tools:
 
 | Tool | Purpose |
 |------|---------|
+| `plan_list` | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
 | `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
 | `handoff_check` | Verify handoff conformance against facts |
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |

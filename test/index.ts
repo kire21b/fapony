@@ -112,6 +112,12 @@ import {
   testReasonCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
+  testPlanListJoinsRunHistory,
+  testPlanListMissingDir,
+  testPlanListNeverAttempted,
+  testPlanListRequiresWorktree,
+} from "./mcp/plans.test.js";
+import {
   testComputeEvidenceSummaryEmpty,
   testComputeEvidenceSummaryMixed,
   testEvidenceStatusesAreLocked,
@@ -467,6 +473,10 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitStoresMcpSource();
   testVerdictSubmitAutoCreatesRun();
   testVerdictSubmitAllGrades();
+  testPlanListRequiresWorktree();
+  testPlanListMissingDir();
+  testPlanListNeverAttempted();
+  testPlanListJoinsRunHistory();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();

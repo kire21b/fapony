@@ -7,6 +7,7 @@ import {
   toolHandoffCheck,
   toolHandoffCollect,
   toolPassiveUsage,
+  toolPlanList,
   toolProjectHealthContext,
   toolVerdictSubmit,
   toolVerificationReport,
@@ -66,6 +67,8 @@ function dispatchToolCall(params: {
       return toolPassiveUsage(args);
     case "project_health_context":
       return toolProjectHealthContext(args);
+    case "plan_list":
+      return toolPlanList(args);
     case "verification_report":
       return toolVerificationReport(args);
     default:

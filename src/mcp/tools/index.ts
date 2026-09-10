@@ -6,6 +6,7 @@ import { REASON_CODES } from "../types.js";
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
 export { toolProjectHealthContext } from "./context.js";
+export { toolPlanList } from "./plans.js";
 export { toolVerificationReport } from "./report.js";
 export { toolFaponyStats } from "./stats.js";
 export { toolPassiveUsage } from "./usage.js";
@@ -288,6 +289,24 @@ export const TOOLS = [
         },
       },
       required: [],
+    },
+  },
+  {
+    name: "plan_list",
+    description:
+      "List pending plan files (with title + last-run status joined from " +
+      "fapony run history) and a count of archived ones. Not a raw directory " +
+      "listing — returns just enough to pick which plan to work on: " +
+      "'2 runs, last: fail(spec_gap)' vs 'never attempted'.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        worktree: {
+          type: "string",
+          description: "Absolute path to the project's git worktree",
+        },
+      },
+      required: ["worktree"],
     },
   },
 ];
