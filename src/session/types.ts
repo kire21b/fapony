@@ -1,6 +1,7 @@
 // src/session/types.ts — shared types + constants for session usage providers
 
 export interface ModelBreakdown {
+  provider: string;
   model: string;
   session_count: number;
   tokens_input: number;

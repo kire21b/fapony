@@ -78,6 +78,7 @@ export function readZcodeUsage(
       .prepare(
         `
         SELECT
+          '' AS provider,
           mu.model_id AS model,
           COUNT(DISTINCT s.id) AS session_count,
           SUM(mu.input_tokens) AS tokens_input,

@@ -14,7 +14,16 @@ const FIELDS: (keyof ModelBreakdown)[] = [
   "cost",
 ];
 
-const HEADERS = ["In", "Out", "Cache R", "Cache W", "Reason", "Sess", "Cost"];
+const HEADERS = [
+  "Provider",
+  "In",
+  "Out",
+  "Cache R",
+  "Cache W",
+  "Reason",
+  "Sess",
+  "Cost",
+];
 
 interface SummaryMetrics {
   sessions: number;
@@ -158,7 +167,7 @@ function cell(
 
 function modelRows(data: PassiveUsageResult | null): string {
   if (!data || data.by_model.length === 0)
-    return '    <tr><td class="muted" colspan="8">no sessions</td></tr>';
+    return '    <tr><td class="muted" colspan="9">no sessions</td></tr>';
   return data.by_model
     .sort(
       (a, b) =>
@@ -177,6 +186,7 @@ function modelRows(data: PassiveUsageResult | null): string {
       (m) =>
         `    <tr data-model="${esc(m.model)}">
       <td class="model-name">${esc(shortModel(m.model))}</td>
+      <td class="muted">${esc(m.provider || "—")}</td>
       ${FIELDS.map((f) => cell(m, f)).join("")}
     </tr>`,
     )
@@ -185,7 +195,7 @@ function modelRows(data: PassiveUsageResult | null): string {
 
 function totalsRow(data: PassiveUsageResult | null): string {
   if (!data || data.session_count === 0)
-    return '    <tr class="totals"><td>Totals</td><td class="muted" colspan="7">no data</td></tr>';
+    return '    <tr class="totals"><td>Totals</td><td class="muted" colspan="8">no data</td></tr>';
   return `    <tr class="totals">
       <td>Totals</td>
       <td>${fmtTokens(data.total_tokens_input)}</td>
@@ -416,11 +426,12 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
     var models = data ? data.by_model.slice().sort(function(a,b) { return (b.tokens_input + b.tokens_output + b.tokens_reasoning + b.tokens_cache_read + b.tokens_cache_write) - (a.tokens_input + a.tokens_output + a.tokens_reasoning + a.tokens_cache_read + a.tokens_cache_write); }) : [];
     var html = "";
     if (models.length === 0) {
-      html = '<tr><td class="muted" colspan="8">no sessions</td></tr>';
+      html = '<tr><td class="muted" colspan="9">no sessions</td></tr>';
     } else {
       models.forEach(function(m) {
         html += '<tr data-model="' + m.model.replace(/"/g,"&quot;") + '">'
           + '<td class="model-name">' + shortModel(m.model).replace(/</g,"&lt;") + '</td>'
+          + '<td class="muted">' + (m.provider || "\u2014").replace(/</g,"&lt;") + '</td>'
           + '<td>' + fmt(m.tokens_input) + '</td>'
           + '<td>' + fmt(m.tokens_output) + '</td>'
           + '<td>' + fmt(m.tokens_cache_read) + '</td>'
@@ -432,10 +443,11 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
       });
     }
     if (!data || data.session_count === 0) {
-      html += '<tr class="totals"><td>Totals</td><td class="muted" colspan="7">no data</td></tr>';
+      html += '<tr class="totals"><td>Totals</td><td class="muted" colspan="8">no data</td></tr>';
     } else {
       html += '<tr class="totals">'
         + '<td>Totals</td>'
+        + '<td></td>'
         + '<td>' + fmt(data.total_tokens_input) + '</td>'
         + '<td>' + fmt(data.total_tokens_output) + '</td>'
         + '<td>' + fmt(data.total_tokens_cache_read) + '</td>'
