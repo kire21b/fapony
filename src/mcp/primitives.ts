@@ -221,9 +221,11 @@ export function renderReportText(report: VerificationReport): string {
   }
 
   // --- Evidence ---
-  if (report.evidence.length > 0) {
-    lines.push("");
-    lines.push("--- evidence ---");
+  lines.push("");
+  lines.push("--- evidence ---");
+  if (report.evidence.length === 0) {
+    lines.push("not_run (no .fapony/evidence.json)");
+  } else {
     const es = report.evidence_summary;
     lines.push(
       `${es.passed} passed, ${es.failed} failed, ${es.not_run} not run, ${es.unverified} unverified, ${es.timeout} timeout`,
@@ -252,9 +254,11 @@ export function renderReportText(report: VerificationReport): string {
   );
 
   // --- Cost ---
-  if (report.cost.spawns > 0) {
-    lines.push("");
-    lines.push("--- cost (bytes proxy, USD est. only) ---");
+  lines.push("");
+  lines.push("--- cost (bytes proxy, USD est. only) ---");
+  if (report.cost.spawns === 0) {
+    lines.push("unavailable (no spawn events — external MCP caller)");
+  } else {
     lines.push(
       `${report.cost.bytes_in} bytes in / ${report.cost.bytes_out} bytes out over ${report.cost.spawns} spawn${report.cost.spawns === 1 ? "" : "s"} (${fmtUsd(report.cost.usd_estimate)})`,
     );
