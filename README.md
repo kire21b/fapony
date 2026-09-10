@@ -150,13 +150,16 @@ Verification produces a quality grade, not just pass/fail:
 
 ## Skills
 
-fapony ships with three portable skills (copy to any agent tool):
+fapony ships five portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
+Code expects, so a client can symlink the directory rather than copy the file:
 
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
-| `skill/git-commit-conventional.md` | Commit split by concern + conventional message | `/git-commit` |
-| `skill/move-to-done.md` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
-| `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
+| `skill/plan-with-me/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
+| `skill/scrutinize/` | Outsider review, wired to fapony: known patterns before, verdict after | `/scrutinize` |
+| `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
+| `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
+| `skill/git-pr-merge/` | Push branch, open PR with drafted title/body, merge | `/pr` |
 
 `plan-with-me` is vendor-neutral — pipe it to any agent:
 
