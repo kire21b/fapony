@@ -13,10 +13,11 @@ review method itself — this file only adds step 0 (before) and step 5 (after).
 ## Step 0 — known patterns first (before Intent)
 
 Call `project_health_context` (fapony MCP) with `worktree` set to this
-project's repo name / worktree key (e.g. `basename $(git rev-parse
---show-toplevel)` — for the fapony repo itself that's `fapony`, but this
-file also ships to other projects via `fapony init`, so never hardcode a
-literal name here). It returns a short "known patterns" block — recurring
+project's **absolute** repo path (`git rev-parse --show-toplevel`) — every
+fapony tool scopes `worktree` by absolute path (see `fapony_usage`,
+`fapony_stats`), not a bare repo name; this file also ships to other
+projects via `fapony init`, so never hardcode a literal path here). It
+returns a short "known patterns" block — recurring
 `reason_code`s, escalated plans, round-1-pass shapes from past verdicts. Skim
 it, don't quote it back — use it to know what to look for harder (e.g. if
 `missing_test` shows up 3× already, look harder at test coverage this time).
@@ -58,7 +59,7 @@ not a generic bucket:
 Args:
 - `verdict`, `reason_code`, `note` — as above (note ≤ 1 sentence, it feeds
   future `project_health_context` calls verbatim)
-- `worktree`: same repo name / worktree key used in step 0 — never a hardcoded literal
+- `worktree`: same absolute path used in step 0 — never a hardcoded literal
 - `plan`: the PLAN file path under review, if any (e.g. `.fapony/plan/PLAN-foo.md`) — omit for a bare PR/diff review with no plan file
 
 No `run_id` — `verdict_submit` auto-creates a run row for external callers.
@@ -69,11 +70,11 @@ If `verdict_submit` errors or isn't available, say so in one line and move on
 ## Example
 
 ```
-0. project_health_context(worktree="fapony") → "missing_test (4×), spec_gap (2×)"
-   (worktree here is fapony's own repo name — a project that ships this skill
-   via `fapony init` would use its own repo name instead)
+0. project_health_context(worktree="/Users/you/Project/fapony/wt-fapony") → "missing_test (4×), spec_gap (2×)"
+   (worktree here is fapony's own absolute repo path — a project that ships
+   this skill via `fapony init` would use its own absolute path instead)
 1-4. run global scrutinize workflow — finds one MAJOR: new gate branch has no test
 5. verdict_submit(verdict="pass-adequate", reason_code="missing_test",
    note="gate branch for round-cap escalation has no test, fixed inline",
-   worktree="fapony", plan=".fapony/plan/PLAN-verdict-notes.md")
+   worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/PLAN-verdict-notes.md")
 ```
