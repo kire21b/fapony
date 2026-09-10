@@ -12,13 +12,40 @@ fapony mcp
 # It reads JSON-RPC from stdin, writes to stdout (newline-delimited)
 ```
 
-## The 3-Tool Pipeline
+## The verification pipeline
+
+These three tools are the low-level surface, documented here in full because adapters
+build on them directly:
 
 ```
 handoff_collect  →  handoff_check  →  verdict_submit
      ↓                    ↓                 ↓
   git facts         conformance         store verdict
 ```
+
+The server exposes 8 tools in total. The other five are higher-level and take plain
+arguments — see [README](../README.md#the-8-tools) for what each one answers:
+
+| Tool | In one line |
+|------|-------------|
+| `verification_report` | The three above plus evidence and cost, in one call — what most agents should use |
+| `plan_list` | Pending plan files joined with their run history |
+| `project_health_context` | Recurring fail reasons and past verdict notes, as a text block |
+| `fapony_stats` | Cross-run KPIs (by model, grade, reason code, plan) |
+| `fapony_usage` | Token/cost totals read from client session logs |
+
+### Two things that bite
+
+- **`server_sha`** — `verification_report` stamps every report with the git SHA of the
+  fapony code that produced it, read once at server start. An MCP server is a long-lived
+  process: edit fapony without restarting the client and reports keep coming from the old
+  build, with nothing else to signal it. Compare the stamp against `git log -1` in the
+  fapony repo before trusting a result.
+- **Evidence budget** — each allowlisted command gets `timeout_ms` (default 30s) and the
+  whole report is capped at 180s. Over budget is reported as `timeout`, never as a pass.
+  Verify your entries actually run the suite: a command that exits 0 without running
+  anything (`bun test` in a repo whose tests live behind `bun run test`) is reported as a
+  clean pass.
 
 ### 1. `handoff_collect` — Get machine facts from git
 

@@ -4,7 +4,7 @@
 
 # fapony
 
-fapony measures what coding agents actually do — tokens, cost, rounds, pass/fail, per model and per workflow — through 7 MCP tools that any agent can call (Claude Code, OpenCode, Codex, anything that speaks MCP). If you juggle more than one agent, this is the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on which kind of task" becomes a data question instead of a vibe. On top of measurement, fapony verifies claims: git facts first, handoff conformance, allowlisted evidence, a 6-grade verdict — with everything the agent claimed but couldn't prove marked as such.
+fapony measures what coding agents actually do — tokens, cost, rounds, pass/fail, per model and per workflow — through 8 MCP tools that any agent can call (Claude Code, OpenCode, Codex, anything that speaks MCP). If you juggle more than one agent, this is the point: the numbers come from the same yardstick everywhere, so "which model earns its keep on which kind of task" becomes a data question instead of a vibe. On top of measurement, fapony verifies claims: git facts first, handoff conformance, allowlisted evidence, a 6-grade verdict — with everything the agent claimed but couldn't prove marked as such.
 
 **The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients, and rounds: which failure reason keeps coming back on this project, which plans blew the round cap (a plan problem, not a code problem — see [CLAUDE.md](CLAUDE.md) Key Design Decision #2), which shapes passed clean on round one. fapony is the only thing positioned to see that, because it's the one layer every client reports into. That history feeds straight back into `plan-with-me` as a short "known patterns" block — so a dev benefits from their own project's track record without ever opening a stats dashboard.
 
@@ -38,6 +38,8 @@ fapony install --platform opencode        # adds mcp.fapony to your opencode con
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
 fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
 fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+#    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
+#    skill of the same name is reported, never overwritten
 # …or add it manually to any MCP client (e.g. Claude Desktop):
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
@@ -58,6 +60,13 @@ With `.fapony/evidence.json` in place, ask your agent to verify its own work:
 
 You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
 
+Sections that have nothing to report say so (`not_run`, `unavailable`) rather than disappearing — a report with no evidence must not read like a report that passed.
+
+Two things worth knowing about the report header and budget:
+
+- **`server_sha`** — every report is stamped with the git SHA of the fapony code that produced it, read once at server start. MCP servers are long-lived: after you edit fapony and don't restart the client, reports keep coming from the old build. Compare the stamp against `git log -1` in the fapony repo; if they differ, reconnect the server before trusting the result.
+- **Evidence budget** — each allowlisted command gets `timeout_ms` (default 30s), and the whole report is capped at 180s total. A command that doesn't fit is reported as `timeout`, never as a pass. Time your real suite and set `timeout_ms` accordingly.
+
 ## How it fits
 
 ```mermaid
@@ -72,9 +81,35 @@ flowchart LR
     G --> P[project_health → plan-with-me]
 ```
 
-## The 7 tools
+fapony never drives the agent — it is a set of checkpoints the agent walks past. One
+work cycle looks like this:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent (any MCP client)
+    participant F as fapony MCP
+    participant W as your worktree
+
+    A->>F: plan_list
+    F-->>A: pending plans + how each one went last time
+    Note over A,W: agent does the actual work — fapony is not involved
+    A->>F: verification_report
+    F->>W: git diff/log + commands from .fapony/evidence.json
+    W-->>F: facts + evidence (passed / failed / timeout / not_run)
+    F-->>A: one report, stamped with server_sha
+    A->>F: verdict_submit (grade + reason_code + note)
+    Note over F: stored in ~/.config/fapony/state.db
+    F-->>A: project_health_context — past notes shape the next plan
+```
+
+`verdict_submit` is the only step that creates knowledge, and `project_health_context`
+is the only reason to keep it. Everything in between is the agent's own business.
+
+## The 8 tools
 
 ```
+discover: plan_list (pending plan files joined with their run history)
 measure:  handoff_collect ── fapony_stats ── fapony_usage
 verify:   handoff_check ── verdict_submit ── verification_report
 plan:     project_health_context (known patterns from history → plan-with-me)
@@ -83,6 +118,7 @@ plan:     project_health_context (known patterns from history → plan-with-me)
 
 | Tool | Tier | Purpose |
 |------|------|---------|
+| `plan_list` | discover | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
 | `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
 | `fapony_stats` | measure | KPIs across runs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N slices |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
@@ -116,13 +152,21 @@ Verification produces a quality grade, not just pass/fail:
 
 ## Skills
 
-fapony ships with three portable skills (copy to any agent tool):
+fapony ships five portable skills, each as `skill/<name>/SKILL.md` — the layout Claude
+Code expects, so a client can symlink the directory rather than copy the file:
 
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
-| `skill/git-commit-conventional.md` | Commit split by concern + conventional message | `/git-commit` |
-| `skill/move-to-done.md` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
-| `skill/plan-with-me.md` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
+| `skill/plan-with-me/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
+| `skill/scrutinize/` | Outsider review, wired to fapony: known patterns before, verdict after | `/scrutinize` |
+| `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
+| `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
+| `skill/git-pr-merge/` | Push branch, open PR with drafted title/body, merge | `/pr` |
+
+`fapony install --platform claude` (or `opencode`) symlinks these directories into
+`~/.claude/skills` rather than copying them, so `fapony update` refreshes every client
+at once. A destination that already exists and isn't a fapony link is reported and left
+alone — replace it by hand if you want fapony's version.
 
 `plan-with-me` is vendor-neutral — pipe it to any agent:
 
@@ -138,7 +182,7 @@ Example plans produced by it live in [examples/](examples/).
 
 ```bash
 # Verification & reporting
-fapony mcp                               # MCP server (stdio JSON-RPC — 7 tools)
+fapony mcp                               # MCP server (stdio JSON-RPC — 8 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
 fapony usage-web [port] [--full]         # live usage comparison dashboard (OpenCode / ZCode / Claude Code / Codex) — default samples (last 30d + last 20k parts), --full for an exact all-time scan
@@ -173,9 +217,9 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 ## Scope
 
 **Supported:**
-- MCP server — 7 tools via stdio JSON-RPC, works with any MCP client
+- MCP server — 8 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value + passive usage (tokens, cost)
-- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed)
+- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed); reports stamped with the producing build's `server_sha`
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)

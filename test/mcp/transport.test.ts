@@ -7,7 +7,7 @@ export function testMcpToolsList(): void {
   const result = dispatch("tools/list", {});
   assert.ok(result && typeof result === "object");
   const r = result as { tools: { name: string }[] };
-  assert.equal(r.tools.length, 7);
+  assert.equal(r.tools.length, 8);
   assert.equal(r.tools[0].name, "handoff_collect");
   assert.equal(r.tools[1].name, "handoff_check");
   assert.equal(r.tools[2].name, "verdict_submit");

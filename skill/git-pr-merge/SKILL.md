@@ -35,6 +35,11 @@ Show the drafted title + body + merge method together and get one go-ahead — d
 separately for push, then PR, then merge. Then:
 
 ```bash
+git status --porcelain   # re-check right before pushing, not just at the start —
+                          # time passed drafting/waiting on CI; in a shared/multi-agent
+                          # worktree another session may have added uncommitted work.
+                          # If dirty, wait for it to be committed (or ask) before pushing —
+                          # don't push around it and don't commit someone else's changes yourself.
 git push -u origin <branch>
 gh pr create --title "<title>" --body "<body>"
 gh pr merge --squash   # or --merge, per the chosen method
@@ -51,5 +56,14 @@ gh pr merge --squash   # or --merge, per the chosen method
 ## If fail
 
 - `gh` not authenticated → tell the user to run `gh auth login`
-- Merge conflict with base branch → STOP, report, don't resolve unilaterally
+- Merge conflict with base branch → STOP, report, don't resolve unilaterally. Exception: if
+  base was previously updated by squash-merging an earlier point of *this same branch* (common
+  with a long-lived `dev` branch merged into `main` repeatedly), the "conflict" can be a false
+  positive from mismatched history rather than real divergent content. Verify before touching
+  anything: `git log branch..base --oneline` to see what base has that the branch doesn't, then
+  diff each of those commits' tree against the branch's history at that point
+  (`git diff <base-commit> <branch-commit-around-same-time>`) — if it's empty, base has nothing
+  the branch doesn't already contain, and it's safe to `git merge base -X ours` (branch wins any
+  textual conflict, since content is a strict superset) and say so. If the diff isn't empty,
+  STOP and report as usual — don't guess.
 - CI red → report which check failed, don't merge, don't retry blindly

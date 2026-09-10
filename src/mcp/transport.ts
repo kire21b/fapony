@@ -1,12 +1,14 @@
 // src/mcp/transport.ts — JSON-RPC dispatch + stdio entry point
 
 import { createInterface } from "node:readline";
+import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolFaponyStats,
   toolHandoffCheck,
   toolHandoffCollect,
   toolPassiveUsage,
+  toolPlanList,
   toolProjectHealthContext,
   toolVerdictSubmit,
   toolVerificationReport,
@@ -66,6 +68,8 @@ function dispatchToolCall(params: {
       return toolPassiveUsage(args);
     case "project_health_context":
       return toolProjectHealthContext(args);
+    case "plan_list":
+      return toolPlanList(args);
     case "verification_report":
       return toolVerificationReport(args);
     default:
@@ -76,6 +80,7 @@ function dispatchToolCall(params: {
 // --- Entry point ---
 
 export function cmdMcp(): void {
+  getServerSha(); // cache while the process is still fresh, not on first report call
   const rl = createInterface({ input: process.stdin });
 
   rl.on("line", (line) => {

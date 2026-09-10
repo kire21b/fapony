@@ -1,0 +1,102 @@
+// src/install/skills.ts — skill symlink logic for install
+//
+// A copied skill goes stale the moment fapony updates, and every client would
+// need its own copy to refresh. Symlinking the directory means `fapony update`
+// (a git pull in INSTALL_ROOT) reaches every client at once. The <name>/SKILL.md
+// layout is what Claude Code expects, so the link is directory-to-directory.
+//
+// OpenCode reads ~/.claude/skills too, so linking once covers both.
+
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+} from "node:fs";
+import { join } from "node:path";
+import { INSTALL_ROOT, type SkillLinkResult } from "./types.js";
+
+export function claudeSkillsDir(getHome: () => string): string {
+  return join(getHome(), ".claude", "skills");
+}
+
+/**
+ * Link every skill/<name>/ into `skillsDir`.
+ *
+ * Never overwrites: a destination that already exists and is not already our
+ * link is reported as `conflict` and left alone — it may be the user's own
+ * skill, or another tool's, and clobbering it is not ours to decide.
+ */
+export function linkSkills(
+  skillsDir: string,
+  dryRun: boolean,
+): SkillLinkResult[] {
+  const srcRoot = join(INSTALL_ROOT, "skill");
+  if (!existsSync(srcRoot)) return [];
+
+  const names = readdirSync(srcRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+
+  const out: SkillLinkResult[] = [];
+  for (const name of names) {
+    const src = join(srcRoot, name);
+    const dest = join(skillsDir, name);
+
+    // null = nothing there; "" = exists but not a symlink; else = link target.
+    let existing: string | null;
+    try {
+      existing = lstatSync(dest).isSymbolicLink() ? readlinkSync(dest) : "";
+    } catch {
+      existing = null;
+    }
+
+    if (existing === src) {
+      out.push({ name, action: "already" });
+      continue;
+    }
+    if (existing !== null) {
+      out.push({ name, action: "conflict" });
+      continue;
+    }
+    if (!dryRun) {
+      mkdirSync(skillsDir, { recursive: true });
+      symlinkSync(src, dest);
+    }
+    out.push({ name, action: "linked" });
+  }
+  return out;
+}
+
+export function reportSkills(
+  results: SkillLinkResult[],
+  skillsDir: string,
+  dryRun: boolean,
+): void {
+  if (results.length === 0) return;
+
+  const linked = results.filter((r) => r.action === "linked").length;
+  const already = results.filter((r) => r.action === "already").length;
+  const conflicts = results.filter((r) => r.action === "conflict");
+
+  if (linked > 0) {
+    const verb = dryRun ? "would link" : "linked";
+    console.error(
+      `✓ ${verb} ${linked} skill${linked === 1 ? "" : "s"} → ${skillsDir}`,
+    );
+  }
+  if (already > 0) {
+    console.error(`  ${already} already linked — no change`);
+  }
+  for (const c of conflicts) {
+    console.error(
+      `  ! ${c.name} already exists and is not a fapony link — not overwriting`,
+    );
+    console.error(
+      `    to replace: rm -r ${join(skillsDir, c.name)} && ln -s ${join(INSTALL_ROOT, "skill", c.name)} ${join(skillsDir, c.name)}`,
+    );
+  }
+}

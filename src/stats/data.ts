@@ -202,19 +202,11 @@ export function resolveMaxRounds(): number {
   }
 }
 
-function gateReason(data: string | null): string | null {
+/** Reason code on a gate event, regardless of pass/fail (for note surfacing). */
+function eventReasonCode(data: string | null): string | null {
   if (!data) return null;
   try {
-    const d = JSON.parse(data) as {
-      reason_code?: unknown;
-      verdict?: unknown;
-      note?: unknown;
-    };
-    if (
-      typeof d.verdict === "string" &&
-      (d.verdict === "pass" || d.verdict.startsWith("pass-"))
-    )
-      return null;
+    const d = JSON.parse(data) as { reason_code?: unknown; note?: unknown };
     if (
       typeof d.reason_code === "string" &&
       (REASON_CODES as readonly string[]).includes(d.reason_code)
@@ -229,6 +221,22 @@ function gateReason(data: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+/** Reason code on a non-pass gate event only (byReasonCode KPI — fail signal). */
+function gateReason(data: string | null): string | null {
+  if (!data) return null;
+  try {
+    const d = JSON.parse(data) as { verdict?: unknown };
+    if (
+      typeof d.verdict === "string" &&
+      (d.verdict === "pass" || d.verdict.startsWith("pass-"))
+    )
+      return null;
+  } catch {
+    return null;
+  }
+  return eventReasonCode(data);
 }
 
 /** Top reason_code per worktree, sorted by count desc (spec §2 query). */
@@ -264,10 +272,10 @@ export interface RecentFailNote {
 }
 
 /**
- * Most recent non-pass gate notes with actual text (spec §2 knowledge-
- * accumulation extra). Unlike byReasonCode counts, this is useful from a
- * single run — a specific "worked around X" note carries signal that a
- * count never does. Sorted newest first, capped at `limit`.
+ * Most recent gate notes with actual text, any verdict (spec §2 knowledge-
+ * accumulation extra) — unlike byReasonCode (fail-only KPI), a pass-adequate
+ * note still carries signal ("worked around X"). Sorted newest first, capped
+ * at `limit`.
  */
 export function getRecentFailNotes(
   runs: Run[],
@@ -280,8 +288,8 @@ export function getRecentFailNotes(
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i];
     if (e.kind !== "gate") continue;
-    const reason = gateReason(e.data);
-    if (!reason) continue; // null = pass family, or no recognizable reason_code
+    const reason = eventReasonCode(e.data);
+    if (!reason) continue; // no recognizable reason_code
     let note = "";
     try {
       const d = JSON.parse(e.data ?? "{}") as { note?: unknown };
@@ -332,6 +340,72 @@ export function getPlanBreakdown(
       worktrees: [...b.worktrees].sort(),
     }))
     .sort((a, b) => b.runs - a.runs);
+}
+
+export interface PlanLastVerdict {
+  plan: string;
+  runs: number;
+  lastVerdict: string;
+  /** null for a pass-family last verdict (gateReason only flags non-pass). */
+  lastReasonCode: string | null;
+  escalated: boolean;
+}
+
+/**
+ * Most recent gate verdict per plan string, for `plan_list` (mcp/tools/plans.ts)
+ * to join filesystem plan files against real run history — "2 runs, last:
+ * fail(spec_gap)" instead of a bare directory listing.
+ */
+export function getLastVerdictByPlan(
+  runs: Run[],
+  events: Event[],
+  maxRounds: number,
+): PlanLastVerdict[] {
+  const runById = new Map(runs.map((r) => [r.id, r]));
+  const runCounts = new Map<string, number>();
+  const escalatedPlans = new Set<string>();
+  for (const r of runs) {
+    if (!r.plan) continue;
+    runCounts.set(r.plan, (runCounts.get(r.plan) ?? 0) + 1);
+    if (r.round > maxRounds) escalatedPlans.add(r.plan);
+  }
+
+  const lastGateByPlan = new Map<
+    string,
+    { ts: string; verdict: string; reason: string | null }
+  >();
+  for (const e of events) {
+    if (e.kind !== "gate" || !e.data) continue;
+    const plan = runById.get(e.run_id)?.plan;
+    if (!plan) continue;
+    let verdict: string | null = null;
+    try {
+      const d = JSON.parse(e.data) as { verdict?: unknown };
+      if (typeof d.verdict === "string") verdict = d.verdict;
+    } catch {
+      continue;
+    }
+    if (!verdict) continue;
+    const prev = lastGateByPlan.get(plan);
+    if (!prev || e.ts >= prev.ts) {
+      lastGateByPlan.set(plan, {
+        ts: e.ts,
+        verdict,
+        reason: gateReason(e.data),
+      });
+    }
+  }
+
+  return [...runCounts.keys()].map((plan) => {
+    const last = lastGateByPlan.get(plan);
+    return {
+      plan,
+      runs: runCounts.get(plan) ?? 0,
+      lastVerdict: last?.verdict ?? "(no gate yet)",
+      lastReasonCode: last?.reason ?? null,
+      escalated: escalatedPlans.has(plan),
+    };
+  });
 }
 
 /** Runs past the round cap — plan-quality signal, not code (CLAUDE.md #2). */

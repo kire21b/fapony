@@ -94,6 +94,7 @@ export function readPassiveUsage(
       .prepare(
         `
         SELECT
+          CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.providerID'), '') ELSE '' END AS provider,
           CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.id'), s.model) ELSE s.model END AS model,
           COUNT(*) AS session_count,
           SUM(s.tokens_input) AS tokens_input,
@@ -105,7 +106,8 @@ export function readPassiveUsage(
         FROM session s
         JOIN project p ON s.project_id = p.id
         ${filter.clause}
-        GROUP BY CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.id'), s.model) ELSE s.model END
+        GROUP BY CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.providerID'), '') ELSE '' END,
+                 CASE WHEN json_valid(s.model) THEN COALESCE(json_extract(s.model, '$.id'), s.model) ELSE s.model END
         ORDER BY (tokens_input + tokens_output + tokens_reasoning + tokens_cache_read + tokens_cache_write) DESC
       `,
       )

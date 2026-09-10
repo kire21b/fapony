@@ -6,6 +6,29 @@
 //
 // §0 rule: add-only — never remove or rename exported symbols.
 
+import { execSync } from "node:child_process";
+import { ROOT } from "../update.js";
+
+// ─── Server build identity ─────────────────────────────────────────────
+
+let cachedServerSha: string | null | undefined; // undefined = not yet computed
+
+/** Short git SHA of the fapony server itself, cached for the process life. */
+export function getServerSha(): string | null {
+  if (cachedServerSha !== undefined) return cachedServerSha;
+  try {
+    cachedServerSha = execSync("git rev-parse --short HEAD", {
+      cwd: ROOT,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    cachedServerSha = null;
+  }
+  return cachedServerSha;
+}
+
 // ─── Evidence status vocabulary (locked, additive-only) ───────────────
 
 /**
@@ -151,6 +174,14 @@ export interface VerificationReport {
     source: "fapony_mcp" | "fapony_cli";
     /** Run ID this report is for. */
     run_id: number | null;
+    /**
+     * Short git SHA of the fapony server process itself (not the worktree
+     * being reviewed), captured once at first use and cached for the life
+     * of the process. Lets a reader compare against `git log -1` in the
+     * fapony repo to catch a stale (pre-edit) server still answering.
+     * Null when fapony isn't running from a git checkout.
+     */
+    server_sha: string | null;
   };
 }
 
@@ -192,6 +223,9 @@ export function renderReportText(report: VerificationReport): string {
   lines.push(
     `run: ${report.meta.run_id ?? "(none)"}  generated: ${report.meta.generated_at}`,
   );
+  lines.push(
+    `fapony server: ${report.meta.server_sha ?? "(unknown — not a git checkout)"}  — compare with \`git log -1\` in the fapony repo`,
+  );
   lines.push("");
 
   // --- Git facts ---
@@ -221,9 +255,11 @@ export function renderReportText(report: VerificationReport): string {
   }
 
   // --- Evidence ---
-  if (report.evidence.length > 0) {
-    lines.push("");
-    lines.push("--- evidence ---");
+  lines.push("");
+  lines.push("--- evidence ---");
+  if (report.evidence.length === 0) {
+    lines.push("not_run (no .fapony/evidence.json)");
+  } else {
     const es = report.evidence_summary;
     lines.push(
       `${es.passed} passed, ${es.failed} failed, ${es.not_run} not run, ${es.unverified} unverified, ${es.timeout} timeout`,
@@ -252,9 +288,11 @@ export function renderReportText(report: VerificationReport): string {
   );
 
   // --- Cost ---
-  if (report.cost.spawns > 0) {
-    lines.push("");
-    lines.push("--- cost (bytes proxy, USD est. only) ---");
+  lines.push("");
+  lines.push("--- cost (bytes proxy, USD est. only) ---");
+  if (report.cost.spawns === 0) {
+    lines.push("unavailable (no spawn events — external MCP caller)");
+  } else {
     lines.push(
       `${report.cost.bytes_in} bytes in / ${report.cost.bytes_out} bytes out over ${report.cost.spawns} spawn${report.cost.spawns === 1 ? "" : "s"} (${fmtUsd(report.cost.usd_estimate)})`,
     );

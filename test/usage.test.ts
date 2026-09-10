@@ -104,6 +104,7 @@ const sampleData: PassiveUsageResult = {
   session_count: 5,
   by_model: [
     {
+      provider: "mock",
       model: "mimo-v2.5",
       session_count: 3,
       tokens_input: 600,
@@ -114,6 +115,7 @@ const sampleData: PassiveUsageResult = {
       cost: 0.3,
     },
     {
+      provider: "mock",
       model: "deepseek-v4-flash",
       session_count: 2,
       tokens_input: 400,

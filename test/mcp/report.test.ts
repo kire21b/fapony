@@ -74,8 +74,8 @@ export function testVerificationReportToolCount(): void {
   const names = TOOLS.map((t: { name: string }) => t.name);
   assert.ok(names.includes("verification_report"));
   assert.ok(names.includes("project_health_context"));
-  assert.equal(TOOLS.length, 7);
-  console.log("  ✓ verification_report registered in TOOLS (7 tools total)");
+  assert.equal(TOOLS.length, 8);
+  console.log("  ✓ verification_report registered in TOOLS (8 tools total)");
 }
 
 export function testVerificationReportVerdictFromGateEvent(): void {

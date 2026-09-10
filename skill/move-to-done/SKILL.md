@@ -42,7 +42,9 @@ You are about to move a PLAN that has been shipped to the archive.
    - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
      — pick `other` with a `note` if nothing fits, or leave a `note` on any grade to record
      what actually happened (worked around, deferred, etc.) — this is what future plans see
-   - `worktree`: the repo/worktree name (e.g. `fapony`)
+   - `worktree`: **absolute path** to this repo/worktree (`git rev-parse --show-toplevel`) —
+     every other fapony tool (`fapony_usage`, `fapony_stats`, `project_health_context`)
+     scopes by absolute path too; a bare repo name won't match those queries
    - `plan`: the archived plan's path (post-move, e.g. `.fapony/plan/done/PLAN-foo.md`)
    Skip only if fapony's MCP tools aren't available in this session — don't block the archive on it.
 
@@ -55,7 +57,7 @@ Steps:
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
 3. git mv
 4. commit
-5. verdict_submit(verdict="pass", reason_code="other", note="clean ship", worktree="fapony", plan=".fapony/plan/done/PLAN-kickoff.md")
+5. verdict_submit(verdict="pass", reason_code="other", note="clean ship", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/PLAN-kickoff.md")
 ```
 
 ## If fail

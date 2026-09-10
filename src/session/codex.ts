@@ -70,6 +70,7 @@ interface CodexLine {
 }
 
 interface ModelAcc {
+  provider: string;
   session_count: number;
   tokens_input: number;
   tokens_output: number;
@@ -154,6 +155,7 @@ export function readCodexUsage(
     let fileCwd: string | undefined;
     let fileTimestamp: string | undefined;
     let fileModel: string | undefined;
+    let fileProvider: string = "";
     let hasTokenUsage = false;
 
     const lines = content.split("\n");
@@ -174,6 +176,7 @@ export function readCodexUsage(
         fileModel =
           parsed.payload.model ??
           parsed.payload.base_instructions?.provenance?.model;
+        fileProvider = parsed.payload.model_provider ?? "";
         continue;
       }
 
@@ -208,6 +211,7 @@ export function readCodexUsage(
         let acc = models.get(model);
         if (!acc) {
           acc = {
+            provider: fileProvider,
             session_count: 0,
             tokens_input: 0,
             tokens_output: 0,
@@ -261,6 +265,7 @@ export function readCodexUsage(
 
   const by_model: ModelBreakdown[] = [...models.entries()]
     .map(([model, acc]) => ({
+      provider: acc.provider,
       model,
       session_count: acc.session_count,
       tokens_input: acc.tokens_input,

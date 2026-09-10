@@ -61,8 +61,9 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     lines.push("By Model:");
     lines.push("--------");
     for (const m of data.by_model) {
+      const prefix = m.provider ? `${m.provider}/` : "";
       lines.push(
-        `  ${m.model}: ${m.session_count} sessions, ` +
+        `  ${prefix}${m.model}: ${m.session_count} sessions, ` +
           `${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out, ` +
           `$${m.cost.toFixed(4)}`,
       );
@@ -115,8 +116,9 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     if (zcodeData.by_model.length > 0) {
       lines.push("  by model:");
       for (const m of zcodeData.by_model) {
+        const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input} in / ${m.tokens_output} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
         );
       }
     }
@@ -135,8 +137,9 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     if (claudeCodeData.by_model.length > 0) {
       lines.push("  by model:");
       for (const m of claudeCodeData.by_model) {
+        const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
         );
       }
     }
@@ -155,8 +158,9 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
     if (codexData.by_model.length > 0) {
       lines.push("  by model:");
       for (const m of codexData.by_model) {
+        const prefix = m.provider ? `${m.provider}/` : "";
         lines.push(
-          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
+          `    ${prefix}${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out (cache r/w: ${(m.tokens_cache_read ?? 0).toLocaleString()} / ${(m.tokens_cache_write ?? 0).toLocaleString()})`,
         );
       }
     }

@@ -52,6 +52,7 @@ interface UsageLine {
 }
 
 interface ModelAcc {
+  provider: string;
   session_count: number;
   tokens_input: number;
   tokens_output: number;
@@ -200,6 +201,7 @@ export function readClaudeCodeUsage(
         let acc = models.get(model);
         if (!acc) {
           acc = {
+            provider: "anthropic",
             session_count: 0,
             tokens_input: 0,
             tokens_output: 0,
@@ -329,6 +331,7 @@ export function readClaudeCodeUsage(
 
   const by_model: ModelBreakdown[] = [...models.entries()]
     .map(([model, acc]) => ({
+      provider: acc.provider,
       model,
       session_count: acc.session_count,
       tokens_input: acc.tokens_input,

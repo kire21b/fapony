@@ -31,7 +31,7 @@ interface EvidenceConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const TOTAL_TIMEOUT_MS = 60_000;
+const TOTAL_TIMEOUT_MS = 180_000;
 const CONFIG_PATH = ".fapony/evidence.json";
 
 const VERIFIED_PROVENANCE = { verified: true, source: "fapony_cli" } as const;

@@ -51,6 +51,8 @@ import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
+  testCmdInstallDispatchesCodex,
+  testCmdInstallDispatchesOpencode,
   testCmdInstallDispatchesZcode,
   testCmdInstallRejectsUnknownPlatform,
   testInstallClaudeAbsentAdds,
@@ -59,12 +61,24 @@ import {
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeMissingBinary,
+  testInstallCodexAlreadyConfiguredNoOp,
+  testInstallCodexAppendsEntry,
+  testInstallCodexDryRunNoWrite,
+  testInstallCodexNoConfigFails,
+  testInstallOpencodeAlreadyConfiguredNoOp,
+  testInstallOpencodeDryRunNoWrite,
+  testInstallOpencodeNewFile,
+  testInstallOpencodeParseErrorFails,
   testInstallRootIsRepoRoot,
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
   testInstallZcodeFallbackPath,
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
+  testLinkSkillsCreatesSymlinks,
+  testLinkSkillsDryRunNoWrite,
+  testLinkSkillsIdempotent,
+  testLinkSkillsRefusesOverwrite,
 } from "./install.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
@@ -111,6 +125,12 @@ import {
   testParseToolResult,
   testReasonCodesAreLocked,
 } from "./mcp/helpers.test.js";
+import {
+  testPlanListJoinsRunHistory,
+  testPlanListMissingDir,
+  testPlanListNeverAttempted,
+  testPlanListRequiresWorktree,
+} from "./mcp/plans.test.js";
 import {
   testComputeEvidenceSummaryEmpty,
   testComputeEvidenceSummaryMixed,
@@ -418,7 +438,21 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeMissingBinary();
   testInstallClaudeAddFailureHintsHelp();
   testCmdInstallDispatchesClaude();
+  testLinkSkillsCreatesSymlinks();
+  testLinkSkillsIdempotent();
+  testLinkSkillsRefusesOverwrite();
+  testLinkSkillsDryRunNoWrite();
   testCmdInstallRejectsUnknownPlatform();
+  testInstallOpencodeNewFile();
+  testInstallOpencodeAlreadyConfiguredNoOp();
+  testInstallOpencodeDryRunNoWrite();
+  testInstallOpencodeParseErrorFails();
+  testCmdInstallDispatchesOpencode();
+  testInstallCodexNoConfigFails();
+  testInstallCodexAppendsEntry();
+  testInstallCodexAlreadyConfiguredNoOp();
+  testInstallCodexDryRunNoWrite();
+  testCmdInstallDispatchesCodex();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();
@@ -467,6 +501,10 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitStoresMcpSource();
   testVerdictSubmitAutoCreatesRun();
   testVerdictSubmitAllGrades();
+  testPlanListRequiresWorktree();
+  testPlanListMissingDir();
+  testPlanListNeverAttempted();
+  testPlanListJoinsRunHistory();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
