@@ -3,68 +3,54 @@ name: git-commit-conventional
 description: Commit split by concern with conventional message — use with Claude Code / OpenCode / Codex / ZCode. Trigger on /git-commit and when the user asks to commit changes.
 ---
 
-# Git Commit Conventional — split by concern per fapony rules
+# Git Commit Conventional — split by concern
 
-You are about to commit completed changes.
-**Hard rule: 1 commit per concern** — never bundle multiple unrelated changes.
+**Hard rule: 1 commit per concern.** Never bundle unrelated changes.
 
 ## Before commit
 
-1. `git status --porcelain` — in a shared/multi-agent worktree (e.g. fapony's `wt-*`), files
-   already modified/untracked *before you touched anything this session* are usually earlier
-   in-progress work from another session, not a problem — don't stop for those alone. Only
-   STOP and report if something looks actively wrong: a file mid-edit that changes between two
-   consecutive `git status` checks (another session writing right now — wait for it to settle,
-   don't commit a moving target), or content you can't explain from this conversation's own
-   history and that doesn't look like a coherent feature.
+1. `git status --porcelain` — in a shared/multi-agent worktree (fapony's `wt-*`), files already
+   dirty before this session started are another session's in-progress work, not a problem.
+   STOP and report only if a file changes between two consecutive `git status` calls (someone is
+   writing right now — wait for it to settle), or if content matches nothing in this
+   conversation and doesn't look like a coherent feature.
 2. `git diff --stat HEAD` — see what changed
-3. Split concerns:
-   - `feat: ...` (new feature)
-   - `fix: ...` (bug fix)
-   - `refactor: ...` (refactor, no behavior change)
-   - `docs: ...` (documentation)
-   - `chore: ...` (tooling, deps)
-   - `test: ...` (add/fix tests)
-
-   When pre-existing uncommitted work (not yours) shares a file with your own edits, `git add
-   -p` isn't available in this environment (interactive flags unsupported) — split at file-group
-   granularity by concern instead of by line authorship. A few files or hunks may end up bundled
-   with the concern they most belong to even if they predate your edits; say so in the commit
-   body rather than forcing a line-level split you can't safely do.
+3. Split by type — `feat` `fix` `refactor` `docs` `chore` `test` — one commit each.
+   `git add -p` is unavailable here (interactive flags unsupported), so split at file
+   granularity. If one file mixes your work with someone else's, put it with the concern it
+   mostly belongs to and say so in the body — don't force a line-level split you can't do safely.
 
 ## Format
 
 ```
-<type>(<scope>): <subject — max 72 chars>
+<type>(<scope>): <subject, max 72 chars>
 
-<body — what changed and why, max 76 chars per line>
+<body — what changed and why, wrapped at 76>
 
-Ref <PLAN-file if applicable>
+Ref <PLAN-file, if any>
 
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Co-Authored-By: <the model you are running as> <noreply@anthropic.com>
 ```
 
-### Examples
+`<type>` is exactly one of the six words above — no `feat/fix:`, no two-word types.
+
+### Example
 
 ```
-feat(kickoff): auto-detect PLAN-active.md
+feat(analyze): structural health diagnosis
 
-Before: fapony kickoff --plan plan/PLAN-foo.md
-After: fapony kickoff (auto-detect from plan/PLAN-active.md)
+Reports hub / orphan / cycle / changed-untested files from an import
+graph built live with Bun.Transpiler.scan(). Nothing persisted: 114
+files scan in 16.6ms, so a cache table would be pure debt.
 
-Saves dev from remembering paths. Auto-detect falls back to
-most-recently-modified PLAN-*.md if PLAN-active.md missing.
-
-Ref PLAN-kickoff.md
+Ref PLAN-analyze.md
 ```
 
 ## Rules
 
-- **NEVER git push from this skill** — this skill only commits. Push/PR/merge is [git-pr-merge](../git-pr-merge/SKILL.md)'s job
-- **NEVER --amend** an existing commit unless explicitly authorized
-- **NEVER --no-verify** in hooks that protect the tree — if a pre-commit hook (lint/typecheck)
-  fails on pre-existing code you didn't write, fix it for real (safe autofix + minimal manual
-  fix) before committing rather than bypassing; note in the commit body that the fix wasn't
-  purely for your own change
-- If there's a conflict with main: STOP, report, don't merge yourself
-- Conventional commit = prefix is max 1 word
+- **NEVER push from this skill** — it only commits. Push/PR/merge is [git-ship](../git-ship/SKILL.md)'s job
+- **NEVER `--amend`** an existing commit unless explicitly authorized
+- **NEVER `--no-verify`** — if a pre-commit hook (lint/typecheck) fails on pre-existing code you
+  didn't write, fix it for real (safe autofix + minimal manual fix) and note in the body that
+  the fix wasn't for your own change
+- Conflict with the base branch → STOP and report, don't merge yourself
