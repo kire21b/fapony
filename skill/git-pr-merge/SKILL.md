@@ -43,7 +43,19 @@ git status --porcelain   # re-check right before pushing, not just at the start 
 git push -u origin <branch>
 gh pr create --title "<title>" --body "<body>"
 gh pr merge --squash   # or --merge, per the chosen method
+
+# post-merge — ALWAYS, for a long-lived branch (dev, develop) that was squash-merged:
+git fetch origin
+git reset --hard origin/<default-branch>
+git push --force-with-lease origin <branch>
 ```
+
+The post-merge reset is not optional. Squashing rewrites the commits, so the branch keeps
+originals the base will never have — the two diverge a little more every ship, and GitHub answers
+every later PR with *"Can't automatically merge"* even when the content is identical. Resetting
+the branch onto the freshly merged base makes them the same commit again, so the next PR is clean.
+Skip it only for a throwaway feature branch you're about to delete. It force-pushes, so say so —
+and check `git status --porcelain` is clean first (uncommitted work would be destroyed).
 
 ## Rules
 
@@ -56,14 +68,13 @@ gh pr merge --squash   # or --merge, per the chosen method
 ## If fail
 
 - `gh` not authenticated → tell the user to run `gh auth login`
-- Merge conflict with base branch → STOP, report, don't resolve unilaterally. Exception: if
-  base was previously updated by squash-merging an earlier point of *this same branch* (common
-  with a long-lived `dev` branch merged into `main` repeatedly), the "conflict" can be a false
-  positive from mismatched history rather than real divergent content. Verify before touching
-  anything: `git log branch..base --oneline` to see what base has that the branch doesn't, then
-  diff each of those commits' tree against the branch's history at that point
-  (`git diff <base-commit> <branch-commit-around-same-time>`) — if it's empty, base has nothing
-  the branch doesn't already contain, and it's safe to `git merge base -X ours` (branch wins any
-  textual conflict, since content is a strict superset) and say so. If the diff isn't empty,
-  STOP and report as usual — don't guess.
+- `gh pr create` warns *"Can't automatically merge"* → that's the base's problem, not `gh`'s.
+  The PR still gets created. Don't stop there — go verify it as the next bullet says.
+- Merge conflict with base branch → STOP, report, don't resolve unilaterally. Exception: a
+  long-lived branch that skipped the post-merge reset above — then the "conflict" is squash
+  history mismatch, not divergent content. Verify: `git diff origin/<base> HEAD --stat` versus
+  the diff of the branch's own unmerged commits (`git diff <first-unmerged>~1 HEAD --stat`).
+  Identical means base holds nothing the branch lacks, so `git merge origin/<base> -X ours` is
+  safe (branch wins every textual conflict, content is a strict superset) — say so, merge, then
+  do the post-merge reset so it stops recurring. Not identical → STOP and report, don't guess.
 - CI red → report which check failed, don't merge, don't retry blindly
