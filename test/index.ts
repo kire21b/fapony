@@ -98,9 +98,11 @@ import {
   testHandoffCheckAutoGenerate,
   testHandoffCheckAutoGenerateRequiresAgentReport,
   testHandoffCheckAutoGenerateWithUncertainty,
+  testHandoffCheckBlastRadiusWithWorktree,
   testHandoffCheckGoodHandoff,
   testHandoffCheckMissingBlock,
   testHandoffCheckMultiLineUncertain,
+  testHandoffCheckNoBlastRadiusWithoutWorktree,
   testHandoffCheckNotDoneFails,
   testHandoffCheckUncertainFails,
   testHandoffCheckWithFactsCrossRef,
@@ -507,6 +509,8 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckAutoGenerate();
   testHandoffCheckAutoGenerateRequiresAgentReport();
   testHandoffCheckAutoGenerateWithUncertainty();
+  testHandoffCheckBlastRadiusWithWorktree();
+  testHandoffCheckNoBlastRadiusWithoutWorktree();
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();

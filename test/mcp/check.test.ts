@@ -1,6 +1,9 @@
 // test/mcp/check.test.ts — tests for handoff_check tool + extractMultiField
 
 import assert from "node:assert";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   extractMultiField,
   toolHandoffCheck,
@@ -286,4 +289,73 @@ export function testExtractMultiFieldNotFound(): void {
   const result = extractMultiField("claimed: x", "uncertain");
   assert.deepEqual(result, []);
   console.log("  ✓ extractMultiField returns [] when field missing");
+}
+
+export function testHandoffCheckBlastRadiusWithWorktree(): void {
+  // Create a minimal TS project: hub imported by 3 non-test files
+  const dir = mkdtempSync(join(tmpdir(), "fapony-check-"));
+  try {
+    writeFileSync(join(dir, "hub.ts"), "export const x = 1;\n");
+    writeFileSync(join(dir, "a.ts"), 'import { x } from "./hub.js";\n');
+    writeFileSync(join(dir, "b.ts"), 'import { x } from "./hub.js";\n');
+    writeFileSync(join(dir, "c.ts"), 'import { x } from "./hub.js";\n');
+
+    const handoff = [
+      "## HANDOFF",
+      "claimed: none",
+      "commits: none",
+      "checks: bun run check",
+      "uncertain: none",
+      "not_done: none",
+    ].join("\n");
+
+    const result = toolHandoffCheck({
+      handoff,
+      uncertain: "none",
+      not_done: "none",
+      checks: "bun run check",
+      worktree: dir,
+      facts: { commits: [], files: ["hub.ts"] },
+    });
+
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      blast_radius: Record<string, { dependents: number; tested: boolean }>;
+    };
+    assert.ok(data.blast_radius, "blast_radius must be present");
+    assert.equal(data.blast_radius["hub.ts"].dependents, 3);
+    assert.equal(data.blast_radius["hub.ts"].tested, false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ handoff_check computes blast_radius when worktree provided");
+}
+
+export function testHandoffCheckNoBlastRadiusWithoutWorktree(): void {
+  const handoff = [
+    "## HANDOFF",
+    "claimed: none",
+    "commits: none",
+    "checks: bun run check",
+    "uncertain: none",
+    "not_done: none",
+  ].join("\n");
+
+  const result = toolHandoffCheck({
+    handoff,
+    uncertain: "none",
+    not_done: "none",
+    checks: "bun run check",
+    facts: { commits: [], files: ["hub.ts"] },
+  });
+
+  assert.equal(result.isError, undefined);
+  const data = parseToolResult(result) as {
+    blast_radius?: Record<string, unknown>;
+  };
+  assert.ok(
+    data.blast_radius === null || data.blast_radius === undefined,
+    "blast_radius must be absent without worktree",
+  );
+  console.log("  ✓ handoff_check omits blast_radius when worktree absent");
 }
