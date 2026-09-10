@@ -1,6 +1,7 @@
 // src/mcp/transport.ts — JSON-RPC dispatch + stdio entry point
 
 import { createInterface } from "node:readline";
+import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
   toolFaponyStats,
@@ -79,6 +80,7 @@ function dispatchToolCall(params: {
 // --- Entry point ---
 
 export function cmdMcp(): void {
+  getServerSha(); // cache while the process is still fresh, not on first report call
   const rl = createInterface({ input: process.stdin });
 
   rl.on("line", (line) => {

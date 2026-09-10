@@ -11,6 +11,7 @@ export type {
 export {
   computeEvidenceSummary,
   EVIDENCE_STATUSES,
+  getServerSha,
   renderReportText,
 } from "./primitives.js";
 export {
