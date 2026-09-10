@@ -79,6 +79,31 @@ flowchart LR
     G --> P[project_health → plan-with-me]
 ```
 
+fapony never drives the agent — it is a set of checkpoints the agent walks past. One
+work cycle looks like this:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Agent (any MCP client)
+    participant F as fapony MCP
+    participant W as your worktree
+
+    A->>F: plan_list
+    F-->>A: pending plans + how each one went last time
+    Note over A,W: agent does the actual work — fapony is not involved
+    A->>F: verification_report
+    F->>W: git diff/log + commands from .fapony/evidence.json
+    W-->>F: facts + evidence (passed / failed / timeout / not_run)
+    F-->>A: one report, stamped with server_sha
+    A->>F: verdict_submit (grade + reason_code + note)
+    Note over F: stored in ~/.config/fapony/state.db
+    F-->>A: project_health_context — past notes shape the next plan
+```
+
+`verdict_submit` is the only step that creates knowledge, and `project_health_context`
+is the only reason to keep it. Everything in between is the agent's own business.
+
 ## The 8 tools
 
 ```
