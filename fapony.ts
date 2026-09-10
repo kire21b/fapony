@@ -3,6 +3,7 @@
 // fapony — measure/verify MCP server for coding agents
 // CLI dispatch: all logic lives in src/
 
+import { cmdAnalyze } from "./src/analyze.js";
 import { cmdInit } from "./src/init.js";
 import { cmdInitMem } from "./src/init-mem.js";
 import { cmdInstall } from "./src/install.js";
@@ -17,7 +18,9 @@ import { cmdUsageWeb } from "./src/usage/index.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
-if (cmd === "stats") {
+if (cmd === "analyze") {
+  cmdAnalyze(a);
+} else if (cmd === "stats") {
   cmdStats(a);
 } else if (cmd === "telemetry") {
   await cmdTelemetry(a);
@@ -44,7 +47,7 @@ if (cmd === "stats") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|usage-web|mcp|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|usage-web|analyze|mcp|test> [args]",
   );
   process.exit(1);
 }

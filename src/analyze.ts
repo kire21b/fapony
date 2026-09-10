@@ -1,0 +1,385 @@
+// src/analyze.ts — `fapony analyze`: structural health diagnosis for a TS/JS project.
+//
+// One file on purpose (plan cap: ≤1 new file in src/). Computes a file-level
+// import graph live with Bun.Transpiler.scan() — never persisted, no new table,
+// zero runtime dependency beyond Bun + node builtins. Read-only: never writes
+// into the analyzed directory.
+//
+// Same module also serves handoff_check / verification_report: blastRadius()
+// turns facts.files[] into per-file { dependents, tested } facts.
+
+import type { Dirent } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
+import {
+  dirname as posixDirname,
+  join as posixJoin,
+  normalize as posixNormalize,
+} from "node:path/posix";
+
+// --- Types (mirror SPEC-analyze-checkup.md) ---
+
+export interface ImportGraph {
+  /** Relative POSIX paths scanned. */
+  files: string[];
+  /** file → files it imports. */
+  deps: Map<string, Set<string>>;
+  /** file → files that import it (reverse). */
+  dependents: Map<string, Set<string>>;
+  /** Imports that could not be resolved (bare specifier / alias / builtin). */
+  unresolved: number;
+}
+
+export type FindingKind =
+  | "hub-untested"
+  | "orphan"
+  | "cycle"
+  | "changed-untested";
+
+export interface Finding {
+  kind: FindingKind;
+  file: string;
+  /** Human sentence — the thing people read. */
+  detail: string;
+  /** How to re-check it yourself (file names, cycle path). */
+  evidence: string;
+}
+
+export interface BlastEntry {
+  dependents: number;
+  tested: boolean;
+}
+
+// --- Shared criteria ---
+
+// Same regex collect.ts has always used for test detection — single source of
+// truth now (collect.ts imports isTestFile from here). Do NOT diverge.
+// Word-boundary aware: "test"/"spec" match only as whole path segments, not as
+// substrings of other words (e.g. testing.ts, contest.ts, vitest/ do NOT match).
+export const TEST_PATH_RE =
+  /(?:^|[/._-])(?:test|spec)(?:$|[/._-])|__tests__|\.test\.|\.spec\./i;
+
+export function isTestFile(p: string): boolean {
+  return TEST_PATH_RE.test(p);
+}
+
+const SCAN_EXTS = new Set([".ts", ".tsx", ".js", ".jsx"]);
+
+// Always skipped, hardcoded — no config (per plan: no .faponyignore in v1).
+const SKIP_DIRS = new Set(["node_modules", "dist", "build", ".git"]);
+
+function isSkippedDir(name: string): boolean {
+  return SKIP_DIRS.has(name) || name.startsWith("wt-");
+}
+
+function isEntryPoint(rel: string): boolean {
+  const base = rel.slice(rel.lastIndexOf("/") + 1);
+  return base === "fapony.ts" || base === "index.ts";
+}
+
+// --- File discovery (manual walk, not Bun.Glob) ---
+
+function collectSourceFiles(absDir: string): string[] {
+  const out: string[] = [];
+  const stack: string[] = [absDir];
+  while (stack.length > 0) {
+    const dir = stack.pop() as string;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue; // unreadable dir → skip, never throw
+    }
+    for (const e of entries) {
+      // Never follow symlinks — loop-proof without extra code.
+      if (e.isSymbolicLink()) continue;
+      if (e.isDirectory()) {
+        if (isSkippedDir(e.name)) continue;
+        stack.push(join(dir, e.name));
+      } else if (e.isFile()) {
+        const dot = e.name.lastIndexOf(".");
+        if (dot >= 0 && SCAN_EXTS.has(e.name.slice(dot))) {
+          out.push(relative(absDir, join(dir, e.name)).split(sep).join("/"));
+        }
+      }
+    }
+  }
+  return out.sort();
+}
+
+// --- Import resolution ---
+
+const REQUIRE_RE = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+const IMPORT_TYPE_RE = /\bimport\s+type\s+[^;]*?\bfrom\s*["']([^"']+)["']/g;
+
+const RESOLVE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
+
+function resolveRelative(
+  importerRel: string,
+  raw: string,
+  filesSet: Set<string>,
+): string | null {
+  const base = posixNormalize(posixJoin(posixDirname(importerRel), raw));
+  const candidates = new Set<string>([base, `${base}/index.ts`]);
+  for (const e of RESOLVE_EXTS) candidates.add(base + e);
+  // TS files import the compiled path ("./foo.js") — try the stem too.
+  const dot = base.lastIndexOf(".");
+  if (dot > base.lastIndexOf("/")) {
+    const stem = base.slice(0, dot);
+    for (const e of RESOLVE_EXTS) candidates.add(stem + e);
+    candidates.add(`${stem}/index.ts`);
+  }
+  for (const c of candidates) {
+    if (filesSet.has(c)) return c;
+  }
+  return null;
+}
+
+export function buildGraph(dir: string): ImportGraph {
+  const absDir = resolve(dir);
+  const files = collectSourceFiles(absDir);
+  const filesSet = new Set(files);
+  const deps = new Map<string, Set<string>>();
+  const dependents = new Map<string, Set<string>>();
+  for (const f of files) dependents.set(f, new Set());
+  let unresolved = 0;
+
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+
+  for (const rel of files) {
+    let content: string;
+    try {
+      content = readFileSync(join(absDir, rel), "utf-8");
+    } catch {
+      unresolved++;
+      continue;
+    }
+    const raws: string[] = [];
+    try {
+      const scanned = transpiler.scan(content) as {
+        imports: { path: string }[];
+      };
+      for (const imp of scanned.imports) raws.push(imp.path);
+    } catch {
+      // Syntax-broken file: skip it, count once — never fail the whole run.
+      unresolved++;
+      continue;
+    }
+    // Transpiler.scan blind spots: require() and `import type` are real edges
+    // (changing a type still shakes dependents), so pick them up by regex.
+    // No overlap with scan output above — scan reports neither form.
+    REQUIRE_RE.lastIndex = 0;
+    IMPORT_TYPE_RE.lastIndex = 0;
+    for (const m of content.matchAll(REQUIRE_RE)) raws.push(m[1]);
+    for (const m of content.matchAll(IMPORT_TYPE_RE)) raws.push(m[1]);
+
+    const edges = new Set<string>();
+    for (const raw of raws) {
+      if (raw.startsWith(".")) {
+        const hit = resolveRelative(rel, raw, filesSet);
+        if (hit) edges.add(hit);
+        else unresolved++;
+      } else {
+        // Bare specifier, path alias, bun:/node: builtin — out of scope in v1.
+        unresolved++;
+      }
+    }
+    deps.set(rel, edges);
+  }
+
+  for (const [file, edgeSet] of deps) {
+    for (const dep of edgeSet) {
+      dependents.get(dep)?.add(file);
+    }
+  }
+
+  return { files, deps, dependents, unresolved };
+}
+
+// --- Diagnosis ---
+
+function findCycles(graph: ImportGraph): string[][] {
+  const cycles: string[][] = [];
+  const seen = new Set<string>();
+  const color = new Map<string, number>(); // 1 = on stack, 2 = done
+  const stack: string[] = [];
+
+  function visit(node: string): void {
+    if (cycles.length >= 20) return; // bound work, display caps at 5 anyway
+    color.set(node, 1);
+    stack.push(node);
+    for (const next of graph.deps.get(node) ?? []) {
+      if (cycles.length >= 20) break;
+      const c = color.get(next) ?? 0;
+      if (c === 1) {
+        const cycle = stack.slice(stack.indexOf(next));
+        const key = [...cycle].sort().join("|");
+        if (!seen.has(key)) {
+          seen.add(key);
+          cycles.push(cycle);
+        }
+      } else if (c === 0) {
+        visit(next);
+      }
+    }
+    stack.pop();
+    color.set(node, 2);
+  }
+
+  for (const f of graph.files) {
+    if ((color.get(f) ?? 0) === 0) visit(f);
+  }
+  return cycles;
+}
+
+const KIND_RANK: Record<FindingKind, number> = {
+  cycle: 0,
+  "hub-untested": 1,
+  "changed-untested": 2,
+  orphan: 3,
+};
+
+export function diagnose(
+  graph: ImportGraph,
+  changed: string[] = [],
+): Finding[] {
+  const findings: Finding[] = [];
+  const filesSet = new Set(graph.files);
+
+  for (const cycle of findCycles(graph)) {
+    findings.push({
+      kind: "cycle",
+      file: cycle.join(" ↔ "),
+      detail: "import วนกลับหากัน — refactor ฝั่งไหนก่อนก็พังอีกฝั่ง",
+      evidence: [...cycle, cycle[0]].join(" → "),
+    });
+  }
+
+  const hubUntested: { file: string; n: number }[] = [];
+  for (const f of graph.files) {
+    const deps = graph.dependents.get(f) ?? new Set<string>();
+    if (deps.size === 0) {
+      if (!isEntryPoint(f) && !isTestFile(f)) {
+        findings.push({
+          kind: "orphan",
+          file: f,
+          detail: "ไม่มีใคร import และไม่ใช่ entry point — dead code candidate",
+          evidence: "0 dependents",
+        });
+      }
+    } else if (deps.size >= 3 && ![...deps].some(isTestFile)) {
+      hubUntested.push({ file: f, n: deps.size });
+    }
+  }
+  hubUntested.sort((a, b) => b.n - a.n || (a.file < b.file ? -1 : 1));
+  for (const { file, n } of hubUntested) {
+    const deps = [...(graph.dependents.get(file) ?? [])].sort();
+    const shown = deps.slice(0, 3).join(", ");
+    const rest = n > 3 ? ` … (+${n - 3})` : "";
+    findings.push({
+      kind: "hub-untested",
+      file,
+      detail: `${n} ไฟล์พึ่งอยู่ ไม่มีเทสไหน import มันเลย — แก้ตรงนี้ไม่มีอะไรจับตอนพัง`,
+      evidence: `พึ่งอยู่: ${shown}${rest}`,
+    });
+  }
+
+  for (const c of changed) {
+    if (!filesSet.has(c)) continue;
+    const deps = graph.dependents.get(c) ?? new Set<string>();
+    if (![...deps].some(isTestFile)) {
+      findings.push({
+        kind: "changed-untested",
+        file: c,
+        detail: `เพิ่งแก้แต่ไม่มีเทสไหนพึ่งอยู่ (${deps.size} dependent) — พังแล้วไม่มีอะไรจับ`,
+        evidence:
+          deps.size > 0
+            ? `พึ่งอยู่: ${[...deps].sort().join(", ")}`
+            : "0 dependents",
+      });
+    }
+  }
+
+  findings.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind]);
+  return findings;
+}
+
+// --- Blast radius (for handoff_check / verification_report) ---
+
+export function blastRadius(
+  graph: ImportGraph,
+  files: string[],
+): Record<string, BlastEntry> {
+  const out: Record<string, BlastEntry> = {};
+  for (const f of files) {
+    const deps = graph.dependents.get(f) ?? new Set<string>();
+    out[f] = { dependents: deps.size, tested: [...deps].some(isTestFile) };
+  }
+  return out;
+}
+
+// Convenience for the MCP tools: graph the worktree live, map files[] to
+// blast radius. Null when there is nothing to map or the dir is unreadable —
+// callers render "no blast data", never throw.
+export function blastRadiusForWorktree(
+  worktree: string,
+  files: string[],
+): Record<string, BlastEntry> | null {
+  if (files.length === 0) return null;
+  try {
+    return blastRadius(buildGraph(worktree), files);
+  } catch {
+    return null;
+  }
+}
+
+// --- CLI rendering (plain text only — no ANSI, pipes cleanly) ---
+
+export function formatAnalyze(graph: ImportGraph, findings: Finding[]): string {
+  let imports = 0;
+  for (const s of graph.deps.values()) imports += s.size;
+  const lines: string[] = [];
+  lines.push(
+    `fapony analyze — ${graph.files.length} files scanned (.ts/.tsx/.js/.jsx), ${imports} imports, ${graph.unresolved} unresolved`,
+  );
+  lines.push("");
+
+  if (findings.length === 0) {
+    lines.push("no findings — โครงสร้างไม่มีอะไรน่าห่วง");
+  } else {
+    for (const f of findings.slice(0, 5)) {
+      const icon = f.kind === "orphan" ? "·" : "⚠";
+      lines.push(`  ${icon}  ${f.file}`);
+      lines.push(`     ${f.detail}`);
+      lines.push(`     ${f.evidence}`);
+      lines.push("");
+    }
+    const rest = findings.length - Math.min(findings.length, 5);
+    if (rest > 0) lines.push(`… and ${rest} more`);
+    lines.push(
+      `${findings.length} findings. ${graph.unresolved} unresolved imports (path alias / bare specifier) — ตัวเลข dependent อาจต่ำกว่าจริง`,
+    );
+  }
+  return lines.join("\n");
+}
+
+// --- CLI entry ---
+
+export function cmdAnalyze(args: string[]): void {
+  const dir = args[0] ?? ".";
+  const absDir = resolve(dir);
+  if (!existsSync(absDir)) {
+    console.error(`fapony analyze: "${dir}" does not exist`);
+    process.exit(1);
+  }
+  let graph: ImportGraph;
+  try {
+    graph = buildGraph(absDir);
+  } catch (e) {
+    console.error(
+      `fapony analyze: cannot scan "${dir}": ${e instanceof Error ? e.message : String(e)}`,
+    );
+    process.exit(1);
+  }
+  console.log(formatAnalyze(graph, diagnose(graph)));
+}

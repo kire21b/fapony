@@ -4,6 +4,7 @@
 // run metrics + verdict into a single VerificationReport.
 // Calls existing primitives — no duplicate parser/conformance logic.
 
+import { blastRadiusForWorktree } from "../../analyze.js";
 import { sumSpawnCost } from "../../cost.js";
 import { addEvent, getEvents, getRun, newRun, openDb } from "../../db/index.js";
 import { loadConfig } from "../../db/load.js";
@@ -121,6 +122,7 @@ export function toolVerificationReport(
     deletions: 0,
     commits: [],
     branch: "",
+    files: [],
     git_error: null,
   };
 
@@ -142,6 +144,11 @@ export function toolVerificationReport(
         deletions: collectData.facts.deletions ?? 0,
         commits: collectData.facts.commits ?? [],
         branch: collectData.facts.branch ?? "",
+        files: Array.isArray(collectData.facts.files)
+          ? collectData.facts.files.filter(
+              (f): f is string => typeof f === "string",
+            )
+          : [],
         git_error: collectData.facts.git_error ?? null,
       };
     }
@@ -203,7 +210,11 @@ export function toolVerificationReport(
     ? evidence_commands.filter((c): c is string => typeof c === "string")
     : undefined;
   const evidence = resolvedWorktree
-    ? collectEvidence({ worktree: resolvedWorktree, agentCommands: agentCmds })
+    ? collectEvidence({
+        worktree: resolvedWorktree,
+        agentCommands: agentCmds,
+        config: loadConfig(),
+      })
     : [];
   const evidence_summary = computeEvidenceSummary(evidence);
 
@@ -294,6 +305,9 @@ export function toolVerificationReport(
   const report: VerificationReport = {
     facts,
     handoff_checks: handoffChecks,
+    blast_radius: resolvedWorktree
+      ? blastRadiusForWorktree(resolvedWorktree, facts.files ?? [])
+      : null,
     evidence,
     evidence_summary,
     verdict,

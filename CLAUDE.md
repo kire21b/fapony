@@ -17,7 +17,7 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|setup|stats|telemetry|test|update
+  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|analyze|setup|stats|telemetry|test|update
   fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
   prompts/
     plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
@@ -271,6 +271,7 @@ fapony setup                        # interactive wizard: config + scaffold in o
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
+fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
 ```
 
 <!-- code-review-graph MCP tools -->

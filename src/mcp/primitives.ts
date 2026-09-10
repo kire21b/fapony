@@ -7,6 +7,7 @@
 // §0 rule: add-only — never remove or rename exported symbols.
 
 import { execSync } from "node:child_process";
+import type { BlastEntry } from "../analyze.js";
 import { ROOT } from "../update.js";
 
 // ─── Server build identity ─────────────────────────────────────────────
@@ -134,6 +135,8 @@ export interface VerificationReport {
     commits: string[];
     branch: string;
     git_error: string | null;
+    /** Changed file paths (from handoff_collect) — absent on old reports. */
+    files?: string[];
   };
   /** Handoff conformance checks (from handoff_check). */
   handoff_checks: {
@@ -145,6 +148,11 @@ export interface VerificationReport {
       needs_human_review: boolean;
     };
   } | null;
+  /**
+   * Blast radius of the changed files (from `fapony analyze` graph, live).
+   * Null/absent when no files[] or the worktree can't be scanned.
+   */
+  blast_radius?: Record<string, BlastEntry> | null;
   /** Evidence items (test, typecheck, lint, etc.). */
   evidence: EvidenceItem[];
   /** Evidence summary (computed from evidence array). */
@@ -240,6 +248,18 @@ export function renderReportText(report: VerificationReport): string {
     `commits: ${report.facts.commits.length ? report.facts.commits.join(", ") : "(none)"}`,
   );
 
+  // --- Blast radius ---
+  if (report.blast_radius && Object.keys(report.blast_radius).length > 0) {
+    lines.push("");
+    lines.push("--- blast radius ---");
+    for (const [file, b] of Object.entries(report.blast_radius)) {
+      const flag = b.tested ? "tested" : "⚠ no test imports it";
+      lines.push(
+        `  ${file}: ${b.dependents} dependent${b.dependents === 1 ? "" : "s"} — ${flag}`,
+      );
+    }
+  }
+
   // --- Handoff checks ---
   if (report.handoff_checks) {
     lines.push("");
@@ -258,7 +278,7 @@ export function renderReportText(report: VerificationReport): string {
   lines.push("");
   lines.push("--- evidence ---");
   if (report.evidence.length === 0) {
-    lines.push("not_run (no .fapony/evidence.json)");
+    lines.push("not_run (no evidence allowlist found)");
   } else {
     const es = report.evidence_summary;
     lines.push(
