@@ -10,7 +10,11 @@ import { loadConfig } from "../../db/load.js";
 import { parseGateEventData } from "../../parse.js";
 import { collectEvidence } from "../evidence.js";
 import type { CheckResult, VerificationReport } from "../primitives.js";
-import { computeEvidenceSummary, renderReportText } from "../primitives.js";
+import {
+  computeEvidenceSummary,
+  getServerSha,
+  renderReportText,
+} from "../primitives.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 import { extractMultiField, toolHandoffCheck } from "./check.js";
 import { toolHandoffCollect } from "./collect.js";
@@ -300,6 +304,7 @@ export function toolVerificationReport(
       generated_at: new Date().toISOString(),
       source: "fapony_mcp",
       run_id: resolvedRunId,
+      server_sha: getServerSha(),
     },
   };
 

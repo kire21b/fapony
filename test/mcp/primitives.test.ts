@@ -101,6 +101,7 @@ function makeReport(
       generated_at: "2026-09-08T12:00:00Z",
       source: "fapony_mcp",
       run_id: 42,
+      server_sha: "abc1234",
     },
     ...overrides,
   };
