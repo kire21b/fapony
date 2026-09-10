@@ -161,7 +161,7 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | `skill/scrutinize/` | Outsider review, wired to fapony: known patterns before, verdict after | `/scrutinize` |
 | `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
-| `skill/git-pr-merge/` | Push branch, open PR with drafted title/body, merge | `/pr` |
+| `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
 
 `fapony install --platform claude` (or `opencode`) symlinks these directories into
 `~/.claude/skills` rather than copying them, so `fapony update` refreshes every client

@@ -26,7 +26,7 @@ fapony/
     scrutinize/                 # outsider review + known patterns before, verdict after
     move-to-done/               # archive PLAN หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
-    git-pr-merge/               # push branch, open PR, merge
+    git-ship/                   # push branch, open PR, merge, reset branch onto base
   templates/
     PLAN.md / SPEC.md / memory/  # plan+spec templates, memory scaffold for `fapony init`
   src/

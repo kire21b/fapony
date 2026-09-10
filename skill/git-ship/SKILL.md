@@ -1,11 +1,11 @@
 ---
-name: git-pr-merge
-description: Push the branch, open a PR with an AI-drafted title/body, and merge it — use with Claude Code. Trigger on /git-pr-merge, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
+name: git-ship
+description: Ship a branch end to end — push it, open a PR with an AI-drafted title/body, merge it, then reset a long-lived branch onto the base. Use with Claude Code. Trigger on /git-ship, /ship, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
 ---
 
-# Git PR Merge — push, PR, merge in one go
+# Git Ship — push, PR, merge, reset
 
-You are shipping a branch: push it, open a PR with a drafted title/body, merge it.
+You are shipping a branch: push it, open a PR with a drafted title/body, merge it, reset it.
 Commits should already be split by concern — see [git-commit-conventional](../git-commit-conventional/SKILL.md)
 if they aren't yet.
 
