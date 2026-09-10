@@ -58,6 +58,13 @@ With `.fapony/evidence.json` in place, ask your agent to verify its own work:
 
 You get one report: git facts (files, commits, branch), handoff conformance (claims vs. reality), evidence from the allowlisted commands (pass/fail/timeout/unverified), a 6-grade verdict, and cost — with anything the agent claimed but couldn't prove marked as such.
 
+Sections that have nothing to report say so (`not_run`, `unavailable`) rather than disappearing — a report with no evidence must not read like a report that passed.
+
+Two things worth knowing about the report header and budget:
+
+- **`server_sha`** — every report is stamped with the git SHA of the fapony code that produced it, read once at server start. MCP servers are long-lived: after you edit fapony and don't restart the client, reports keep coming from the old build. Compare the stamp against `git log -1` in the fapony repo; if they differ, reconnect the server before trusting the result.
+- **Evidence budget** — each allowlisted command gets `timeout_ms` (default 30s), and the whole report is capped at 180s total. A command that doesn't fit is reported as `timeout`, never as a pass. Time your real suite and set `timeout_ms` accordingly.
+
 ## How it fits
 
 ```mermaid
@@ -177,7 +184,7 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 **Supported:**
 - MCP server — 8 tools via stdio JSON-RPC, works with any MCP client
 - Measurement: cross-run KPIs by model/grade/value + passive usage (tokens, cost)
-- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed)
+- Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed); reports stamped with the producing build's `server_sha`
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)
 - Opt-in telemetry, off by default ([TELEMETRY.md](TELEMETRY.md) lists exactly what leaves the machine)
