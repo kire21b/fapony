@@ -75,6 +75,7 @@ fapony/
     telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     install.ts          # fapony install --platform opencode|claude|zcode|codex — wire the MCP server into a client
+                        #   + linkSkills(): symlinks skill/<name>/ into ~/.claude/skills (claude/opencode) — never overwrites
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 8 tools
@@ -254,7 +255,7 @@ fapony report-web [file]            # static HTML report page
 fapony usage-web [port] [--full]    # live usage comparison dashboard (OpenCode / ZCode / Claude Code) — default samples (last 30d + last 20k parts), --full for exact all-time
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
-fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client
+fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client (+ symlink skills for claude/opencode)
 fapony setup                        # interactive wizard: config + scaffold in one step
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md

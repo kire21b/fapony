@@ -38,6 +38,8 @@ fapony install --platform opencode        # adds mcp.fapony to your opencode con
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
 fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
 fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+#    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
+#    skill of the same name is reported, never overwritten
 # …or add it manually to any MCP client (e.g. Claude Desktop):
 # { "mcpServers": { "fapony": { "command": "fapony", "args": ["mcp"] } } }
 
@@ -160,6 +162,11 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-pr-merge/` | Push branch, open PR with drafted title/body, merge | `/pr` |
+
+`fapony install --platform claude` (or `opencode`) symlinks these directories into
+`~/.claude/skills` rather than copying them, so `fapony update` refreshes every client
+at once. A destination that already exists and isn't a fapony link is reported and left
+alone — replace it by hand if you want fapony's version.
 
 `plan-with-me` is vendor-neutral — pipe it to any agent:
 

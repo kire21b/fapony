@@ -4,8 +4,19 @@
 // zcode: reads/writes ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json) directly.
 // codex: reads/writes ~/.codex/config.toml directly.
 // All platforms are idempotent + support --dry-run.
+// Claude/OpenCode also get skill/<name>/ symlinked into ~/.claude/skills so
+// `fapony update` reaches them without a second copy to keep in sync.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { assertSafe } from "./safety.js";
@@ -205,6 +216,8 @@ export function cmdInstall(args: string[], deps: InstallDeps = {}): void {
     console.error(`✓ added mcp.${MCP_KEY} to ${configPath}`);
   }
   console.error(`  restart opencode to load the MCP server`);
+  const skillsDir = claudeSkillsDir(deps.homedir ?? (() => homedir()));
+  reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
 }
 
 // --- zcode platform (reads/writes JSON directly; ZCode has no `zcode mcp add` CLI) ---
@@ -410,6 +423,8 @@ export function cmdInstallClaude(
     if (claudeGetPointsToFapony(`${get.stdout}\n${get.stderr}`)) {
       console.error(`✓ mcp.fapony already configured — no change needed`);
       console.error(`  (Claude Code user scope)`);
+      const dir = claudeSkillsDir(deps.homedir ?? (() => homedir()));
+      reportSkills(linkSkills(dir, dryRun), dir, dryRun);
       return;
     }
     console.error(
@@ -443,6 +458,107 @@ export function cmdInstallClaude(
     exitFn(1);
   }
   console.error(`✓ mcp.fapony configured for Claude Code (user scope)`);
+  const skillsDir = claudeSkillsDir(deps.homedir ?? (() => homedir()));
+  reportSkills(linkSkills(skillsDir, dryRun), skillsDir, dryRun);
+}
+
+// --- skills (symlink, never copy) ---
+//
+// A copied skill goes stale the moment fapony updates, and every client would
+// need its own copy to refresh. Symlinking the directory means `fapony update`
+// (a git pull in INSTALL_ROOT) reaches every client at once. The <name>/SKILL.md
+// layout is what Claude Code expects, so the link is directory-to-directory.
+//
+// OpenCode reads ~/.claude/skills too, so linking once covers both.
+
+export type SkillLinkAction = "linked" | "already" | "conflict";
+
+export interface SkillLinkResult {
+  name: string;
+  action: SkillLinkAction;
+}
+
+export function claudeSkillsDir(getHome: () => string): string {
+  return join(getHome(), ".claude", "skills");
+}
+
+/**
+ * Link every skill/<name>/ into `skillsDir`.
+ *
+ * Never overwrites: a destination that already exists and is not already our
+ * link is reported as `conflict` and left alone — it may be the user's own
+ * skill, or another tool's, and clobbering it is not ours to decide.
+ */
+export function linkSkills(
+  skillsDir: string,
+  dryRun: boolean,
+): SkillLinkResult[] {
+  const srcRoot = join(INSTALL_ROOT, "skill");
+  if (!existsSync(srcRoot)) return [];
+
+  const names = readdirSync(srcRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+
+  const out: SkillLinkResult[] = [];
+  for (const name of names) {
+    const src = join(srcRoot, name);
+    const dest = join(skillsDir, name);
+
+    // null = nothing there; "" = exists but not a symlink; else = link target.
+    let existing: string | null;
+    try {
+      existing = lstatSync(dest).isSymbolicLink() ? readlinkSync(dest) : "";
+    } catch {
+      existing = null;
+    }
+
+    if (existing === src) {
+      out.push({ name, action: "already" });
+      continue;
+    }
+    if (existing !== null) {
+      out.push({ name, action: "conflict" });
+      continue;
+    }
+    if (!dryRun) {
+      mkdirSync(skillsDir, { recursive: true });
+      symlinkSync(src, dest);
+    }
+    out.push({ name, action: "linked" });
+  }
+  return out;
+}
+
+function reportSkills(
+  results: SkillLinkResult[],
+  skillsDir: string,
+  dryRun: boolean,
+): void {
+  if (results.length === 0) return;
+
+  const linked = results.filter((r) => r.action === "linked").length;
+  const already = results.filter((r) => r.action === "already").length;
+  const conflicts = results.filter((r) => r.action === "conflict");
+
+  if (linked > 0) {
+    const verb = dryRun ? "would link" : "linked";
+    console.error(
+      `✓ ${verb} ${linked} skill${linked === 1 ? "" : "s"} → ${skillsDir}`,
+    );
+  }
+  if (already > 0) {
+    console.error(`  ${already} already linked — no change`);
+  }
+  for (const c of conflicts) {
+    console.error(
+      `  ! ${c.name} already exists and is not a fapony link — not overwriting`,
+    );
+    console.error(
+      `    to replace: rm -r ${join(skillsDir, c.name)} && ln -s ${join(INSTALL_ROOT, "skill", c.name)} ${join(skillsDir, c.name)}`,
+    );
+  }
 }
 
 // --- codex platform (reads/writes TOML directly; Codex has no CLI for MCP config) ---

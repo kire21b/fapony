@@ -65,6 +65,10 @@ import {
   testInstallZcodeFallbackPath,
   testInstallZcodeNoConfigFails,
   testInstallZcodePrimaryPath,
+  testLinkSkillsCreatesSymlinks,
+  testLinkSkillsDryRunNoWrite,
+  testLinkSkillsIdempotent,
+  testLinkSkillsRefusesOverwrite,
 } from "./install.test.js";
 // MCP handcheck tests (split into test/mcp/)
 import {
@@ -424,6 +428,10 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeMissingBinary();
   testInstallClaudeAddFailureHintsHelp();
   testCmdInstallDispatchesClaude();
+  testLinkSkillsCreatesSymlinks();
+  testLinkSkillsIdempotent();
+  testLinkSkillsRefusesOverwrite();
+  testLinkSkillsDryRunNoWrite();
   testCmdInstallRejectsUnknownPlatform();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
