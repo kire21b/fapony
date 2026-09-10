@@ -1,5 +1,6 @@
 // src/mcp/tools/check.ts — handoff_check tool
 
+import { blastRadiusForWorktree } from "../../analyze.js";
 import type { CheckResult } from "../primitives.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
@@ -45,6 +46,7 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
     uncertain,
     not_done,
     checks: checksArg,
+    worktree,
   } = args;
 
   // Track which fields the agent actually reported (vs auto-generated)
@@ -213,7 +215,7 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
   const passed = checkResults.filter((c) => c.pass).length;
   const failed = checkResults.filter((c) => !c.pass).length;
 
-  return jsonResult({
+  const out: Record<string, unknown> = {
     checks: checkResults,
     summary: {
       total: checkResults.length,
@@ -221,5 +223,21 @@ export function toolHandoffCheck(args: Record<string, unknown>): ToolResult {
       failed,
       needs_human_review: failed > 0,
     },
-  });
+  };
+
+  // Blast radius: only when the caller supplies a worktree to graph against.
+  // facts.files[] comes from handoff_collect. Never throws — null on failure.
+  if (typeof worktree === "string") {
+    const changed =
+      facts &&
+      typeof facts === "object" &&
+      Array.isArray((facts as Record<string, unknown>).files)
+        ? ((facts as Record<string, unknown>).files as unknown[]).filter(
+            (f): f is string => typeof f === "string",
+          )
+        : [];
+    out.blast_radius = blastRadiusForWorktree(worktree, changed);
+  }
+
+  return jsonResult(out);
 }

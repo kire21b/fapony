@@ -10,7 +10,11 @@ You are about to move a PLAN that has been shipped to the archive.
 ## Rules
 
 1. **PLAN must have shipped header** — regex: `^> ✅ \*\*.*shipped.*\*\*$`
-   If missing → STOP, report what's needed
+   If missing, add it yourself, don't ask — invoking this skill *is* the ship claim (the user
+   has already verified the work landed; this step is paperwork). Replace the plan's
+   status/header line with `> ✅ **shipped** (<hash>)`, `<hash>` = `git rev-parse --short HEAD`.
+   Say in the summary that you stamped it, so a wrong HEAD is visible and correctable.
+   STOP only if there's no git repo / no commits to hash from.
 
 2. **Rewrite relative links first** — `.fapony/plan/done/` is 1 level deeper than `.fapony/plan/`
    - Normalize first (remove stacked `../`)
@@ -26,12 +30,15 @@ You are about to move a PLAN that has been shipped to the archive.
    ```bash
    git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/PLAN-foo.md
    ```
+   If git refuses ("not under version control" — `.fapony/` is gitignored in this repo), plain
+   `mv` instead; there's nothing to commit for an untracked path, so skip step 6 in that case.
 
 5. **Archive the related spec too** — if the PLAN's "Source spec:" line points to a file under
-   `.fapony/spec/`, `git mv` it to `.fapony/spec/done/` the same way (normalize its links first).
-   No source spec → skip, don't invent one.
+   `.fapony/spec/`, move it to `.fapony/spec/done/` the same way (same git-mv-or-plain-mv rule,
+   normalize its links first — remember the spec's "Used by" backlink to the plan must also
+   gain the plan's own `done/` segment, since both moved). No source spec → skip, don't invent one.
 
-6. **Commit split by concern**:
+6. **Commit split by concern** (only when the moved files are actually tracked by git):
    ```
    chore(plan): archive PLAN-foo.md (shipped <hash>)
    ```
@@ -62,6 +69,7 @@ Steps:
 
 ## If fail
 
-- File header doesn't match → tell user: "Add header > ✅ **shipped** (<hash>) first"
+- No git repo / no commits (can't derive a shipped hash) → tell user: "Add header > ✅ **shipped** (<hash>) first"
+- Stamped the header yourself → always say which hash you used
 - Link normalize fails → report which paths normalized wrong
 - Too many inbound links → report full list, don't fix yourself

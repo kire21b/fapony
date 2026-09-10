@@ -17,14 +17,16 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|setup|stats|telemetry|test|update
+  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|analyze|setup|stats|telemetry|test|update
   fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
   prompts/
     plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
-  skill/
-    git-commit-conventional.md  # commit แยก concern + conventional message
-    move-to-done.md             # archive PLAN หลัง ship
-    plan-with-me.md             # draft plan + spec จาก conversation
+  skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
+    plan-with-me/               # draft plan + spec จาก conversation
+    scrutinize/                 # outsider review + known patterns before, verdict after
+    move-to-done/               # archive PLAN หลัง ship
+    git-commit-conventional/    # commit แยก concern + conventional message
+    git-pr-merge/               # push branch, open PR, merge
   templates/
     PLAN.md / SPEC.md / memory/  # plan+spec templates, memory scaffold for `fapony init`
   src/
@@ -74,8 +76,15 @@ fapony/
       index.ts            # barrel re-export
     telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
-    install.ts          # fapony install --platform opencode|claude|zcode|codex — wire the MCP server into a client
-                        #   + linkSkills(): symlinks skill/<name>/ into ~/.claude/skills (claude/opencode) — never overwrites
+    install.ts          # barrel — re-exports src/install/ (fapony install --platform …)
+    install/            # one file per client + shared pieces
+      claude.ts         # `claude mcp add` (never writes ~/.claude.json directly)
+      opencode.ts       # ~/.config/opencode/opencode.json(c)
+      zcode.ts          # ~/.zcode/cli/config.json (fallback ~/.agents/mcp.json)
+      codex.ts          # ~/.codex/config.toml
+      skills.ts         # linkSkills() — symlinks skill/<name>/ into ~/.claude/skills, never overwrites
+      types.ts          # InstallDeps / ClaudeRunResult / defaultExit
+      utils.ts          # shared JSON(C) helpers
     update.ts            # fapony update — self-update via git pull (tripwire test คุม ROOT)
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 8 tools
@@ -90,6 +99,8 @@ fapony/
         stats.ts           # fapony_stats — KPI query
         usage.ts           # fapony_usage — passive OpenCode session usage
         report.ts          # verification_report — facts + checks + evidence + verdict + cost, one call
+        plans.ts           # plan_list — pending plan files joined with run history
+        context.ts         # project_health_context — known patterns for plan-with-me
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module
@@ -260,6 +271,7 @@ fapony setup                        # interactive wizard: config + scaffold in o
 fapony update                       # self-update via git pull
 fapony telemetry show|send          # opt-in only, default off — see TELEMETRY.md
 fapony test                         # self-check
+fapony analyze [path]               # structural diagnosis (hub/orphan/cycle/changed-untested) — live graph via Bun.Transpiler.scan(), never persisted (no table: 114 files / 466 imports = 16.6ms, cache would be pure debt)
 ```
 
 <!-- code-review-graph MCP tools -->

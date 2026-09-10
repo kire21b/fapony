@@ -1,6 +1,7 @@
 // src/mcp/tools/collect.ts — handoff_collect tool
 
 import { execSync } from "node:child_process";
+import { isTestFile } from "../../analyze.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 // --- Git helper ---
@@ -111,9 +112,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
   const names = nameResult.ok
     ? nameResult.output.split("\n").filter(Boolean)
     : [];
-  const has_test_changes = names.some((n) =>
-    /test|spec|__tests__|\.test\.|\.spec\./i.test(n),
-  );
+  const has_test_changes = names.some((n) => isTestFile(n));
   const has_docs_changes = names.some((n) => /\.md$/i.test(n));
 
   return jsonResult({
@@ -124,6 +123,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
       deletions,
       commits,
       branch,
+      files: names,
       git_error: gitError ?? null,
     },
     checks: {

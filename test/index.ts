@@ -1,6 +1,14 @@
 // test/index.ts — test runner. Import all test modules and run sequentially.
 
 import {
+  testAnalyzeBlastRadius,
+  testAnalyzeChangedUntested,
+  testAnalyzeEmptyDir,
+  testAnalyzeHubOrphanCycle,
+  testAnalyzeIsTestFile,
+  testAnalyzeSkipsUnresolvableAndBroken,
+} from "./analyze.test.js";
+import {
   testConfigDefaults,
   testConfigFileOverrides,
   testConfigUnknownKeysRideAlong,
@@ -90,9 +98,11 @@ import {
   testHandoffCheckAutoGenerate,
   testHandoffCheckAutoGenerateRequiresAgentReport,
   testHandoffCheckAutoGenerateWithUncertainty,
+  testHandoffCheckBlastRadiusWithWorktree,
   testHandoffCheckGoodHandoff,
   testHandoffCheckMissingBlock,
   testHandoffCheckMultiLineUncertain,
+  testHandoffCheckNoBlastRadiusWithoutWorktree,
   testHandoffCheckNotDoneFails,
   testHandoffCheckUncertainFails,
   testHandoffCheckWithFactsCrossRef,
@@ -103,6 +113,7 @@ import {
   testHandoffCollectExplicitRange,
   testHandoffCollectGitError,
   testHandoffCollectMissingArgs,
+  testHandoffCollectReturnsFiles,
   testHandoffCollectValidRepo,
 } from "./mcp/collect.test.js";
 import {
@@ -114,6 +125,7 @@ import {
   testCollectEvidencePassingCommand,
   testCollectEvidenceRefusesDangerousCommand,
   testCollectEvidenceTimeout,
+  testReadEvidenceConfigCustomPath,
   testReadEvidenceConfigInvalid,
   testReadEvidenceConfigMissing,
   testReadEvidenceConfigValid,
@@ -343,6 +355,12 @@ import { testIsAffirmative } from "./util.test.js";
 export async function cmdTest(): Promise<void> {
   console.log("running tests...\n");
   testAssertSafe();
+  testAnalyzeHubOrphanCycle();
+  testAnalyzeChangedUntested();
+  testAnalyzeSkipsUnresolvableAndBroken();
+  testAnalyzeEmptyDir();
+  testAnalyzeBlastRadius();
+  testAnalyzeIsTestFile();
   testDbLifecycle();
   testSchemaVersionStamped();
   testLegacyDbStampedWithoutDataLoss();
@@ -481,6 +499,7 @@ export async function cmdTest(): Promise<void> {
   testHandoffCollectMissingArgs();
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();
+  testHandoffCollectReturnsFiles();
   testHandoffCollectValidRepo();
   testHandoffCollectGitError();
   testHandoffCheckMissingBlock();
@@ -490,6 +509,8 @@ export async function cmdTest(): Promise<void> {
   testHandoffCheckAutoGenerate();
   testHandoffCheckAutoGenerateRequiresAgentReport();
   testHandoffCheckAutoGenerateWithUncertainty();
+  testHandoffCheckBlastRadiusWithWorktree();
+  testHandoffCheckNoBlastRadiusWithoutWorktree();
   testHandoffCheckWithFactsCrossRef();
   testHandoffCheckWithoutFacts();
   testHandoffCheckMultiLineUncertain();
@@ -529,6 +550,7 @@ export async function cmdTest(): Promise<void> {
   testReadEvidenceConfigMissing();
   testReadEvidenceConfigInvalid();
   testReadEvidenceConfigValid();
+  testReadEvidenceConfigCustomPath();
   testCollectEvidenceNoConfig();
   testCollectEvidencePassingCommand();
   testCollectEvidenceFailingCommand();

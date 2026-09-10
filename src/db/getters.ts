@@ -1,4 +1,5 @@
 import {
+  DEFAULT_EVIDENCE_FILE,
   DEFAULT_MEMORY_ENTRY,
   DEFAULT_PLAN_DIR,
   DEFAULT_SAFETY_DENY,
@@ -20,6 +21,10 @@ export function specDir(config?: Config): string {
 
 export function memoryEntry(config?: Config): string {
   return config?.paths?.memoryEntry ?? DEFAULT_MEMORY_ENTRY;
+}
+
+export function evidenceFile(config?: Config): string {
+  return config?.paths?.evidenceFile ?? DEFAULT_EVIDENCE_FILE;
 }
 
 /** Model attribution for a role: roles.<name>.model or "" when unset. */

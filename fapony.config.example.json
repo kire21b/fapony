@@ -10,7 +10,8 @@
   "paths": {
     "planDir": ".fapony/plan",
     "specDir": ".fapony/spec",
-    "memoryEntry": ".fapony/.memory/mem.ts"
+    "memoryEntry": ".fapony/.memory/mem.ts",
+    "evidenceFile": ".fapony/evidence.json"
   },
   "safety": {
     "deny": [

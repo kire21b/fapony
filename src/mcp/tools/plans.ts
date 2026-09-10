@@ -7,7 +7,13 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Event, openDb, planDir, type Run } from "../../db/index.js";
+import {
+  type Event,
+  loadConfig,
+  openDb,
+  planDir,
+  type Run,
+} from "../../db/index.js";
 import { getLastVerdictByPlan, resolveMaxRounds } from "../../stats/index.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
@@ -25,7 +31,10 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
   const worktree = typeof args.worktree === "string" ? args.worktree : "";
   if (!worktree) return errorResult("worktree is required (absolute path)");
 
-  const dir = join(worktree, planDir());
+  // Config is server-global (FAPONY_CONFIG or cwd/fapony.config.json), like
+  // every other tool — the worktree arg only selects the directory to list.
+  const config = loadConfig();
+  const dir = join(worktree, planDir(config));
   const doneDir = join(dir, "done");
   if (!existsSync(dir)) {
     return jsonResult({ pending: [], done: 0, error: `no plan dir at ${dir}` });

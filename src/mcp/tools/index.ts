@@ -48,7 +48,8 @@ export const TOOLS = [
       "Verify handoff conformance: check that executor's handoff block has " +
       "required fields, no unresolved uncertainty, and facts cross-reference. " +
       "Set auto_generate to true to auto-fill claimed/commits from git facts, " +
-      "but uncertain/not_done/checks must still come from the agent.",
+      "but uncertain/not_done/checks must still come from the agent. " +
+      "When worktree is provided, includes blast_radius of changed files.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -90,6 +91,12 @@ export const TOOLS = [
         plan_ref: {
           type: "string",
           description: "Optional plan file reference",
+        },
+        worktree: {
+          type: "string",
+          description:
+            "Absolute path to git worktree. When provided with facts.files[], " +
+            "computes blast_radius (dependents + tested flag per changed file).",
         },
       },
       required: [],

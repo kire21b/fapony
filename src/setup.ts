@@ -5,6 +5,7 @@ import { execSync } from "node:child_process";
 import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { DEFAULT_MEMORY_ENTRY } from "./db/index.js";
 import { initProject } from "./init.js";
 import { isAffirmative } from "./util.js";
 
@@ -76,7 +77,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   };
 
   if (a.enableMemory) {
-    const memEntry = ".fapony/.memory/mem.ts";
+    const memEntry = DEFAULT_MEMORY_ENTRY;
     config.memory = {
       claim: ["bun", memEntry, "claim", "{id}"],
       close: ["bun", memEntry, "close", "{id}", "{msg}"],

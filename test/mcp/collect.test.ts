@@ -119,3 +119,20 @@ export function testHandoffCollectExplicitRange(): void {
   });
   console.log("  ✓ handoff_collect with explicit range still works");
 }
+
+export function testHandoffCollectReturnsFiles(): void {
+  withTempRepo((dir) => {
+    writeFileSync(join(dir, "b.txt"), "new content\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync("git commit -m 'add b.txt'", { cwd: dir, stdio: "ignore" });
+
+    const result = toolHandoffCollect({ worktree: dir });
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as {
+      facts: { files: string[] };
+    };
+    assert.ok(Array.isArray(data.facts.files));
+    assert.ok(data.facts.files.includes("b.txt"));
+  });
+  console.log("  ✓ handoff_collect returns files[] for blast radius");
+}
