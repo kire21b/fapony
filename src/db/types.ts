@@ -67,6 +67,7 @@ export interface Config {
     planDir?: string;
     specDir?: string;
     memoryEntry?: string;
+    evidenceFile?: string;
   } | null;
   safety?: {
     // regex sources tested against the joined argv; default = the 4 git patterns.

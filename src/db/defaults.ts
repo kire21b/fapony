@@ -9,6 +9,7 @@ export const DEFAULT_SAFETY_DENY = [
 export const DEFAULT_PLAN_DIR = ".fapony/plan";
 export const DEFAULT_SPEC_DIR = ".fapony/spec";
 export const DEFAULT_MEMORY_ENTRY = ".fapony/.memory/mem.ts";
+export const DEFAULT_EVIDENCE_FILE = ".fapony/evidence.json";
 
 export const DEFAULT_CONFIG: Config = {
   worktrees: {},

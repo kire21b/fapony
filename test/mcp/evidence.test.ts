@@ -63,6 +63,45 @@ export function testReadEvidenceConfigValid(): void {
   }
 }
 
+export function testReadEvidenceConfigCustomPath(): void {
+  const dir = makeTmpWorktree();
+  try {
+    mkdirSync(join(dir, "config"), { recursive: true });
+    writeFileSync(
+      join(dir, "config/evidence.json"),
+      JSON.stringify({
+        commands: [{ name: "test", cmd: "echo ok", timeout_ms: 5000 }],
+      }),
+    );
+    // Default path absent — without config, nothing is found…
+    assert.equal(readEvidenceConfig(dir), null);
+    // …with paths.evidenceFile, the custom location is read…
+    const found = readEvidenceConfig(dir, {
+      worktrees: {},
+      review: { maxRounds: 2 },
+      memory: null,
+      paths: { evidenceFile: "config/evidence.json" },
+    });
+    assert.ok(found);
+    assert.equal(found.commands[0].cmd, "echo ok");
+    // …and collectEvidence runs it.
+    const items = collectEvidence({
+      worktree: dir,
+      config: {
+        worktrees: {},
+        review: { maxRounds: 2 },
+        memory: null,
+        paths: { evidenceFile: "config/evidence.json" },
+      },
+    });
+    assert.equal(items.length, 1);
+    assert.equal(items[0].status, "passed");
+    console.log("  ✓ readEvidenceConfig honours paths.evidenceFile");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // --- collectEvidence ---
 
 export function testCollectEvidenceNoConfig(): void {

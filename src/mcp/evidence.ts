@@ -1,6 +1,7 @@
 // src/mcp/evidence.ts — allowlist-based evidence collector
 //
-// Runs only commands listed in `.fapony/evidence.json` inside the worktree,
+// Runs only commands listed in the evidence allowlist (default
+// `.fapony/evidence.json`, movable via paths.evidenceFile) inside the worktree,
 // sequentially, each under assertSafe() + per-command timeout. Returns
 // structured EvidenceItem[] without storing secret output.
 //
@@ -14,11 +15,11 @@
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Config, safetyDeny } from "../db/index.js";
+import { type Config, evidenceFile, safetyDeny } from "../db/index.js";
 import { assertSafe } from "../safety.js";
 import type { EvidenceItem, EvidenceStatus } from "./primitives.js";
 
-// --- Config shape (.fapony/evidence.json) ---
+// --- Config shape (.fapony/evidence.json by default, paths.evidenceFile to move it) ---
 
 interface EvidenceCommand {
   name: string;
@@ -32,15 +33,17 @@ interface EvidenceConfig {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const TOTAL_TIMEOUT_MS = 180_000;
-const CONFIG_PATH = ".fapony/evidence.json";
 
 const VERIFIED_PROVENANCE = { verified: true, source: "fapony_cli" } as const;
 const AGENT_PROVENANCE = { verified: false, source: "agent_report" } as const;
 
 // --- Allowlist reader ---
 
-export function readEvidenceConfig(worktree: string): EvidenceConfig | null {
-  const configPath = join(worktree, CONFIG_PATH);
+export function readEvidenceConfig(
+  worktree: string,
+  config?: Config,
+): EvidenceConfig | null {
+  const configPath = join(worktree, evidenceFile(config));
   if (!existsSync(configPath)) return null;
 
   try {
@@ -163,7 +166,8 @@ export function collectEvidence(options: CollectOptions): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   const deny = safetyDeny(config);
-  const evidenceConfig = readEvidenceConfig(worktree);
+  const evidencePath = evidenceFile(config);
+  const evidenceConfig = readEvidenceConfig(worktree, config);
   const totalStart = Date.now();
 
   const totalTimeoutItem = (
@@ -192,7 +196,7 @@ export function collectEvidence(options: CollectOptions): EvidenceItem[] {
           exit_code: null,
           duration_ms: null,
           provenance: { ...VERIFIED_PROVENANCE },
-          note: "invalid entry in .fapony/evidence.json (cmd must be a non-empty string)",
+          note: `invalid entry in ${evidencePath} (cmd must be a non-empty string)`,
         });
         continue;
       }
@@ -263,7 +267,7 @@ export function collectEvidence(options: CollectOptions): EvidenceItem[] {
         exit_code: null,
         duration_ms: null,
         provenance: { ...AGENT_PROVENANCE },
-        note: "proposed by agent — not in .fapony/evidence.json allowlist, not executed",
+        note: `proposed by agent — not in ${evidencePath} allowlist, not executed`,
       });
     }
   }

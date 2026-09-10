@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type Config,
+  evidenceFile,
   loadConfig,
   memoryEntry,
   planDir,
@@ -22,6 +23,7 @@ export function testConfigDefaults(): void {
   assert.equal(planDir(config), ".fapony/plan");
   assert.equal(specDir(config), ".fapony/spec");
   assert.equal(memoryEntry(config), ".fapony/.memory/mem.ts");
+  assert.equal(evidenceFile(config), ".fapony/evidence.json");
   assert.equal(safetyDeny(config).length, 4);
 
   console.log("  ✓ config defaults = old hardcodes");
@@ -35,13 +37,14 @@ export function testConfigFileOverrides(): void {
       file,
       JSON.stringify({
         review: { maxRounds: 5 },
-        paths: { planDir: "plans" },
+        paths: { planDir: "plans", evidenceFile: "config/evidence.json" },
         safety: { deny: ["custom-bad-cmd"] },
       }),
     );
     const config = loadConfig(file);
     assert.equal(config.review.maxRounds, 5);
     assert.equal(planDir(config), "plans");
+    assert.equal(evidenceFile(config), "config/evidence.json");
     assert.deepEqual(safetyDeny(config), ["custom-bad-cmd"]);
     // unspecified sections keep defaults
     assert.equal(memoryEntry(config), ".fapony/.memory/mem.ts");

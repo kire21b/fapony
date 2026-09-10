@@ -4,8 +4,14 @@
 // never inside the worktree where agents have full write access.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
-import { type Config, memoryEntry, planDir, specDir } from "./db/index.js";
+import { dirname, join, relative } from "node:path";
+import {
+  type Config,
+  evidenceFile,
+  memoryEntry,
+  planDir,
+  specDir,
+} from "./db/index.js";
 import { copyDir } from "./init-mem.js";
 
 const FAPONY_README = `# .fapony/ — fapony project dir (plans, specs, memory)
@@ -46,10 +52,11 @@ export function initProject(targetPath: string, config?: Config): void {
   writeFileSync(join(faponyDir, "README"), FAPONY_README);
 
   // --- evidence.json (verification_report allowlist — see src/mcp/evidence.ts) ---
-  const evidencePath = join(faponyDir, "evidence.json");
+  const evidencePath = join(targetPath, evidenceFile(config));
   if (existsSync(evidencePath)) {
     throw new Error(`${evidencePath} already exists — not overwriting.`);
   }
+  mkdirSync(dirname(evidencePath), { recursive: true });
   writeFileSync(evidencePath, EVIDENCE_JSON);
 
   // --- plan/ spec/ .memory/ — all under .fapony/ ---
@@ -87,7 +94,7 @@ export function initProject(targetPath: string, config?: Config): void {
   console.log(`  ${planDir(config)}/    — plan files`);
   console.log(`  ${specDir(config)}/    — spec files`);
   console.log(
-    `  evidence.json    — allowlist for verification_report (edit the cmds!)`,
+    `  ${evidenceFile(config)}    — allowlist for verification_report (edit the cmds!)`,
   );
   console.log(
     `  ${relative(targetPath, memoryDir)}/ — ${files.length} files from template`,
