@@ -51,6 +51,8 @@ import {
   testClaudeAddUsesAbsolutePath,
   testClaudeGetPointsToFapony,
   testCmdInstallDispatchesClaude,
+  testCmdInstallDispatchesCodex,
+  testCmdInstallDispatchesOpencode,
   testCmdInstallDispatchesZcode,
   testCmdInstallRejectsUnknownPlatform,
   testInstallClaudeAbsentAdds,
@@ -59,6 +61,14 @@ import {
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
   testInstallClaudeMissingBinary,
+  testInstallCodexAlreadyConfiguredNoOp,
+  testInstallCodexAppendsEntry,
+  testInstallCodexDryRunNoWrite,
+  testInstallCodexNoConfigFails,
+  testInstallOpencodeAlreadyConfiguredNoOp,
+  testInstallOpencodeDryRunNoWrite,
+  testInstallOpencodeNewFile,
+  testInstallOpencodeParseErrorFails,
   testInstallRootIsRepoRoot,
   testInstallZcodeAlreadyConfiguredNoOp,
   testInstallZcodeDryRunNoWrite,
@@ -433,6 +443,16 @@ export async function cmdTest(): Promise<void> {
   testLinkSkillsRefusesOverwrite();
   testLinkSkillsDryRunNoWrite();
   testCmdInstallRejectsUnknownPlatform();
+  testInstallOpencodeNewFile();
+  testInstallOpencodeAlreadyConfiguredNoOp();
+  testInstallOpencodeDryRunNoWrite();
+  testInstallOpencodeParseErrorFails();
+  testCmdInstallDispatchesOpencode();
+  testInstallCodexNoConfigFails();
+  testInstallCodexAppendsEntry();
+  testInstallCodexAlreadyConfiguredNoOp();
+  testInstallCodexDryRunNoWrite();
+  testCmdInstallDispatchesCodex();
   testInstallZcodeNoConfigFails();
   testInstallZcodePrimaryPath();
   testInstallZcodeFallbackPath();

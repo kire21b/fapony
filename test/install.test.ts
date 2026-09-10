@@ -18,6 +18,8 @@ import {
   claudeGetPointsToFapony,
   cmdInstall,
   cmdInstallClaude,
+  cmdInstallCodex,
+  cmdInstallOpencode,
   cmdInstallZcode,
   INSTALL_ROOT,
   type InstallDeps,
@@ -511,4 +513,221 @@ export function testLinkSkillsDryRunNoWrite(): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// --- opencode platform tests ---
+
+function opencodeEntry(): Record<string, unknown> {
+  return {
+    type: "local",
+    command: ["bun", "run", "fapony.ts", "mcp"],
+  };
+}
+
+export function testInstallOpencodeNewFile(): void {
+  withTempHome((home) => {
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const targetPath = join(home, ".config", "opencode", "opencode.json");
+    assert.ok(existsSync(targetPath), "opencode.json should be created");
+    const cfg = JSON.parse(readFileSync(targetPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    assert.deepStrictEqual(
+      (cfg.mcp as Record<string, unknown>).fapony,
+      opencodeEntry(),
+    );
+    assert.ok(err.includes("created"), `got: ${err}`);
+    console.log("  ✓ install opencode no config → creates opencode.json");
+  });
+}
+
+export function testInstallOpencodeAlreadyConfiguredNoOp(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".config", "opencode");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "opencode.json");
+    writeJson(configPath, { mcp: { fapony: opencodeEntry() } });
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("already configured"), `got: ${err}`);
+    console.log("  ✓ install opencode already configured → no-op");
+  });
+}
+
+export function testInstallOpencodeDryRunNoWrite(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".config", "opencode");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "opencode.json");
+    writeJson(configPath, {});
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallOpencode(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("dry-run"), `got: ${err}`);
+    assert.ok(err.includes("mcp.fapony"), `got: ${err}`);
+    console.log("  ✓ install opencode dry-run → no write");
+  });
+}
+
+export function testInstallOpencodeParseErrorFails(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".config", "opencode");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "opencode.json");
+    writeFileSync(configPath, "{ not json\n");
+
+    let code: number | null = null;
+    const err = silentErrors(() =>
+      captureErrors(() => {
+        try {
+          cmdInstallOpencode(false, { exit: testExit, homedir: () => home });
+        } catch (e) {
+          code = (e as TestExit).code;
+        }
+      }),
+    );
+    assert.equal(code, 1);
+    assert.ok(err.includes("failed to parse"), `got: ${err}`);
+    console.log("  ✓ install opencode broken config → clear error");
+  });
+}
+
+export function testCmdInstallDispatchesOpencode(): void {
+  withTempHome((home) => {
+    silentErrors(() =>
+      cmdInstall(["opencode"], { exit: testExit, homedir: () => home }),
+    );
+    const targetPath = join(home, ".config", "opencode", "opencode.json");
+    const cfg = JSON.parse(readFileSync(targetPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+    assert.deepStrictEqual(
+      (cfg.mcp as Record<string, unknown>).fapony,
+      opencodeEntry(),
+    );
+    console.log("  ✓ install dispatch routes --platform opencode");
+  });
+}
+
+// --- codex platform tests ---
+
+function codexEntryToml(): string {
+  return `[mcp_servers.fapony]
+command = "bun"
+args = ["run", "${join(INSTALL_ROOT, "fapony.ts")}", "mcp"]
+type = "stdio"
+`;
+}
+
+export function testInstallCodexNoConfigFails(): void {
+  withTempHome((home) => {
+    let code: number | null = null;
+    const err = silentErrors(() =>
+      captureErrors(() => {
+        try {
+          cmdInstallCodex(false, { exit: testExit, homedir: () => home });
+        } catch (e) {
+          code = (e as TestExit).code;
+        }
+      }),
+    );
+    assert.equal(code, 1);
+    assert.ok(err.includes("Codex config not found"), `got: ${err}`);
+    console.log("  ✓ install codex no config → clear error");
+  });
+}
+
+export function testInstallCodexAppendsEntry(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.toml");
+    writeFileSync(configPath, 'model = "gpt-5"\n');
+
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.ok(after.includes("[mcp_servers.fapony]"), `got: ${after}`);
+    assert.ok(after.includes('model = "gpt-5"'), `got: ${after}`);
+    assert.ok(err.includes("added mcp_servers.fapony"), `got: ${err}`);
+    console.log("  ✓ install codex existing config → appends entry");
+  });
+}
+
+export function testInstallCodexAlreadyConfiguredNoOp(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.toml");
+    writeFileSync(configPath, codexEntryToml());
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(false, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("already configured"), `got: ${err}`);
+    console.log("  ✓ install codex already configured → no-op");
+  });
+}
+
+export function testInstallCodexDryRunNoWrite(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.toml");
+    writeFileSync(configPath, 'model = "gpt-5"\n');
+
+    const before = readFileSync(configPath, "utf-8");
+    const err = silentErrors(() =>
+      captureErrors(() =>
+        cmdInstallCodex(true, { exit: testExit, homedir: () => home }),
+      ),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.equal(before, after);
+    assert.ok(err.includes("dry-run"), `got: ${err}`);
+    console.log("  ✓ install codex dry-run → no write");
+  });
+}
+
+export function testCmdInstallDispatchesCodex(): void {
+  withTempHome((home) => {
+    const configDir = join(home, ".codex");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = join(configDir, "config.toml");
+    writeFileSync(configPath, 'model = "gpt-5"\n');
+
+    silentErrors(() =>
+      cmdInstall(["codex"], { exit: testExit, homedir: () => home }),
+    );
+    const after = readFileSync(configPath, "utf-8");
+    assert.ok(after.includes("[mcp_servers.fapony]"), `got: ${after}`);
+    console.log("  ✓ install dispatch routes --platform codex");
+  });
 }
