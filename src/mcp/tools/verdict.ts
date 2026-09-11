@@ -10,6 +10,7 @@ import {
   type ReasonCode,
   type ToolResult,
 } from "../types.js";
+import { resolveWorktreeArg } from "../worktree.js";
 
 // --- Tool implementation ---
 
@@ -45,9 +46,13 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     // Auto-create a run entry for external agents. worktree/plan let callers
     // (e.g. move-to-done) attribute the verdict so byReasonCode/bestPassing
     // aggregate correctly instead of collapsing into "mcp-external".
+    const resolvedWorktree =
+      typeof worktree === "string" && worktree
+        ? resolveWorktreeArg(worktree)
+        : "mcp-external";
     resolvedRunId = newRun(
       db,
-      typeof worktree === "string" && worktree ? worktree : "mcp-external",
+      resolvedWorktree,
       typeof plan === "string" && plan ? plan : null,
       null,
       "mcp",

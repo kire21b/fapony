@@ -17,6 +17,7 @@ import {
   renderReportText,
 } from "../primitives.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
+import { resolveWorktreeArg } from "../worktree.js";
 import { extractMultiField, toolHandoffCheck } from "./check.js";
 import { toolHandoffCollect } from "./collect.js";
 
@@ -91,19 +92,13 @@ export function toolVerificationReport(
         return errorResult(`run ${run_id} not found`);
       }
       resolvedRunId = run_id;
-      // run.worktree is a key (e.g. "falsify"); resolve to absolute path
-      // via config so git commands run in the right directory.
-      const config = loadConfig();
-      const fromConfig = config.worktrees[run.worktree];
-      if (fromConfig) {
-        resolvedWorktree = fromConfig;
-      } else if (run.worktree.includes("/")) {
-        // Already an absolute path (legacy or direct-path storage).
-        resolvedWorktree = run.worktree;
-      } else {
-        return errorResult(
-          `worktree key "${run.worktree}" not found in config. Set FAPONY_CONFIG to the config file that defines this key.`,
-        );
+      // run.worktree may be a key (e.g. "falsify"), an absolute path, or
+      // the "mcp-external" sentinel — resolve via shared helper so git
+      // commands run in the right directory.
+      try {
+        resolvedWorktree = resolveWorktreeArg(run.worktree);
+      } catch (e) {
+        return errorResult((e as Error).message);
       }
     } finally {
       db.close();

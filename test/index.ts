@@ -199,6 +199,12 @@ import {
   testVerdictSubmitSuccess,
 } from "./mcp/verdict.test.js";
 import {
+  testResolveWorktreeArgAbsolutePath,
+  testResolveWorktreeArgKeyLookup,
+  testResolveWorktreeArgKeyNotFound,
+  testResolveWorktreeArgSentinel,
+} from "./mcp/worktree.test.js";
+import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
   testMemoryDefaultWiringNoFile,
@@ -251,6 +257,7 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
+  testCountPendingPlans,
   testStatsBestPassing,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
@@ -570,6 +577,7 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
+  testCountPendingPlans();
   testStatsNoPricingValueIsNull();
   testStatsZeroCostValueIsNull();
   testStatsMultiRoundSeparateGates();
@@ -640,6 +648,10 @@ export async function cmdTest(): Promise<void> {
   testShortModelJsonNoId();
   testShortModelPlainText();
   testShortModelEmptyString();
+  testResolveWorktreeArgAbsolutePath();
+  testResolveWorktreeArgKeyLookup();
+  testResolveWorktreeArgKeyNotFound();
+  testResolveWorktreeArgSentinel();
   testRenderHtmlStructure();
   testRenderHtmlModelNames();
   testRenderHtmlTokenValues();
