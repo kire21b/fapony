@@ -23,7 +23,7 @@ fapony/
     plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
     plan-with-me/               # draft plan + spec จาก conversation
-    review-mantra/              # four-mantra review + known patterns before, verdict after
+    review-pony/                # review as verification + known patterns before, verdict after
     move-to-done/               # archive PLAN หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
     git-ship/                   # push branch, open PR, merge, reset branch onto base
