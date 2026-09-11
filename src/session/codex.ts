@@ -13,6 +13,7 @@ import {
   EMPTY_RESULT,
   type ModelBreakdown,
   type PassiveUsageResult,
+  type UsageDetail,
 } from "./types.js";
 
 const SESSIONS_DIR = join(homedir(), ".codex", "sessions");
@@ -108,11 +109,16 @@ function walkJsonl(dir: string): string[] {
  * Read passive usage from Codex JSONL session files.
  * Returns EMPTY_RESULT when the sessions dir is missing, inaccessible,
  * or has no qualifying token records.
+ *
+ * detail:true adds a UsageDetail — Codex JSONL has no tool_use/tool_result
+ * blocks, so tool_breakdown and bytes_by_tool are empty. Steps are counted
+ * from token_usage_record lines.
  */
 export function readCodexUsage(
   worktree?: string,
   since?: number,
   until?: number,
+  detail?: boolean,
 ): PassiveUsageResult {
   const sessionsDir = resolveSessionsDir();
   try {
@@ -131,6 +137,7 @@ export function readCodexUsage(
   let totalReasoning = 0;
   let totalCacheRead = 0;
   let totalCacheWrite = 0;
+  let totalSteps = 0;
 
   for (const filePath of files) {
     // ponytail: skip files untouched since `since` before reading them —
@@ -207,6 +214,7 @@ export function readCodexUsage(
         // Only count each session id once per file.
         fileSessions.add(sessionId);
         hasTokenUsage = true;
+        totalSteps++;
 
         let acc = models.get(model);
         if (!acc) {
@@ -286,5 +294,15 @@ export function readCodexUsage(
     total_cost: 0, // Codex JSONL has no cost field
     session_count: totalSessions,
     by_model,
+    ...(detail
+      ? {
+          detail: {
+            tool_breakdown: {},
+            steps: totalSteps,
+            by_session: [],
+            note: "Codex JSONL has no tool_use/tool_result blocks — tool breakdown unavailable",
+          } satisfies UsageDetail,
+        }
+      : {}),
   };
 }

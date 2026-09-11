@@ -14,6 +14,8 @@ export interface HealthContextOptions {
   topReasons?: number;
   /** Min runs before trends are reported (default 5 — PLAN §5 sample-size guard). */
   minRuns?: number;
+  /** Filter recentVerdictNotes to only those mentioning these files. */
+  files?: string[];
 }
 
 /**
@@ -28,6 +30,7 @@ export function buildProjectHealthContext(
   const worktree = opts?.worktree;
   const topReasons = opts?.topReasons ?? 3;
   const minRuns = opts?.minRuns ?? 5;
+  const files = opts?.files;
 
   const total = worktree
     ? (data.byWorktree.find((w) => w.worktree === worktree)?.runs ?? 0)
@@ -37,11 +40,26 @@ export function buildProjectHealthContext(
 
   // Recent free-text notes carry signal from N=1 (a specific "worked around
   // X" beats a count) — unlike the trend lines below, not gated by minRuns.
-  const notes = (
-    worktree
-      ? data.recentFailNotes.filter((n) => n.worktree === worktree)
-      : data.recentFailNotes
-  ).slice(0, 3);
+  // Order matters: filter (worktree, then files) BEFORE slicing, so a match
+  // sitting past the top-3 cutoff still surfaces when files[] is given.
+  let notes = worktree
+    ? data.recentVerdictNotes.filter((n) => n.worktree === worktree)
+    : data.recentVerdictNotes;
+  // When files[] is provided, keep only notes that mention at least one of
+  // the target files (substring match on note text or stored files array).
+  if (files && files.length > 0) {
+    const fileSet = new Set(files.map((f) => f.toLowerCase()));
+    notes = notes.filter((n) => {
+      // Check stored files array first (reliable, from gate event data).
+      if (n.files && n.files.length > 0) {
+        return n.files.some((f) => fileSet.has(f.toLowerCase()));
+      }
+      // Fallback: substring match on note text.
+      const noteLower = n.note.toLowerCase();
+      return files.some((f) => noteLower.includes(f.toLowerCase()));
+    });
+  }
+  notes = notes.slice(0, 3);
 
   if (total < minRuns) {
     const lines = [

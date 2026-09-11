@@ -66,7 +66,8 @@ draft, which is worth far more than a question about constraints.
 - If the `project_health_context` MCP tool is available, call it **twice**:
   1. `worktree` = the **absolute path** to this repo (`git rev-parse --show-toplevel`) — patterns
      from this project. Every fapony tool scopes by absolute path, and a bare repo name lands in
-     a different bucket that later queries won't find.
+     a different bucket that later queries won't find. When the plan scope mentions specific files,
+     also pass `files` with those file paths to get file-scoped findings.
   2. **no `worktree` argument at all** — patterns across *every* project sharing this fapony
      state db. This is the cross-project view: habits you repeat everywhere (same reason_code
      failing in three repos) show up here and nowhere else.
@@ -114,7 +115,13 @@ Everything else — risks, examples, step ordering — ships as-is or as `_TBD_`
 
 ## Phase 3 — Write the file
 
-`ls .fapony/plan/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
+**Resolve where plans live first — never assume `.fapony/plan/`.** Read
+`<worktree>/fapony.config.json` and use `paths.planDir` / `paths.specDir`; if the file or those
+keys are missing, fall back to `.fapony/plan` / `.fapony/spec`. Repos that keep plans beside the
+app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
+directory nobody reads.
+
+`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
 it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
 
 Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
@@ -124,7 +131,7 @@ prompts lives at `templates/PLAN.md` in the fapony repo.
 
 Then say where it landed, and that it is meant to move:
 
-> "Written to .fapony/plan/PLAN-<feature>.md. Change it whenever building teaches you something —
+> "Written to <planDir>/PLAN-<feature>.md. Change it whenever building teaches you something —
 > that's the plan working, not the plan failing."
 
 ## Phase 4 — Spec (optional)
@@ -135,11 +142,11 @@ Only if the dev asks, or the plan keeps trying to describe *how*:
 > the detail the plan links to instead of carrying. I can draft one from the plan if you'd rather
 > react than specify."
 
-Then draft `.fapony/spec/SPEC-<feature>.md` by:
+Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 3) by:
 - Referencing sections from the plan directly — don't rewrite
 - More concrete examples than abstract
 - Include "fail examples" to make boundaries clear
-- Opening with a backlink: `> **Used by:** [PLAN-<feature>.md](../plan/PLAN-<feature>.md)` — the
+- Opening with a backlink: `> **Used by:** [PLAN-<feature>.md](<relative path to planDir>/PLAN-<feature>.md)` — the
   plan links out, the spec links back, and the pair becomes a graph with no tooling to maintain
 
 ## Hard rules

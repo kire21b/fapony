@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  mergeBytesByTool,
   readClaudeCodeUsage,
   readCodexUsage,
   readPassiveUsage,
@@ -713,4 +714,27 @@ export function testReadCodexUsageSkipsMalformedLines(): void {
     else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+export function testMergeBytesByToolSumsAcrossClients(): void {
+  const a = {
+    tool_breakdown: {},
+    steps: 0,
+    by_session: [],
+    note: "",
+    bytes_by_tool: { Read: 10 },
+  };
+  const b = {
+    tool_breakdown: {},
+    steps: 0,
+    by_session: [],
+    note: "",
+    bytes_by_tool: { Read: 5, Grep: 3 },
+  };
+  assert.deepStrictEqual(mergeBytesByTool(a, b, null, undefined), {
+    Read: 15,
+    Grep: 3,
+  });
+  assert.deepStrictEqual(mergeBytesByTool(null, undefined), {});
+  console.log("  ✓ mergeBytesByTool sums per-tool bytes across clients");
 }

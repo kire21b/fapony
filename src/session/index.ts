@@ -19,6 +19,7 @@ export {
   type DetailToolRow,
   type ExtractedPartTiming,
   extractPartTiming,
+  mergeBytesByTool,
   parseTimeMs,
   readDetailFromDb,
   readTimingFromDb,

@@ -43,6 +43,8 @@ export interface StepTimingSummary {
 export interface UsageDetail {
   /** Global tool-call counts across the filtered sessions (activity signal, not quality). */
   tool_breakdown: Record<string, number>;
+  /** Context bytes per tool — size of tool_result content blocks. */
+  bytes_by_tool?: Record<string, number>;
   /** Total step-finish parts across the filtered sessions. */
   steps: number;
   /** Per-session breakdown (SQL-aggregated, never raw part rows). */

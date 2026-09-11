@@ -120,6 +120,7 @@ export function readClaudeCodeUsage(
 
   // Detail accumulators (only filled when detail:true).
   const toolBreakdown: Record<string, number> = {};
+  const bytesByTool: Record<string, number> = {};
   const bySession: SessionDetail[] = [];
   const timingInput: TimingInput = {
     durationsMs: [],
@@ -249,6 +250,7 @@ export function readClaudeCodeUsage(
       // latency (matched by tool_use_id), turn gaps as step durations.
       if (detail && fileSessions > 0) {
         const fileTools: Record<string, number> = {};
+        const fileBytesByTool: Record<string, number> = {};
         const turnTs: Array<number | null> = [];
         const useTs = new Map<string, { name: string; ts: number | null }>();
         let fileSteps = 0;
@@ -282,6 +284,15 @@ export function readClaudeCodeUsage(
                     tool: use.name,
                     ms: ts - use.ts,
                   });
+                // Measure context bytes consumed by this tool_result.
+                // JSON.stringify length is a proxy for token count — ratio
+                // error cancels when comparing tool-to-tool (same encoding).
+                if (use) {
+                  const bytes = JSON.stringify(b).length;
+                  fileBytesByTool[use.name] =
+                    (fileBytesByTool[use.name] ?? 0) + bytes;
+                  bytesByTool[use.name] = (bytesByTool[use.name] ?? 0) + bytes;
+                }
               }
             }
           }
@@ -356,6 +367,8 @@ export function readClaudeCodeUsage(
       ? {
           detail: {
             tool_breakdown: toolBreakdown,
+            bytes_by_tool:
+              Object.keys(bytesByTool).length > 0 ? bytesByTool : undefined,
             steps: timingInput.steps,
             by_session: bySession.sort((a, b) => b.steps - a.steps),
             note: "per-turn usage overlaps like per-step tokens — steps is a count only",

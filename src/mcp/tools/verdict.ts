@@ -2,6 +2,7 @@
 
 import {
   findOpenRun,
+  findOpenRunWithNullPlan,
   getRun,
   newRun,
   openDb,
@@ -21,8 +22,16 @@ import { resolveWorktreeArg } from "../worktree.js";
 // --- Tool implementation ---
 
 export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
-  const { run_id, verdict, reason_code, note, worktree, plan, session_id } =
-    args;
+  const {
+    run_id,
+    verdict,
+    reason_code,
+    note,
+    worktree,
+    plan,
+    session_id,
+    files,
+  } = args;
 
   if (typeof verdict !== "string" || !VERDICT_GRADES.has(verdict)) {
     return errorResult(
@@ -53,17 +62,25 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     // Bind to the latest still-open run for the same worktree+plan so a
     // round-2+ verdict lands on the original row (round keeps counting and
     // review.maxRounds can actually trigger). Only when no open run matches
-    // is a fresh row created. plan=null never matches — bare-diff reviews
-    // always open a new run rather than guessing which work they belong to.
+    // is a fresh row created. plan=null always opens a new run (no guess).
+    // Free-text plans are normalized (trim+lowercase) so "Fix Login" and
+    // "fix login" bind to the same run. When no exact match exists, falls
+    // back to any open run with plan=null (the "no PLAN file" flow).
     const resolvedWorktree =
       typeof worktree === "string" && worktree
         ? resolveWorktreeArg(worktree)
         : "mcp-external";
-    const resolvedPlan = typeof plan === "string" && plan ? plan : null;
-    const open =
-      resolvedPlan === null
-        ? null
-        : findOpenRun(db, resolvedWorktree, resolvedPlan);
+    const resolvedPlan =
+      typeof plan === "string" && plan ? plan.trim().toLowerCase() : null;
+    let open = resolvedPlan
+      ? findOpenRun(db, resolvedWorktree, resolvedPlan)
+      : null;
+    // Fallback: if no exact match and plan is non-null, try any open run with
+    // plan=null.  This lets a verdict with free-text intent bind to a run that
+    // was created without a plan (the common "no PLAN file" flow).
+    if (!open && resolvedPlan) {
+      open = findOpenRunWithNullPlan(db, resolvedWorktree);
+    }
     if (open) {
       resolvedRunId = open.id;
     } else {
@@ -74,12 +91,18 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     }
   }
 
+  // Normalize files: must be a non-empty array of strings.
+  const resolvedFiles =
+    Array.isArray(files) && files.length > 0
+      ? files.filter((f): f is string => typeof f === "string" && f.length > 0)
+      : undefined;
+
   // Route through gateOnce for consistent status/round/memory handling.
   const mcpNote =
     typeof note === "string" && note
       ? `[${reason_code}] ${note}`
       : `[${reason_code}]`;
-  const result = gateOnce(resolvedRunId, grade, mcpNote);
+  const result = gateOnce(resolvedRunId, grade, mcpNote, resolvedFiles);
 
   if (result.error) {
     return jsonResult({
@@ -108,5 +131,6 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     reason_code,
     status: result.status,
     round: result.round,
+    ...(resolvedFiles ? { files: resolvedFiles } : {}),
   });
 }

@@ -16,6 +16,7 @@ import {
   testTemplateArgsReplaceAll,
 } from "./config.test.js";
 import {
+  testContextBlockFilesFilterBeyondTop3,
   testContextBlockLineCap,
   testContextBlockLowHistory,
   testContextBlockLowHistoryStillShowsNotes,
@@ -89,7 +90,10 @@ import {
   testInstallClaudeAlreadyConfiguredNoOp,
   testInstallClaudeDifferentCommandRefusesOverwrite,
   testInstallClaudeDryRunNeverAdds,
+  testInstallClaudeForeignScriptRefusesOverwrite,
+  testInstallClaudeForeignStatuslineRefusesOverwrite,
   testInstallClaudeMissingBinary,
+  testInstallClaudeStatuslineWiresSettings,
   testInstallCodexAlreadyConfiguredNoOp,
   testInstallCodexAppendsEntry,
   testInstallCodexDryRunNoWrite,
@@ -163,6 +167,7 @@ import {
   testPlanListMissingDir,
   testPlanListNeverAttempted,
   testPlanListRequiresWorktree,
+  testPlanListUsesWorktreeConfigPaths,
 } from "./mcp/plans.test.js";
 import {
   testComputeEvidenceSummaryEmpty,
@@ -250,6 +255,7 @@ import {
 } from "./report-html.test.js";
 import { testAssertSafe } from "./safety.test.js";
 import {
+  testMergeBytesByToolSumsAcrossClients,
   testReadClaudeCodeUsageFilterByWorktree,
   testReadClaudeCodeUsageNoDir,
   testReadClaudeCodeUsagePrimaryPath,
@@ -303,6 +309,7 @@ import {
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsVerdictNotesNotCappedAtDisplayLimit,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -484,6 +491,7 @@ export async function cmdTest(): Promise<void> {
   testContextBlockNoPatterns();
   testContextBlockLineCap();
   testContextBlockRecentNotes();
+  testContextBlockFilesFilterBeyondTop3();
   testContextBlockLowHistoryStillShowsNotes();
   testContextToolEndToEnd();
   testContextToolEmptyDb();
@@ -507,6 +515,9 @@ export async function cmdTest(): Promise<void> {
   testInstallClaudeAbsentAdds();
   testInstallClaudeAlreadyConfiguredNoOp();
   testInstallClaudeDifferentCommandRefusesOverwrite();
+  testInstallClaudeForeignStatuslineRefusesOverwrite();
+  testInstallClaudeForeignScriptRefusesOverwrite();
+  testInstallClaudeStatuslineWiresSettings();
   testInstallClaudeDryRunNeverAdds();
   testInstallClaudeMissingBinary();
   testInstallClaudeAddFailureHintsHelp();
@@ -584,6 +595,7 @@ export async function cmdTest(): Promise<void> {
   testPlanListMissingDir();
   testPlanListNeverAttempted();
   testPlanListJoinsRunHistory();
+  testPlanListUsesWorktreeConfigPaths();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();
@@ -629,6 +641,7 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
+  testStatsVerdictNotesNotCappedAtDisplayLimit();
   testCountPendingPlans();
   testStatsNoPricingValueIsNull();
   testStatsZeroCostValueIsNull();
@@ -654,6 +667,7 @@ export async function cmdTest(): Promise<void> {
   testSessionDetailSkipsUnknownType();
   testSessionDetailStepTokensNotSummed();
   testSessionDetailMatchesRawSql();
+  testMergeBytesByToolSumsAcrossClients();
   testReadZcodeUsageNoDb();
   testReadZcodeUsagePrimaryPath();
   testReadZcodeUsageDetail();

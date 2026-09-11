@@ -136,6 +136,28 @@ export function aggregateDetail(
   };
 }
 
+/**
+ * Sum `bytes_by_tool` across any number of UsageDetail objects (or nulls).
+ * Only the Claude Code reader populates the field today — SQLite providers
+ * and Codex contribute nothing — so callers must pass every client's detail
+ * (opencode + zcode + claude_code + codex), never just the top-level one.
+ * Returns {} when no client reported bytes.
+ */
+export function mergeBytesByTool(
+  ...details: Array<UsageDetail | null | undefined>
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const d of details) {
+    const bbt = d?.bytes_by_tool;
+    if (!bbt || typeof bbt !== "object") continue;
+    for (const [tool, bytes] of Object.entries(bbt)) {
+      if (typeof bytes !== "number" || bytes <= 0) continue;
+      out[tool] = (out[tool] ?? 0) + bytes;
+    }
+  }
+  return out;
+}
+
 // ─── SQLite detail reader ──────────────────────────────────────────────
 
 /**

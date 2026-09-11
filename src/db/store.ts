@@ -194,6 +194,23 @@ export function findOpenRun(
     .get(worktree, plan) as Run | null;
 }
 
+/**
+ * Latest still-open run with plan=null for a worktree, or null.
+ * Used by MCP verdict_submit as a fallback when no exact plan match is found —
+ * lets a verdict with free-text intent bind to a run that was created without
+ * a plan (the common "no PLAN file" flow).
+ */
+export function findOpenRunWithNullPlan(
+  db: Database,
+  worktree: string,
+): Run | null {
+  return db
+    .prepare(
+      `SELECT * FROM runs WHERE worktree = ? AND plan IS NULL AND status NOT IN ('passed', 'stopped', 'stalled') ORDER BY id DESC LIMIT 1`,
+    )
+    .get(worktree) as Run | null;
+}
+
 export function getEvents(db: Database, runId: number): Event[] {
   return db
     .prepare("SELECT * FROM events WHERE run_id = ? ORDER BY id")

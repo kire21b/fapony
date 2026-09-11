@@ -31,9 +31,14 @@ export function toolPlanList(args: Record<string, unknown>): ToolResult {
   const worktree = typeof args.worktree === "string" ? args.worktree : "";
   if (!worktree) return errorResult("worktree is required (absolute path)");
 
-  // Config is server-global (FAPONY_CONFIG or cwd/fapony.config.json), like
-  // every other tool — the worktree arg only selects the directory to list.
-  const config = loadConfig();
+  // Path layout belongs to the worktree being listed, not to wherever the MCP
+  // server happened to start — a repo that keeps plans in apps/<app>/plan says
+  // so in its own fapony.config.json. Fall back to the server-global config
+  // (FAPONY_CONFIG or cwd) when the worktree has none.
+  const localConfig = join(worktree, "fapony.config.json");
+  const config = existsSync(localConfig)
+    ? loadConfig(localConfig)
+    : loadConfig();
   const dir = join(worktree, planDir(config));
   const doneDir = join(dir, "done");
   if (!existsSync(dir)) {

@@ -14,6 +14,12 @@ export function toolProjectHealthContext(
     typeof args.worktree === "string" && args.worktree
       ? args.worktree
       : undefined;
-  const block = buildProjectHealthContext(getStatsData(), { worktree });
+  const files =
+    Array.isArray(args.files) && args.files.length > 0
+      ? args.files.filter(
+          (f): f is string => typeof f === "string" && f.length > 0,
+        )
+      : undefined;
+  const block = buildProjectHealthContext(getStatsData(), { worktree, files });
   return { content: [{ type: "text", text: block }] };
 }
