@@ -163,6 +163,7 @@ import {
   testPlanListMissingDir,
   testPlanListNeverAttempted,
   testPlanListRequiresWorktree,
+  testPlanListUsesWorktreeConfigPaths,
 } from "./mcp/plans.test.js";
 import {
   testComputeEvidenceSummaryEmpty,
@@ -584,6 +585,7 @@ export async function cmdTest(): Promise<void> {
   testPlanListMissingDir();
   testPlanListNeverAttempted();
   testPlanListJoinsRunHistory();
+  testPlanListUsesWorktreeConfigPaths();
   testEndToEndPipeline();
   testExtractMultiFieldNone();
   testExtractMultiFieldSingle();

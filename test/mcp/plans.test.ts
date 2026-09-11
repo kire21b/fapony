@@ -90,3 +90,24 @@ export function testPlanListJoinsRunHistory(): void {
   });
   console.log("  ✓ plan_list joins pending plan against run history");
 }
+
+export function testPlanListUsesWorktreeConfigPaths(): void {
+  withTempDb(() => {
+    const wt = mkdtempSync(join(tmpdir(), "fapony-plans-cfg-"));
+    mkdirSync(join(wt, "apps", "vela", "plan"), { recursive: true });
+    writeFileSync(
+      join(wt, "fapony.config.json"),
+      JSON.stringify({ paths: { planDir: "apps/vela/plan" } }),
+    );
+    writeFileSync(join(wt, "apps", "vela", "plan", "PLAN-x.md"), "# X plan");
+
+    const result = toolPlanList({ worktree: wt });
+    const data = parseToolResult(result) as {
+      pending: { file: string }[];
+      error?: string;
+    };
+    assert.equal(data.error, undefined);
+    assert.equal(data.pending[0]?.file, "PLAN-x.md");
+  });
+  console.log("  ✓ plan_list honors worktree-local paths.planDir");
+}
