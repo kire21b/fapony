@@ -41,7 +41,28 @@ import {
   testSchemaVersionStamped,
 } from "./db.test.js";
 import {
+  testFindSessionModelClaudeCodeHit,
+  testFindSessionModelClaudeCodeMajority,
+  testFindSessionModelClaudeCodeMiss,
+  testFindSessionModelClaudeCodeTieGoesLast,
+  testFindSessionModelCodexHit,
+  testFindSessionModelCodexMiss,
+  testFindSessionModelCodexMultiMeta,
+  testFindSessionModelCodexMultiMetaTieGoesLast,
+  testFindSessionModelEmptyId,
+  testFindSessionModelNoReadersAvailable,
+  testFindSessionModelOpenCodeHit,
+  testFindSessionModelOpenCodeMiss,
+  testFindSessionModelOpenCodePlainTextProviderUnknown,
+  testFindSessionModelZcodeHit,
+  testFindSessionModelZcodeMiss,
+  testFindSessionModelZcodeMultiModel,
+  testFindSessionModelZcodeRawProviderPassthrough,
+  testFindSessionModelZcodeSummedTokensWin,
+} from "./findModel.test.js";
+import {
   testGateOnceAlreadyPassed,
+  testGateOnceAlreadyStalled,
   testGateOnceFail,
   testGateOnceMaxRounds,
   testGateOncePass,
@@ -163,6 +184,7 @@ import {
   testVerificationReportTextFormat,
   testVerificationReportToolCount,
   testVerificationReportVerdictFromGateEvent,
+  testVerificationReportWorktreeOnlyCreatesNoRun,
 } from "./mcp/report.test.js";
 import {
   testStatsEfficiencyTextFailCensored,
@@ -193,11 +215,20 @@ import {
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
   testVerdictSubmitInvalidVerdict,
+  testVerdictSubmitNullPlanAlwaysCreatesNew,
   testVerdictSubmitOtherRequiresNote,
+  testVerdictSubmitPassedRunNotReused,
+  testVerdictSubmitReusesOpenRunAcrossRounds,
   testVerdictSubmitRunNotFound,
   testVerdictSubmitStoresMcpSource,
   testVerdictSubmitSuccess,
 } from "./mcp/verdict.test.js";
+import {
+  testResolveWorktreeArgAbsolutePath,
+  testResolveWorktreeArgKeyLookup,
+  testResolveWorktreeArgKeyNotFound,
+  testResolveWorktreeArgSentinel,
+} from "./mcp/worktree.test.js";
 import {
   testClaimMemoryFailGracefully,
   testClaimMemoryTimeout,
@@ -211,6 +242,7 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testReportHtmlByModelHasAttributionColumns,
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
@@ -251,7 +283,9 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
+  testCountPendingPlans,
   testStatsBestPassing,
+  testStatsByModelGroupsByClientProviderAgent,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
   testStatsEfficiencyFailIsInfinite,
@@ -263,10 +297,12 @@ import {
   testStatsGateWithoutSpawnsInWindow,
   testStatsLegacyPassMergedWithPassAdequate,
   testStatsModelFromExecutorSpawn,
+  testStatsModelFromSessionIdWhenNoSpawn,
   testStatsMultiRoundSeparateGates,
   testStatsNoPricingValueIsNull,
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
+  testStatsSpawnModelWinsOverSessionId,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -371,11 +407,30 @@ export async function cmdTest(): Promise<void> {
   testGateOncePass();
   testGateOnceFail();
   testGateOnceAlreadyPassed();
+  testGateOnceAlreadyStalled();
   testGateOnceMaxRounds();
   testGateOncePassExcellent();
   testGateOncePassGood();
   testGateOncePassAdequate();
   testGateOnceUncertain();
+  testFindSessionModelOpenCodeHit();
+  testFindSessionModelOpenCodeMiss();
+  testFindSessionModelZcodeHit();
+  testFindSessionModelZcodeMiss();
+  testFindSessionModelZcodeMultiModel();
+  testFindSessionModelZcodeSummedTokensWin();
+  testFindSessionModelZcodeRawProviderPassthrough();
+  testFindSessionModelOpenCodePlainTextProviderUnknown();
+  testFindSessionModelClaudeCodeHit();
+  testFindSessionModelClaudeCodeMiss();
+  testFindSessionModelClaudeCodeMajority();
+  testFindSessionModelClaudeCodeTieGoesLast();
+  testFindSessionModelCodexHit();
+  testFindSessionModelCodexMiss();
+  testFindSessionModelCodexMultiMeta();
+  testFindSessionModelCodexMultiMetaTieGoesLast();
+  testFindSessionModelEmptyId();
+  testFindSessionModelNoReadersAvailable();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
@@ -522,6 +577,9 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitStoresMcpSource();
   testVerdictSubmitAutoCreatesRun();
   testVerdictSubmitAllGrades();
+  testVerdictSubmitReusesOpenRunAcrossRounds();
+  testVerdictSubmitNullPlanAlwaysCreatesNew();
+  testVerdictSubmitPassedRunNotReused();
   testPlanListRequiresWorktree();
   testPlanListMissingDir();
   testPlanListNeverAttempted();
@@ -565,11 +623,13 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportTextFormat();
   testVerificationReportJsonFormat();
   testVerificationReportToolCount();
+  testVerificationReportWorktreeOnlyCreatesNoRun();
   testVerificationReportVerdictFromGateEvent();
   testVerificationReportCheckParity();
   testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
+  testCountPendingPlans();
   testStatsNoPricingValueIsNull();
   testStatsZeroCostValueIsNull();
   testStatsMultiRoundSeparateGates();
@@ -581,6 +641,9 @@ export async function cmdTest(): Promise<void> {
   testStatsPlanBreakdown();
   testStatsBestPassing();
   testStatsModelFromExecutorSpawn();
+  testStatsModelFromSessionIdWhenNoSpawn();
+  testStatsByModelGroupsByClientProviderAgent();
+  testStatsSpawnModelWinsOverSessionId();
   testStatsEfficiencyUsd();
   testStatsEfficiencyBytesProxy();
   testStatsEfficiencyFailIsInfinite();
@@ -625,6 +688,7 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlTotalCostCountsEachSpawnOnce();
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
+  testReportHtmlByModelHasAttributionColumns();
   testReportHtmlEscapesContent();
   // Usage-web tests
   testFmtTokensZero();
@@ -640,6 +704,10 @@ export async function cmdTest(): Promise<void> {
   testShortModelJsonNoId();
   testShortModelPlainText();
   testShortModelEmptyString();
+  testResolveWorktreeArgAbsolutePath();
+  testResolveWorktreeArgKeyLookup();
+  testResolveWorktreeArgKeyNotFound();
+  testResolveWorktreeArgSentinel();
   testRenderHtmlStructure();
   testRenderHtmlModelNames();
   testRenderHtmlTokenValues();

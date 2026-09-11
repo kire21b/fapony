@@ -1,6 +1,10 @@
 // test/stats.test.ts — tests for getStatsData enrichment
 
+import { Database } from "bun:sqlite";
 import assert from "node:assert";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beginSpawn, endSpawn } from "../src/cost.js";
 import {
   addEvent,
@@ -9,7 +13,7 @@ import {
   newRun,
   setStatus,
 } from "../src/db/index.js";
-import { getStatsData } from "../src/stats.js";
+import { countPendingPlans, getStatsData } from "../src/stats.js";
 import { baseConfig, withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
@@ -106,9 +110,12 @@ export function testStatsMultiRoundSeparateGates(): void {
       16,
       "gate 2 cost = round 2 spawns only, not cumulative",
     );
-    // Both gates share the (unknown)-model bucket with gateCount 2
+    // Both gates share the "—"-model bucket with gateCount 2
     assert.equal(data.byModel.length, 1);
-    assert.equal(data.byModel[0].model, "(unknown)");
+    assert.equal(data.byModel[0].model, "—");
+    assert.equal(data.byModel[0].client, "—");
+    assert.equal(data.byModel[0].provider, "—");
+    assert.equal(data.byModel[0].agent, "—");
     assert.equal(data.byModel[0].gateCount, 2);
     // avgQuality over fail(0) + pass-good(4) = 2
     assert.equal(data.byModel[0].avgQuality, 2);
@@ -226,6 +233,222 @@ export function testStatsModelFromExecutorSpawn(): void {
     assert.equal(data.byModel[0].model, "mimo-v2");
   });
   console.log("  ✓ getStatsData: model attribution from executor spawn");
+}
+
+export function testStatsModelFromSessionIdWhenNoSpawn(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // No spawn events — gate has session_id only
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-opencode",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    // Point OpenCode DB at a fixture that has this session
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-"));
+    const dbPath = join(dir, "opencode.db");
+    const ocdb = new Database(dbPath);
+    ocdb.run(
+      `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+    );
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+    );
+    ocdb.run(
+      `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+      .run("p1", "/tmp/wt1");
+    ocdb
+      .prepare(
+        `INSERT INTO session (id, project_id, model, time_created) VALUES (?, ?, ?, ?)`,
+      )
+      .run(
+        "sess-opencode",
+        "p1",
+        '{"providerID":"anthropic","id":"claude-sonnet-5"}',
+        1000,
+      );
+    ocdb.close();
+
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 1);
+      assert.equal(data.byModel[0].model, "claude-sonnet-5");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log(
+    "  ✓ getStatsData: model from session_id when no spawn in window",
+  );
+}
+
+export function testStatsByModelGroupsByClientProviderAgent(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // Same model name on two providers — must land in two different buckets
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-zcode-1",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 1,
+      session_id: "sess-oc-1",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-split-"));
+    const zcPath = join(dir, "zcode.sqlite");
+    const zdb = new Database(zcPath);
+    zdb.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
+        computed_total_tokens INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    zdb
+      .prepare(
+        `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "m1",
+        "sess-zcode-1",
+        "GLM-5.3-Flash",
+        "builtin:zai-start-plan",
+        "zcode-Explore",
+        5000,
+      );
+    zdb.close();
+
+    const ocPath = join(dir, "opencode.db");
+    const ocdb = new Database(ocPath);
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO session (id, project_id, model) VALUES (?, ?, ?)`)
+      .run(
+        "sess-oc-1",
+        "p1",
+        '{"providerID":"other-provider","id":"GLM-5.3-Flash"}',
+      );
+    ocdb.close();
+
+    const prevOC = process.env.FAPONY_OPENCODE_DB;
+    const prevZC = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = ocPath;
+      process.env.FAPONY_ZCODE_DB = zcPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 2, "same name ≠ same bucket");
+      const zc = data.byModel.find((m) => m.client === "zcode")!;
+      const oc = data.byModel.find((m) => m.client === "opencode")!;
+      assert.ok(zc && oc);
+      assert.equal(zc.provider, "builtin:zai-start-plan");
+      assert.equal(zc.model, "GLM-5.3-Flash");
+      assert.equal(zc.agent, "zcode-Explore");
+      assert.equal(oc.provider, "other-provider");
+      assert.equal(oc.model, "GLM-5.3-Flash");
+      assert.equal(oc.agent, "—");
+    } finally {
+      if (prevOC === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prevOC;
+      if (prevZC === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = prevZC;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ getStatsData: byModel splits same model across providers");
+}
+
+export function testStatsSpawnModelWinsOverSessionId(): void {
+  withTmpDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      roles: { executor: { model: "mimo-v2" } },
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // Executor spawn with model — gate also has session_id pointing elsewhere
+    const s1 = beginSpawn(db, runId, config, "executor", "prompt");
+    endSpawn(db, s1, config, "executor", "output");
+
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-other",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    // OpenCode DB with a *different* model for session_id
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-"));
+    const dbPath = join(dir, "opencode.db");
+    const ocdb = new Database(dbPath);
+    ocdb.run(
+      `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+    );
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+    );
+    ocdb.run(
+      `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+      .run("p1", "/tmp/wt1");
+    ocdb
+      .prepare(
+        `INSERT INTO session (id, project_id, model, time_created) VALUES (?, ?, ?, ?)`,
+      )
+      .run(
+        "sess-other",
+        "p1",
+        '{"providerID":"anthropic","id":"claude-opus-5"}',
+        1000,
+      );
+    ocdb.close();
+
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 1);
+      // Spawn model wins — session_id is fallback only
+      assert.equal(data.byModel[0].model, "mimo-v2");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ getStatsData: spawn model wins over session_id fallback");
 }
 
 function setRunMinutes(
@@ -469,4 +692,33 @@ export function testStatsBestPassing(): void {
     assert.equal(data.bestPassing[0].worktree, "wt1");
   });
   console.log("  ✓ getStatsData: bestPassing only round-1 passes with a plan");
+}
+
+export function testCountPendingPlans(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-pending-"));
+  try {
+    // No fapony.config.json → falls back to the .fapony/plan scaffold default.
+    mkdirSync(join(dir, ".fapony/plan/done"), { recursive: true });
+    writeFileSync(join(dir, ".fapony/plan/PLAN-a.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/PLAN-b.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/done/PLAN-old.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/notes.txt"), "");
+    assert.equal(countPendingPlans(dir), 2);
+
+    // paths.planDir in the target repo's own config wins over the default.
+    mkdirSync(join(dir, "apps/x/plan"), { recursive: true });
+    writeFileSync(join(dir, "apps/x/plan/PLAN-c.md"), "");
+    writeFileSync(
+      join(dir, "fapony.config.json"),
+      JSON.stringify({ paths: { planDir: "apps/x/plan" } }),
+    );
+    assert.equal(countPendingPlans(dir), 1);
+
+    // Uncountable → null, never 0 ("no plan dir" must not read as "none pending").
+    assert.equal(countPendingPlans(join(dir, "nope")), null);
+    assert.equal(countPendingPlans("mcp-external"), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ countPendingPlans: done/ excluded, null when uncountable");
 }

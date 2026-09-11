@@ -14,7 +14,7 @@ import { isPassFamily, type VerdictGrade } from "./parse.js";
 
 export interface GateResult {
   runId: number;
-  status: "passed" | "fixing" | "stopped";
+  status: "passed" | "fixing" | "stopped" | "stalled";
   round?: number;
   error?: string;
 }
@@ -25,7 +25,7 @@ export interface GateResult {
  *
  * Verdict routing (3 groups):
  *   pass-family (pass-excellent|pass-good|pass-adequate|pass) → passed
- *   fail → fixing (+ round cap check)
+ *   fail → fixing (+ round cap check → stalled)
  *   uncertain → stopped (same shape as round-cap path)
  */
 export function gateOnce(
@@ -38,10 +38,15 @@ export function gateOnce(
   if (!run) {
     return { runId, status: "stopped", error: `run ${runId} not found` };
   }
-  if (run.status === "passed" || run.status === "stopped") {
+  if (
+    run.status === "passed" ||
+    run.status === "stopped" ||
+    run.status === "stalled"
+  ) {
     return {
       runId,
       status: run.status,
+      round: run.round,
       error: `run ${runId} is already ${run.status}`,
     };
   }
@@ -63,7 +68,7 @@ export function gateOnce(
     const kickoff = kickoffMemory(config, worktree);
     if (kickoff) console.log(kickoff);
 
-    return { runId, status: "passed" };
+    return { runId, status: "passed", round: run.round };
   }
 
   // --- uncertain → stop (plan problem, same as round-cap) ---
@@ -81,7 +86,7 @@ export function gateOnce(
       );
       addEvent(db, runId, "memory_claim_closed", { mem_id: run.mem_id });
     }
-    return { runId, status: "stopped" };
+    return { runId, status: "stopped", round: run.round };
   }
 
   // --- fail → back to executor, one more round ---
@@ -100,9 +105,11 @@ export function gateOnce(
   }
 
   if (updated.round > config.review.maxRounds) {
-    // Round cap reached — the plan is the problem, stop for real. Persist it
+    // Round cap reached — the plan is the problem, stall for real. Persist it
     // (else the run sits in 'fixing' forever) and release the memory claim.
-    setStatus(db, runId, "stopped");
+    // stalled (not stopped): tells the caller to take it back to the human
+    // instead of sending the agent for another fix round.
+    setStatus(db, runId, "stalled");
     addEvent(db, runId, "stop", {
       reason: `round ${updated.round} > maxRounds ${config.review.maxRounds}`,
     });
@@ -111,15 +118,15 @@ export function gateOnce(
         config,
         worktree,
         run.mem_id,
-        `run ${runId} stopped at round cap`,
+        `run ${runId} stalled at round cap`,
       );
       addEvent(db, runId, "memory_claim_closed", { mem_id: run.mem_id });
     }
     return {
       runId,
-      status: "stopped",
+      status: "stalled",
       round: updated.round,
-      error: `round ${updated.round} > maxRounds ${config.review.maxRounds} — plan likely has a problem`,
+      error: `round ${updated.round} > maxRounds ${config.review.maxRounds} — stop fixing and take it back to the human, the plan likely has a problem`,
     };
   }
 

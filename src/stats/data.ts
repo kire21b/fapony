@@ -1,5 +1,8 @@
 // src/stats/data.ts — StatsData shape + getStatsData() + computeEfficiency()
 
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { sumSpawnCost } from "../cost.js";
 import { type Event, openDb, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
@@ -44,6 +47,9 @@ interface EnrichedGate {
   verdict: string;
   costUSD: number | null;
   model: string | null;
+  provider: string | null;
+  client: string | null;
+  agent: string | null;
   valueScore: number | null;
 }
 
@@ -64,6 +70,9 @@ function enrichGates(events: Event[]): EnrichedGate[] {
       verdict: w.verdict,
       costUSD: w.costUSD,
       model: w.model,
+      provider: w.provider,
+      client: w.client,
+      agent: w.agent,
       valueScore,
     };
   });
@@ -156,6 +165,37 @@ export function computeEfficiency(
     });
   }
   return out.sort((a, b) => a.runId - b.runId);
+}
+
+/**
+ * Count un-shipped plan files in a worktree's planDir.
+ *
+ * Reads the *target repo's own* fapony.config.json for `paths.planDir` — the
+ * central config's worktrees map is optional and usually absent, and each repo
+ * picks its own plan dir (vela uses apps/vela/plan, not .fapony/plan).
+ *
+ * Returns null — never 0 — when the path isn't a readable directory, so a
+ * sentinel row like "mcp-external" renders as "—" instead of claiming
+ * "nothing pending", which would be a lie.
+ */
+export function countPendingPlans(worktree: string): number | null {
+  if (!worktree.startsWith("/")) return null;
+  let planDir = ".fapony/plan";
+  try {
+    const cfg = JSON.parse(
+      readFileSync(join(worktree, "fapony.config.json"), "utf8"),
+    ) as { paths?: { planDir?: unknown } };
+    if (typeof cfg.paths?.planDir === "string" && cfg.paths.planDir)
+      planDir = cfg.paths.planDir;
+  } catch {
+    // no config (or unreadable/malformed) — fall back to the scaffold default
+  }
+  try {
+    return readdirSync(join(worktree, planDir)).filter((f) => f.endsWith(".md"))
+      .length;
+  } catch {
+    return null;
+  }
 }
 
 // --- Cross-run knowledge queries (PLAN-project-health-context §2) ---
@@ -466,7 +506,10 @@ export interface StatsData {
     review: { avg: number; count: number };
   };
   byModel: Array<{
+    client: string;
+    provider: string;
     model: string;
+    agent: string;
     gateCount: number;
     avgQuality: number;
     avgCostUSD: number | null;
@@ -482,6 +525,8 @@ export interface StatsData {
     runs: number;
     passed: number;
     stalled: number;
+    /** Un-shipped plan files in that repo's planDir, or null when uncountable. */
+    pending: number | null;
   }>;
   /** Derived ES/CPQ per run (PLAN-usage-depth §3) — additive, always present. */
   efficiency: RunEfficiency[];
@@ -551,9 +596,16 @@ export function getStatsData(): StatsData {
     // --- Gate enrichment ---
     const enriched = enrichGates(events);
 
+    // Group by client+provider+model+agent — the same model name on two
+    // providers is two different things. Unknown dimension → "—" (never ""
+    // or "(unknown)").
     const modelMap: Record<
       string,
       {
+        client: string;
+        provider: string;
+        model: string;
+        agent: string;
         gateCount: number;
         qualities: number[];
         costs: number[];
@@ -561,8 +613,16 @@ export function getStatsData(): StatsData {
       }
     > = {};
     for (const g of enriched) {
-      const m = g.model ?? "(unknown)";
-      const bucket = (modelMap[m] ??= {
+      const client = g.client ?? "—";
+      const provider = g.provider ?? "—";
+      const model = g.model ?? "—";
+      const agent = g.agent ?? "—";
+      const key = [client, provider, model, agent].join("\0");
+      const bucket = (modelMap[key] ??= {
+        client,
+        provider,
+        model,
+        agent,
         gateCount: 0,
         qualities: [],
         costs: [],
@@ -574,9 +634,12 @@ export function getStatsData(): StatsData {
       if (g.costUSD !== null) bucket.costs.push(g.costUSD);
       if (g.valueScore !== null) bucket.values.push(g.valueScore);
     }
-    const byModel = Object.entries(modelMap)
-      .map(([model, b]) => ({
-        model,
+    const byModel = Object.values(modelMap)
+      .map((b) => ({
+        client: b.client,
+        provider: b.provider,
+        model: b.model,
+        agent: b.agent,
         gateCount: b.gateCount,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         avgCostUSD: b.costs.length ? avg(b.costs) : null,
@@ -610,7 +673,11 @@ export function getStatsData(): StatsData {
       if (r.status === "stalled") b.stalled++;
     }
     const byWorktree = Object.entries(wtMap)
-      .map(([worktree, b]) => ({ worktree, ...b }))
+      .map(([worktree, b]) => ({
+        worktree,
+        ...b,
+        pending: countPendingPlans(worktree),
+      }))
       .sort((a, b) => b.runs - a.runs);
 
     const usage = readPassiveUsage();

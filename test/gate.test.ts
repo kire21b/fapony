@@ -58,6 +58,19 @@ export function testGateOnceAlreadyPassed(): void {
   console.log("  ✓ gateOnce already passed");
 }
 
+export function testGateOnceAlreadyStalled(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
+    setStatus(db, runId, "stalled");
+
+    const result = gateOnce(runId, "fail", "one more try");
+    assert.equal(result.status, "stalled");
+    assert(result.error?.includes("already"), "should say already stalled");
+  });
+
+  console.log("  ✓ gateOnce already stalled");
+}
+
 export function testGateOnceMaxRounds(): void {
   withTmpDb((db) => {
     const runId = newRun(db, "test-wt", "plan.md", "mem-1", "abc123");
@@ -73,14 +86,18 @@ export function testGateOnceMaxRounds(): void {
     const r2 = getRun(db, runId)!;
     assert.equal(r2.round, 2);
 
-    // Third fail — round 3 > 2, so stops
+    // Third fail — round 3 > 2, so stalls (back to the human, no more fixes)
     setStatus(db, runId, "awaiting_review");
     const result = gateOnce(runId, "fail", "round 3");
-    assert.equal(result.status, "stopped");
+    assert.equal(result.status, "stalled");
     assert(result.error?.includes("maxRounds"), "should mention maxRounds");
+    assert(
+      result.error?.includes("human"),
+      "should tell the caller to go back to the human",
+    );
 
-    // stopped must be persisted (run must not sit in 'fixing' forever)
-    assert.equal(getRun(db, runId)?.status, "stopped");
+    // stalled must be persisted (run must not sit in 'fixing' forever)
+    assert.equal(getRun(db, runId)?.status, "stalled");
     const stops = db
       .prepare("SELECT * FROM events WHERE run_id = ? AND kind = 'stop'")
       .all(runId) as { data: string }[];

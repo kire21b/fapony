@@ -127,7 +127,7 @@ plan:     project_health_context (known patterns from history → plan-with-pony
 | `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
 | `project_health_context` | plan | Known-patterns block for plan-with-pony: recurring fail reasons, escalated runs, round-1-pass shapes |
 
-Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page. `fapony usage-web [port]` starts a live comparison dashboard across OpenCode, ZCode, Claude Code, and Codex sessions — by default it samples (OpenCode/ZCode timing: last 20k parts; Claude Code/Codex: last 30 days, skipped by file mtime so old JSONL history is never read) instead of scanning everything; pass `--full` for an exact all-time scan. The dashboard title shows which mode is active.
+Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-web [port]` starts a live comparison dashboard across OpenCode, ZCode, Claude Code, and Codex sessions — by default it samples (OpenCode/ZCode timing: last 20k parts; Claude Code/Codex: last 30 days, skipped by file mtime so old JSONL history is never read) instead of scanning everything; pass `--full` for an exact all-time scan. The dashboard title shows which mode is active.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 

@@ -135,8 +135,14 @@ Always attach a one-line `note`. Grades and codes only count; the note is the on
 review can act on. Say what specifically broke or was walked, not that a review happened.
 
 Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), and `plan` (the
-PLAN file path under review, omitted for a bare PR/diff). No `run_id` — a run row is created
-automatically for external callers.
+PLAN file path under review, omitted for a bare PR/diff). No `run_id` — fapony reuses the
+latest still-open run for the same worktree+plan (so round 2+ counts toward the round cap),
+creating a row only when none is open.
+
+`session_id` (optional) — the client session id so fapony can attribute the model from the session
+log when no spawn events exist. OpenCode/ZCode: the session id string. Claude Code/Codex: the
+`.jsonl` file path. Only send it if the client exposes it; if not, omit — never block the submit
+on it.
 
 If `verdict_submit` errors, say so in one line and move on. Never re-run a review because storage
 failed.

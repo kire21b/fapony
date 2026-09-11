@@ -173,6 +173,27 @@ export function getActiveRuns(db: Database): Run[] {
     .all() as Run[];
 }
 
+/**
+ * Latest still-open run for a worktree+plan pair, or null.
+ * Used by MCP verdict_submit to bind a round-2+ verdict to the original run
+ * instead of opening one row per review (which kept every run at round 0 and
+ * made review.maxRounds untriggerable). No time window: a passed verdict
+ * already closes the run to terminal, so any open match is a failed-not-yet-
+ * fixed piece of work that the new verdict belongs to. plan=null never
+ * matches — bare-diff reviews always open a fresh run.
+ */
+export function findOpenRun(
+  db: Database,
+  worktree: string,
+  plan: string,
+): Run | null {
+  return db
+    .prepare(
+      `SELECT * FROM runs WHERE worktree = ? AND plan = ? AND status NOT IN ('passed', 'stopped', 'stalled') ORDER BY id DESC LIMIT 1`,
+    )
+    .get(worktree, plan) as Run | null;
+}
+
 export function getEvents(db: Database, runId: number): Event[] {
   return db
     .prepare("SELECT * FROM events WHERE run_id = ? ORDER BY id")

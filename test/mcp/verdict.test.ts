@@ -4,7 +4,7 @@ import assert from "node:assert";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { newRun, openDb } from "../../src/db/index.js";
+import { getRun, newRun, openDb } from "../../src/db/index.js";
 import { toolVerdictSubmit } from "../../src/mcp/tools/verdict.js";
 import { parseToolResult } from "../../src/mcp/types.js";
 
@@ -201,4 +201,124 @@ export function testVerdictSubmitAllGrades(): void {
     });
   }
   console.log("  ✓ verdict_submit accepts all 6 grades");
+}
+
+interface VerdictResponse {
+  stored: boolean;
+  run_id?: number;
+  verdict?: string;
+  reason_code?: string;
+  status?: string;
+  round?: number;
+  error?: string;
+}
+
+function submit(args: Record<string, unknown>): VerdictResponse {
+  return parseToolResult(toolVerdictSubmit(args)) as VerdictResponse;
+}
+
+export function testVerdictSubmitReusesOpenRunAcrossRounds(): void {
+  withTempDb(() => {
+    const wt = "/tmp/reuse-wt";
+    const plan = ".fapony/plan/PLAN-reuse.md";
+
+    // Round 1: fail with no run_id → fresh run at round 1
+    const r1 = submit({
+      verdict: "fail",
+      reason_code: "spec_gap",
+      note: "round 1",
+      worktree: wt,
+      plan,
+    });
+    assert.equal(r1.stored, true);
+    assert.equal(r1.status, "fixing");
+    assert.equal(r1.round, 1);
+
+    // Round 2: same worktree+plan, no run_id → same run, round 2
+    const r2 = submit({
+      verdict: "fail",
+      reason_code: "spec_gap",
+      note: "round 2",
+      worktree: wt,
+      plan,
+    });
+    assert.equal(r2.stored, true);
+    assert.equal(r2.run_id, r1.run_id, "round 2 must bind the original run");
+    assert.equal(r2.round, 2);
+
+    // Round 3: past maxRounds (default 2) → stalled, back to the human
+    const r3 = submit({
+      verdict: "fail",
+      reason_code: "spec_gap",
+      note: "round 3",
+      worktree: wt,
+      plan,
+    });
+    assert.equal(r3.run_id, r1.run_id, "cap verdict still lands on the run");
+    assert.equal(r3.status, "stalled");
+    assert.equal(r3.round, 3);
+    assert.ok(r3.error?.includes("human"), "must tell caller to find a human");
+
+    const db = openDb();
+    try {
+      assert.equal(getRun(db, r1.run_id!)?.status, "stalled");
+      assert.equal(getRun(db, r1.run_id!)?.round, 3);
+    } finally {
+      db.close();
+    }
+  });
+  console.log(
+    "  ✓ verdict_submit reuses open run across rounds, stalls past cap",
+  );
+}
+
+export function testVerdictSubmitNullPlanAlwaysCreatesNew(): void {
+  withTempDb(() => {
+    // Bare-diff reviews carry no plan — never guess they are the same work.
+    const a = submit({
+      verdict: "fail",
+      reason_code: "other",
+      note: "bare diff 1",
+      worktree: "/tmp/bare-wt",
+    });
+    const b = submit({
+      verdict: "fail",
+      reason_code: "other",
+      note: "bare diff 2",
+      worktree: "/tmp/bare-wt",
+    });
+    assert.equal(a.stored, true);
+    assert.equal(b.stored, true);
+    assert.notEqual(a.run_id, b.run_id, "plan=null must never reuse");
+  });
+  console.log("  ✓ verdict_submit with no plan always opens a new run");
+}
+
+export function testVerdictSubmitPassedRunNotReused(): void {
+  withTempDb(() => {
+    const wt = "/tmp/passed-wt";
+    const plan = ".fapony/plan/PLAN-done.md";
+    const p = submit({
+      verdict: "pass",
+      reason_code: "other",
+      note: "shipped",
+      worktree: wt,
+      plan,
+    });
+    assert.equal(p.stored, true);
+    assert.equal(p.status, "passed");
+
+    // Terminal runs stay closed — later work on the same plan opens fresh.
+    const f = submit({
+      verdict: "fail",
+      reason_code: "missing_test",
+      note: "new work",
+      worktree: wt,
+      plan,
+    });
+    assert.equal(f.stored, true);
+    assert.notEqual(f.run_id, p.run_id, "passed run must not reopen");
+    assert.equal(f.round, 1);
+  });
+  console.log("  ✓ verdict_submit never reopens a passed run");
 }

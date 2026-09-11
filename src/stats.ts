@@ -3,6 +3,7 @@
 export { cmdStats } from "./stats/cli.js";
 export {
   computeEfficiency,
+  countPendingPlans,
   getStatsData,
   type RunEfficiency,
   type StatsData,

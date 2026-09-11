@@ -4,6 +4,7 @@ export { cmdStats } from "./cli.js";
 export {
   type BestPassing,
   computeEfficiency,
+  countPendingPlans,
   type EscalatedRun,
   getBestPassing,
   getEscalatedRuns,

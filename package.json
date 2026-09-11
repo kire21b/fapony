@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun fapony.ts test",
     "test:fast": "SKIP_SLOW=1 bun fapony.ts test",
-    "check": "bun run lint && bun run typecheck && bun fapony.ts test"
+    "check": "bun run lint && bun run typecheck && bun fapony.ts test",
+    "overview": "bun fapony.ts report-web /tmp/fapony-overview.html && open /tmp/fapony-overview.html"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",

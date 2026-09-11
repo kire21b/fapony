@@ -106,7 +106,9 @@ export const TOOLS = [
     name: "verdict_submit",
     description:
       "Record a verdict with reason code into the event log. " +
-      "Creates a new run entry if run_id is not provided.",
+      "Without run_id, binds to the latest still-open run for the same " +
+      "worktree+plan (round keeps counting toward review.maxRounds); " +
+      "creates a new run entry only when none is open.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -138,6 +140,12 @@ export const TOOLS = [
           type: "string",
           description:
             "Optional plan file path for a new run (used only when run_id is omitted)",
+        },
+        session_id: {
+          type: "string",
+          description:
+            "Optional client session id (OpenCode/ZCode session id, or Claude Code/Codex .jsonl path). " +
+            "Used to resolve model attribution when no spawn events exist in the gate window.",
         },
       },
       required: ["verdict", "reason_code"],
