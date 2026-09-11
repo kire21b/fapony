@@ -9,7 +9,6 @@
   "files": [
     "fapony.ts",
     "src/",
-    "prompts/",
     "templates/",
     "skill/"
   ],

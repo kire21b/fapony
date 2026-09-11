@@ -283,7 +283,7 @@ export const TOOLS = [
   {
     name: "project_health_context",
     description:
-      "Known-patterns context for plan-with-me: recurring fail reasons, " +
+      "Known-patterns context for plan-with-pony: recurring fail reasons, " +
       "escalated runs, and round-1-pass shapes from real run history. " +
       "Short plain-text block (framed as watch-fors, not constraints).",
     inputSchema: {

@@ -1,6 +1,6 @@
 // src/mcp/tools/context.ts — project_health_context tool
 //
-// Single-call entry for `plan-with-me`: returns the paste-ready "known
+// Single-call entry for `plan-with-pony`: returns the paste-ready "known
 // patterns" block built from real run history (no raw dump, ~15 lines max).
 
 import { buildProjectHealthContext } from "../../context/index.js";

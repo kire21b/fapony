@@ -44,7 +44,7 @@ You are about to move a PLAN that has been shipped to the archive.
    ```
 
 7. **Record the verdict** — call the `verdict_submit` MCP tool (fapony) so this ship feeds
-   `project_health_context` for the next plan-with-me draft. No `run_id` needed:
+   `project_health_context` for the next plan-with-pony draft. No `run_id` needed:
    - `verdict`: `pass` (adjust if the ship had known rough edges — see VERDICT_GRADES)
    - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
      — pick `other` with a `note` if nothing fits, or leave a `note` on any grade to record
@@ -60,7 +60,7 @@ You are about to move a PLAN that has been shipped to the archive.
 ```
 Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)"
 Steps:
-1. normalize links: [prompts/](../prompts/) → [../prompts/](../prompts/)
+1. normalize links: [templates/](../templates/) → [../templates/](../templates/)
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
 3. git mv
 4. commit
