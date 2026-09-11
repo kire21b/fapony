@@ -44,10 +44,13 @@ review may have added some.
   whole branch — not just the last commit
 - **PR body**: short summary of what changed and why (from the commit messages + diff, not
   invented), plus a one-line test plan if there's an obvious one (tests run, command output).
-  End with:
+  End with an attribution line:
   ```
-  🤖 Generated with [Claude Code](https://claude.com/claude-code)
+  🤖 Generated with <the coding agent you are running in>
   ```
+  Name the agent you actually are — Claude Code, Codex, opencode, ZCode — not a hardcoded one.
+  If your harness already gave you an exact attribution line to use, use that verbatim instead;
+  it wins over this template.
 - **Merge method**: squash, unless the branch already has meaningful separate commits worth
   keeping — then a regular merge. Ask if genuinely unclear.
 
