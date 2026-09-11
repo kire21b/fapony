@@ -242,6 +242,13 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 7. **ก่อนแก้ไฟล์ ถาม `project_health_context` ก่อน** — ส่ง `files[]` ของไฟล์ที่จะแตะ
    รู้ pattern ที่เคย fail กับไฟล์นั้นก่อนลงมือ · ลืมได้ ไม่เรียกก็ยังทำงานได้เท่าเดิม
    (optional degradation ไม่ใช่ precondition)
+8. **เดาผิดแล้วรู้ตัว = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — trigger คือ *ตอนรู้ว่าความ
+   พยายามแรกผิดและต้นเหตุไม่ได้อยู่ที่เดียวกับอาการ* ไม่ใช่ตอนงานเสร็จ · ยิง `fail` ทันทีที่รู้
+   แล้วปิดด้วย pass-family เมื่อตรวจผ่านจริง (ตรวจไม่ได้ → `uncertain` ห้ามเดา pass)
+   งานที่ผ่านตั้งแต่รอบแรก **ไม่ต้องบันทึก** — future session เห็นแค่ 3 note, pass เปล่า ๆ
+   ไล่ note ที่สอนอะไรได้ออก · `note` ต้อง standalone: อาการ / ต้นเหตุจริง / กฎที่ได้
+   ห้ามอ้างอิงบทสนทนา · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree
+   นั้นมาเกาะ ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
 
 ---
 

@@ -29,8 +29,11 @@ description: Commit split by concern with conventional message — use with Clau
 
 Ref <PLAN-file, if any>
 
-Co-Authored-By: <the model you are running as> <noreply@anthropic.com>
+Co-Authored-By: <the model you are running as> <its vendor's noreply address>
 ```
+
+If your harness already gave you an exact `Co-Authored-By` line, use that verbatim — it wins over
+this template. Otherwise name the model you actually are; never copy another vendor's address.
 
 `<type>` is exactly one of the six words above — no `feat/fix:`, no two-word types.
 
