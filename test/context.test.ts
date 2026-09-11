@@ -30,7 +30,9 @@ function statsFixture(): StatsData {
     },
     byModel: [],
     byGrade: [],
-    byWorktree: [{ worktree: "wt1", runs: 23, passed: 20, stalled: 0 }],
+    byWorktree: [
+      { worktree: "wt1", runs: 23, passed: 20, stalled: 0, pending: null },
+    ],
     efficiency: [],
     byReasonCode: [
       { worktree: "wt1", reason: "scope_mismatch", count: 7 },
@@ -67,7 +69,9 @@ export function testContextBlockSnapshot(): void {
 export function testContextBlockLowHistory(): void {
   const data = statsFixture();
   data.runs.total = 2;
-  data.byWorktree = [{ worktree: "wt1", runs: 2, passed: 2, stalled: 0 }];
+  data.byWorktree = [
+    { worktree: "wt1", runs: 2, passed: 2, stalled: 0, pending: null },
+  ];
   const block = buildProjectHealthContext(data);
   assert.ok(block.includes("Not enough history yet (2 runs, need 5+)"));
   assert.ok(!block.includes("scope_mismatch"), "no reason noise on n=2");
@@ -154,7 +158,9 @@ export function testContextBlockRecentNotes(): void {
 export function testContextBlockLowHistoryStillShowsNotes(): void {
   const data = statsFixture();
   data.runs.total = 1;
-  data.byWorktree = [{ worktree: "wt1", runs: 1, passed: 0, stalled: 0 }];
+  data.byWorktree = [
+    { worktree: "wt1", runs: 1, passed: 0, stalled: 0, pending: null },
+  ];
   data.recentFailNotes = [
     {
       worktree: "wt1",

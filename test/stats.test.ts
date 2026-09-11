@@ -2,7 +2,7 @@
 
 import { Database } from "bun:sqlite";
 import assert from "node:assert";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beginSpawn, endSpawn } from "../src/cost.js";
@@ -13,7 +13,7 @@ import {
   newRun,
   setStatus,
 } from "../src/db/index.js";
-import { getStatsData } from "../src/stats.js";
+import { countPendingPlans, getStatsData } from "../src/stats.js";
 import { baseConfig, withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
@@ -601,4 +601,33 @@ export function testStatsBestPassing(): void {
     assert.equal(data.bestPassing[0].worktree, "wt1");
   });
   console.log("  ✓ getStatsData: bestPassing only round-1 passes with a plan");
+}
+
+export function testCountPendingPlans(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-pending-"));
+  try {
+    // No fapony.config.json → falls back to the .fapony/plan scaffold default.
+    mkdirSync(join(dir, ".fapony/plan/done"), { recursive: true });
+    writeFileSync(join(dir, ".fapony/plan/PLAN-a.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/PLAN-b.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/done/PLAN-old.md"), "");
+    writeFileSync(join(dir, ".fapony/plan/notes.txt"), "");
+    assert.equal(countPendingPlans(dir), 2);
+
+    // paths.planDir in the target repo's own config wins over the default.
+    mkdirSync(join(dir, "apps/x/plan"), { recursive: true });
+    writeFileSync(join(dir, "apps/x/plan/PLAN-c.md"), "");
+    writeFileSync(
+      join(dir, "fapony.config.json"),
+      JSON.stringify({ paths: { planDir: "apps/x/plan" } }),
+    );
+    assert.equal(countPendingPlans(dir), 1);
+
+    // Uncountable → null, never 0 ("no plan dir" must not read as "none pending").
+    assert.equal(countPendingPlans(join(dir, "nope")), null);
+    assert.equal(countPendingPlans("mcp-external"), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ countPendingPlans: done/ excluded, null when uncountable");
 }

@@ -128,7 +128,7 @@ ${stats.byGrade
 
 <h2>By Worktree <span class="sample">(n=${runs})</span></h2>
 <table id="t-worktree">
-  <thead><tr><th>Worktree</th><th>Runs</th><th>Passed</th><th>Stalled</th><th>Pass Rate</th></tr></thead>
+  <thead><tr><th>Worktree</th><th>Runs</th><th>Passed</th><th>Stalled</th><th>Pass Rate</th><th>Pending plans</th></tr></thead>
   <tbody>
 ${stats.byWorktree
   .map((w) => {
@@ -139,6 +139,7 @@ ${stats.byWorktree
       <td class="pass">${w.passed}</td>
       <td class="fail">${w.stalled}</td>
       <td class="${rate >= 0.8 ? "pass" : rate >= 0.5 ? "warn" : "fail"}">${fmtRate(rate)}</td>
+      <td>${w.pending === null ? "—" : w.pending}</td>
     </tr>`;
   })
   .join("\n")}

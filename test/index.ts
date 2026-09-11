@@ -269,6 +269,7 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
+  testCountPendingPlans,
   testStatsBestPassing,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
@@ -600,6 +601,7 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
+  testCountPendingPlans();
   testStatsNoPricingValueIsNull();
   testStatsZeroCostValueIsNull();
   testStatsMultiRoundSeparateGates();

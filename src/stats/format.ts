@@ -68,11 +68,12 @@ export function formatStatsText(data: StatsData): string {
 
   if (data.byWorktree.length > 0) {
     lines.push("\nby worktree:");
-    lines.push("  worktree | runs | passed | stalled");
-    lines.push("  ---------|------|--------|--------");
+    lines.push("  worktree | runs | passed | stalled | pending");
+    lines.push("  ---------|------|--------|---------|--------");
     for (const w of data.byWorktree) {
+      const pending = w.pending === null ? "—" : String(w.pending);
       lines.push(
-        `  ${w.worktree.padEnd(8)} | ${String(w.runs).padStart(4)} | ${String(w.passed).padStart(6)} | ${String(w.stalled).padStart(7)}`,
+        `  ${w.worktree.padEnd(8)} | ${String(w.runs).padStart(4)} | ${String(w.passed).padStart(6)} | ${String(w.stalled).padStart(7)} | ${pending.padStart(7)}`,
       );
     }
   }
