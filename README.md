@@ -158,7 +158,7 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | Skill | Purpose | Trigger |
 |-------|---------|---------|
 | `skill/plan-with-me/` | Draft plan + spec from "what's in your head" via conversation | `/plan-with-me` |
-| `skill/review-mantra/` | Four-mantra review, wired to fapony: known patterns before, verdict after | `/review-mantra` |
+| `skill/review-pony/` | Review as verification, wired to fapony: known patterns before, verdict after | `/review-pony` |
 | `skill/move-to-done/` | Archive PLAN to .fapony/plan/done/ after ship | `/move-to-done` |
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
