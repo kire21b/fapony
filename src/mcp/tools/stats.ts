@@ -16,13 +16,25 @@ export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
   // group_by: top-N slice from real events (PLAN-project-health-context §2).
   // Worktree-scoped when `worktree` is given, global otherwise.
   const groupBy = args.group_by;
-  if (groupBy === "reason_code" || groupBy === "plan") {
+  if (groupBy === "reason_code" || groupBy === "plan" || groupBy === "file") {
     const top =
       typeof args.top === "number" && args.top > 0 ? Math.floor(args.top) : 10;
     const worktree =
       typeof args.worktree === "string" && args.worktree
         ? args.worktree
         : undefined;
+    if (groupBy === "file") {
+      const rows = (
+        worktree
+          ? data.byFile.filter((f) => f.worktree === worktree)
+          : data.byFile
+      ).slice(0, top);
+      return jsonResult({
+        group_by: groupBy,
+        worktree: worktree ?? null,
+        rows,
+      });
+    }
     if (groupBy === "reason_code") {
       const rows = (
         worktree
@@ -54,7 +66,7 @@ export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
     return jsonResult({ group_by: groupBy, worktree: worktree ?? null, rows });
   }
   if (typeof groupBy !== "undefined") {
-    return errorResult(`group_by must be one of: reason_code, plan`);
+    return errorResult(`group_by must be one of: reason_code, plan, file`);
   }
 
   // json:true → StatsData ล้วน (SPEC-verdict-stats) — ห้ามแทรก text อื่น

@@ -158,7 +158,10 @@ export const TOOLS = [
           type: "array",
           items: { type: "string" },
           description:
-            "Optional files touched in this work unit. Stored in the gate event for project_health_context filtering.",
+            "Repo-relative paths of the files this work unit touched. Technically " +
+            "optional, but always send them: this is the only input to per-file " +
+            "risk history — a verdict with no files[] teaches the next session " +
+            "nothing about where the risk was.",
         },
       },
       required: ["verdict", "reason_code"],
@@ -169,8 +172,9 @@ export const TOOLS = [
     description:
       "Query accumulated run statistics: pass/stall rates, cost, quality scores, " +
       "breakdown by model/grade/worktree. Returns StatsData shape. " +
-      "With group_by='reason_code'|'plan', returns top-N rows for that grouping " +
-      "(recurring failure signatures / per-plan totals) instead of the full shape.",
+      "With group_by='reason_code'|'plan'|'file', returns top-N rows for that " +
+      "grouping (recurring failure signatures / per-plan totals / per-file " +
+      "gate-vs-fail counts) instead of the full shape.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -181,9 +185,10 @@ export const TOOLS = [
         },
         group_by: {
           type: "string",
-          enum: ["reason_code", "plan"],
+          enum: ["reason_code", "plan", "file"],
           description:
-            "Optional grouping: top-N reason_code counts or per-plan totals from real gate events.",
+            "Optional grouping: top-N reason_code counts, per-plan totals, or " +
+            "per-file risk (graded touches vs fails) from real gate events.",
         },
         top: {
           type: "number",
@@ -304,8 +309,10 @@ export const TOOLS = [
   {
     name: "project_health_context",
     description:
-      "Known-patterns context for plan-with-pony: recurring fail reasons, " +
-      "escalated runs, and round-1-pass shapes from real run history. " +
+      "Call this BEFORE editing files: known-patterns context for the files " +
+      "you are about to touch — recurring fail reasons, escalated runs, and " +
+      "round-1-pass shapes from real run history. Pass files[] (the unit is " +
+      "touched files, not a plan; a bug fix with no plan file still qualifies). " +
       "Short plain-text block (framed as watch-fors, not constraints).",
     inputSchema: {
       type: "object" as const,

@@ -47,14 +47,20 @@ export function formatStatsText(data: StatsData): string {
   if (data.byModel.length > 0) {
     lines.push("\nby model:");
     lines.push(
-      "  client | provider | model | agent | gates | avgQuality | avgCostUSD | avgValue",
+      "  client | provider | model | agent | gates | fails | failRate | avgQuality | avgCostUSD | avgValue",
     );
     lines.push(
-      "  -------|----------|-------|-------|-------|------------|------------|--------",
+      "  -------|----------|-------|-------|-------|-------|----------|------------|------------|--------",
     );
     for (const m of data.byModel) {
       lines.push(
-        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtNullable(m.avgCostUSD).padStart(10)} | ${fmtNullable(m.avgValue).padStart(8)}`,
+        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtNullable(m.avgCostUSD).padStart(10)} | ${fmtNullable(m.avgValue).padStart(8)}`,
+      );
+    }
+    const a = data.modelAttribution;
+    if (a.inferred > 0 || a.none > 0) {
+      lines.push(
+        `  attribution: ${a.declared} declared, ${a.inferred} inferred from the live session, ${a.none} unknown`,
       );
     }
   }
@@ -89,6 +95,19 @@ export function formatStatsText(data: StatsData): string {
     for (const r of data.byReasonCode.slice(0, 3)) {
       lines.push(
         `  ${r.worktree.padEnd(8)} | ${r.reason.padEnd(14)} | ${String(r.count).padStart(5)}`,
+      );
+    }
+  }
+
+  if (data.byFile.length > 0) {
+    lines.push(
+      "\nby file (graded touches — absence means unmeasured, not safe):",
+    );
+    lines.push("  file | gates | fails | last reason");
+    lines.push("  -----|-------|-------|------------");
+    for (const f of data.byFile.slice(0, 10)) {
+      lines.push(
+        `  ${f.file.padEnd(40)} | ${String(f.gates).padStart(5)} | ${String(f.fails).padStart(5)} | ${f.lastReason ?? "—"}`,
       );
     }
   }

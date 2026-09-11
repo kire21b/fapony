@@ -3,6 +3,12 @@
 // All callers that do `import { readPassiveUsage } from "./session.js"`
 // will resolve here after src/session.ts is deleted.
 
+export {
+  claudeProjectSlug,
+  findSessionAt,
+  loadSessionSpans,
+  type SessionSpan,
+} from "./activeSession.js";
 export { readClaudeCodeUsage } from "./claude-code.js";
 export { readCodexUsage } from "./codex.js";
 export {

@@ -1,6 +1,10 @@
 // test/index.ts — test runner. Import all test modules and run sequentially.
 
 import {
+  testClaudeProjectSlug,
+  testFindSessionAt,
+} from "./activeSession.test.js";
+import {
   testAnalyzeBlastRadius,
   testAnalyzeChangedUntested,
   testAnalyzeEmptyDir,
@@ -291,6 +295,7 @@ import {
 import {
   testCountPendingPlans,
   testStatsBestPassing,
+  testStatsByFileRisk,
   testStatsByModelGroupsByClientProviderAgent,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
@@ -652,7 +657,10 @@ export async function cmdTest(): Promise<void> {
   testStatsReasonCodeBreakdown();
   testStatsEscalatedRuns();
   testStatsPlanBreakdown();
+  testFindSessionAt();
+  testClaudeProjectSlug();
   testStatsBestPassing();
+  testStatsByFileRisk();
   testStatsModelFromExecutorSpawn();
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();

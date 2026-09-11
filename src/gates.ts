@@ -14,7 +14,13 @@
 import { sumSpawnCost } from "./cost.js";
 import type { Event } from "./db/index.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
-import { findSessionModel, type SessionClient } from "./session/index.js";
+import {
+  findSessionAt,
+  findSessionModel,
+  loadSessionSpans,
+  type SessionClient,
+  type SessionSpan,
+} from "./session/index.js";
 
 export interface GateWindow {
   runId: number;
@@ -34,6 +40,20 @@ export interface GateWindow {
   costUSD: number | null;
   /** Round number from the gate event data (defaults to 1). */
   round: number;
+  /**
+   * Where `model` came from: a spawn event, the gate's own session_id, or
+   * inferred from which client session was live in that worktree at that
+   * moment. "inferred" is a guess — never present it as declared.
+   */
+  modelSource: "spawn" | "session_id" | "inferred" | null;
+}
+
+/** SQLite `datetime('now')` output is UTC without a zone marker. */
+function eventTimeMs(ts: string): number | null {
+  const direct = Date.parse(ts);
+  if (!Number.isNaN(direct) && /[zZ]|[+-]\d\d:?\d\d$/.test(ts)) return direct;
+  const utc = Date.parse(`${ts.replace(" ", "T")}Z`);
+  return Number.isNaN(utc) ? null : utc;
 }
 
 function parseEventData(data: string | null): Record<string, unknown> {
@@ -49,7 +69,21 @@ function parseEventData(data: string | null): Record<string, unknown> {
  * Enrich every gate event with its per-round window.
  * One entry per gate event, in (run_id, id) order.
  */
-export function enrichGateWindows(events: Event[]): GateWindow[] {
+export function enrichGateWindows(
+  events: Event[],
+  worktreeByRun?: Map<number, string>,
+): GateWindow[] {
+  // Spans are loaded per worktree, once, and only when a gate actually needs
+  // them — most callers pass no worktree map and pay nothing.
+  const spanCache = new Map<string, SessionSpan[]>();
+  const spansFor = (worktree: string): SessionSpan[] => {
+    let cached = spanCache.get(worktree);
+    if (!cached) {
+      cached = loadSessionSpans(worktree);
+      spanCache.set(worktree, cached);
+    }
+    return cached;
+  };
   const byRun = new Map<number, { gates: Event[]; spawns: Event[] }>();
   for (const e of events) {
     let b = byRun.get(e.run_id);
@@ -95,6 +129,7 @@ export function enrichGateWindows(events: Event[]): GateWindow[] {
       let provider: string | null = null;
       let client: SessionClient | null = null;
       let agent: string | null = null;
+      let modelSource: GateWindow["modelSource"] = model ? "spawn" : null;
       if (model === null && typeof d.session_id === "string" && d.session_id) {
         const resolved = findSessionModel(d.session_id);
         if (resolved) {
@@ -102,6 +137,24 @@ export function enrichGateWindows(events: Event[]): GateWindow[] {
           provider = resolved.provider;
           client = resolved.client;
           agent = resolved.agent;
+          modelSource = "session_id";
+        }
+      }
+      // Still nothing: ask which client session was live in this worktree
+      // when the verdict landed. Costs the caller no new field and works on
+      // rows already stored — see session/activeSession.ts.
+      const worktree = worktreeByRun?.get(runId);
+      if (model === null && worktree) {
+        const atMs = eventTimeMs(g.ts);
+        const span =
+          atMs === null ? null : findSessionAt(spansFor(worktree), atMs);
+        const resolved = span ? findSessionModel(span.sessionId) : null;
+        if (resolved) {
+          model = resolved.model;
+          provider = resolved.provider;
+          client = resolved.client;
+          agent = resolved.agent;
+          modelSource = "inferred";
         }
       }
 
@@ -119,6 +172,7 @@ export function enrichGateWindows(events: Event[]): GateWindow[] {
         provider,
         client,
         agent,
+        modelSource,
       });
     }
   }

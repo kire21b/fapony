@@ -9,7 +9,12 @@ import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
 import { REASON_CODES } from "../mcp/types.js";
-import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "../parse.js";
+import {
+  isPassFamily,
+  qualityScore,
+  VERDICT_GRADES,
+  type VerdictGrade,
+} from "../parse.js";
 import {
   type PassiveUsageResult,
   readClaudeCodeUsage,
@@ -51,6 +56,8 @@ interface EnrichedGate {
   client: string | null;
   agent: string | null;
   valueScore: number | null;
+  /** How `model` was resolved — "inferred" is a guess, not a declaration. */
+  modelSource: "spawn" | "session_id" | "inferred" | null;
 }
 
 /**
@@ -59,8 +66,11 @@ interface EnrichedGate {
  * never cumulative. Delegates windowing to enrichGateWindows (src/gates.ts)
  * and adds the value score on top.
  */
-function enrichGates(events: Event[]): EnrichedGate[] {
-  return enrichGateWindows(events).map((w) => {
+function enrichGates(
+  events: Event[],
+  worktreeByRun?: Map<number, string>,
+): EnrichedGate[] {
+  return enrichGateWindows(events, worktreeByRun).map((w) => {
     let valueScore: number | null = null;
     if (w.costUSD !== null && w.costUSD > 0 && w.quality !== null) {
       valueScore = w.quality / w.costUSD;
@@ -73,6 +83,7 @@ function enrichGates(events: Event[]): EnrichedGate[] {
       provider: w.provider,
       client: w.client,
       agent: w.agent,
+      modelSource: w.modelSource,
       valueScore,
     };
   });
@@ -277,6 +288,84 @@ function gateReason(data: string | null): string | null {
     return null;
   }
   return eventReasonCode(data);
+}
+
+export interface FileRisk {
+  worktree: string;
+  file: string;
+  /** Gate verdicts that listed this file. */
+  gates: number;
+  /** Of those, non-pass-family verdicts. */
+  fails: number;
+  /** reason_code of the most recent failing gate on this file. */
+  lastReason: string | null;
+}
+
+/**
+ * Per-file risk: how often a file appeared in a gate verdict, and how often
+ * that verdict was non-pass. Reads files[] already stored on gate events —
+ * no new table, no new write path.
+ *
+ * Counts are "touches that were graded", not edits: a file only shows up here
+ * once someone submitted a verdict naming it, so absence means unmeasured,
+ * never safe. Read a row as a prior, not a score — at gates=1 it is one
+ * anecdote.
+ */
+export function getFileRisk(runs: Run[], events: Event[]): FileRisk[] {
+  const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+  const map = new Map<
+    string,
+    {
+      worktree: string;
+      file: string;
+      gates: number;
+      fails: number;
+      lastReason: string | null;
+    }
+  >();
+  for (const e of events) {
+    if (e.kind !== "gate") continue;
+    let verdict: string | null = null;
+    let files: string[] = [];
+    try {
+      const d = JSON.parse(e.data ?? "{}") as {
+        verdict?: unknown;
+        files?: unknown;
+      };
+      if (typeof d.verdict === "string" && VERDICT_GRADES.has(d.verdict))
+        verdict = d.verdict;
+      if (Array.isArray(d.files))
+        files = d.files.filter(
+          (f): f is string => typeof f === "string" && !!f,
+        );
+    } catch {
+      continue; // unparseable gate data — nothing to attribute
+    }
+    if (!verdict || files.length === 0) continue;
+    const wt = wtByRun.get(e.run_id) ?? "(unknown)";
+    const failed = !isPassFamily(verdict);
+    const reason = failed ? eventReasonCode(e.data) : null;
+    for (const file of files) {
+      const key = `${wt}\u0000${file}`;
+      let b = map.get(key);
+      if (!b) {
+        b = { worktree: wt, file, gates: 0, fails: 0, lastReason: null };
+        map.set(key, b);
+      }
+      b.gates++;
+      if (failed) {
+        b.fails++;
+        // events arrive oldest-first, so the last write wins = most recent.
+        if (reason) b.lastReason = reason;
+      }
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) =>
+      b.fails - a.fails ||
+      b.gates - a.gates ||
+      (a.file < b.file ? -1 : a.file > b.file ? 1 : 0),
+  );
 }
 
 /** Top reason_code per worktree, sorted by count desc (spec §2 query). */
@@ -529,10 +618,16 @@ export interface StatsData {
     model: string;
     agent: string;
     gateCount: number;
+    /** Non-pass-family verdicts in this bucket. */
+    fails: number;
+    /** fails / gateCount — the per-model question nothing else can answer. */
+    failRate: number;
     avgQuality: number;
     avgCostUSD: number | null;
     avgValue: number | null;
   }>;
+  /** How many gates got their model by inference vs. a declared session_id. */
+  modelAttribution: { inferred: number; declared: number; none: number };
   byGrade: Array<{
     grade: string;
     count: number;
@@ -554,6 +649,8 @@ export interface StatsData {
   escalatedRuns: EscalatedRun[];
   bestPassing: BestPassing[];
   recentVerdictNotes: RecentVerdictNote[];
+  /** Per-file gate/fail counts (risk heatmap), worst first. */
+  byFile: FileRisk[];
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -612,7 +709,10 @@ export function getStatsData(): StatsData {
     }
 
     // --- Gate enrichment ---
-    const enriched = enrichGates(events);
+    const enriched = enrichGates(
+      events,
+      new Map(runs.map((r) => [r.id, r.worktree])),
+    );
 
     // Group by client+provider+model+agent — the same model name on two
     // providers is two different things. Unknown dimension → "—" (never ""
@@ -625,6 +725,7 @@ export function getStatsData(): StatsData {
         model: string;
         agent: string;
         gateCount: number;
+        fails: number;
         qualities: number[];
         costs: number[];
         values: number[];
@@ -642,11 +743,13 @@ export function getStatsData(): StatsData {
         model,
         agent,
         gateCount: 0,
+        fails: 0,
         qualities: [],
         costs: [],
         values: [],
       });
       bucket.gateCount++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
       if (g.costUSD !== null) bucket.costs.push(g.costUSD);
@@ -659,11 +762,20 @@ export function getStatsData(): StatsData {
         model: b.model,
         agent: b.agent,
         gateCount: b.gateCount,
+        fails: b.fails,
+        failRate: b.gateCount ? b.fails / b.gateCount : 0,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         avgCostUSD: b.costs.length ? avg(b.costs) : null,
         avgValue: b.values.length ? avg(b.values) : null,
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
+
+    const modelAttribution = { inferred: 0, declared: 0, none: 0 };
+    for (const g of enriched) {
+      if (g.modelSource === "inferred") modelAttribution.inferred++;
+      else if (g.modelSource === null) modelAttribution.none++;
+      else modelAttribution.declared++;
+    }
 
     const gradeMap: Record<string, { count: number; costs: number[] }> = {};
     for (const g of enriched) {
@@ -727,6 +839,7 @@ export function getStatsData(): StatsData {
         review: { avg: avg(reviewAll), count: reviewAll.length },
       },
       byModel,
+      modelAttribution,
       byGrade,
       byWorktree,
       efficiency,
@@ -738,6 +851,7 @@ export function getStatsData(): StatsData {
       // list by worktree and files[] before slicing, so a cap of 3 here would
       // throw away the very notes a file-scoped query is looking for.
       recentVerdictNotes: getRecentVerdictNotes(runs, events, 50),
+      byFile: getFileRisk(runs, events),
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:

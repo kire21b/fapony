@@ -1,7 +1,8 @@
 // src/mcp/tools/context.ts — project_health_context tool
 //
-// Single-call entry for `plan-with-pony`: returns the paste-ready "known
-// patterns" block built from real run history (no raw dump, ~15 lines max).
+// Single-call pre-edit reflex for any caller: returns the paste-ready "known
+// patterns" block built from real run history, keyed by files[] (no raw dump,
+// ~15 lines max). `plan-with-pony` is one caller, not the only entry point.
 
 import { buildProjectHealthContext } from "../../context/index.js";
 import { getStatsData } from "../../stats.js";
