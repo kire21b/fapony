@@ -48,6 +48,10 @@ gh pr merge --squash   # or --merge, per the chosen method
 git fetch origin
 git reset --hard origin/<default-branch>
 git push --force-with-lease origin <branch>
+
+# if you shipped from a git worktree, fast-forward the primary checkout too —
+# `git worktree list` prints it first:
+git -C <primary-checkout> pull --ff-only
 ```
 
 The post-merge reset is not optional. Squashing rewrites the commits, so the branch keeps
@@ -56,6 +60,12 @@ every later PR with *"Can't automatically merge"* even when the content is ident
 the branch onto the freshly merged base makes them the same commit again, so the next PR is clean.
 Skip it only for a throwaway feature branch you're about to delete. It force-pushes, so say so —
 and check `git status --porcelain` is clean first (uncommitted work would be destroyed).
+
+The primary-checkout pull matters when anything outside the repo points *into* it — symlinked
+skills, an editor workspace, a tool resolving its root from that path. Ship from a worktree and
+that checkout silently falls a commit behind every time, serving yesterday's content. Only
+`--ff-only`, and only when it's clean and on the default branch: report and leave it alone
+otherwise, it isn't the branch you were asked to ship.
 
 ## Rules
 
