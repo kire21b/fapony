@@ -9,6 +9,9 @@ You are about to move a PLAN that has been shipped to the archive.
 
 ## Rules
 
+0. **Report in lines, not paragraphs** — what moved, what the inbound-link sweep found, what
+   needs the user. Never narrate the steps; the commands are already in the transcript.
+
 1. **PLAN must have shipped header** — regex: `^> ✅ \*\*.*shipped.*\*\*$`
    If missing, add it yourself, don't ask — invoking this skill *is* the ship claim (the user
    has already verified the work landed; this step is paperwork). Replace the plan's

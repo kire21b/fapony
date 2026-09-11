@@ -10,16 +10,15 @@ something you feel about the code — and feelings are what make reviews long an
 
 Four passes. Run them in order. Each one is allowed to end the review early.
 
-## Open with this
+## The four passes
 
-Post these four lines before anything else, unchanged, so the user can hold you to them:
+1. **Scope is a finding.** Does this need to exist, and does it need to be this big?
+2. **Claims are not facts.** Walk the real path. Run what can be run.
+3. **A finding needs a failing input.** Cannot write one? Not a finding.
+4. **Facts carry a citation.** `file:line`, output, or trace step — or it doesn't ship.
 
-> 1. **Scope is a finding.** Does this need to exist, and does it need to be this big?
-> 2. **Claims are not facts.** Walk the real path. Run what can be run.
-> 3. **A finding needs a failing input.** Cannot write one? Not a finding.
-> 4. **Facts carry a citation.** `file:line`, output, or trace step — or it doesn't ship.
-
-Then start at pass 1.
+Carry them. Do not post them, and do not narrate them — the reader wants what you found, not
+proof that you looked. Start at pass 1.
 
 ---
 
@@ -101,17 +100,32 @@ them is how a review launders an assumption into a fact.
 
 ## Report
 
-Most severe first: **blocker → major → nit.** If pass 1 or 2 turned up something structural, lead
-with it and cut the nits entirely — they dilute the only thing worth reading.
+The reader has the diff and is deciding what to do next. Nothing else belongs here.
 
-One block per finding:
+**Verdict first, then at most 3 findings, at most 4 lines each, then one deferred line.**
+Severity order: blocker → major → nit, and cut the nits entirely when anything structural
+survived — they dilute the only thing worth reading.
 
-- **Finding** — one sentence, specific, citing `file:line`, marked `CONFIRMED` or `PLAUSIBLE`.
-- **Failing input** — the inputs or state → the wrong result.
-- **Evidence** — the trace step, command output, or input that exposed it.
-- **Fix** — concrete and minimal.
+```
+<ship | fix-then-ship | rework | reject> — the single biggest reason, one sentence.
 
-Close with one line: **ship / fix-then-ship / rework / reject**, and the single biggest reason.
+1. <blocker|major|nit> <CONFIRMED|PLAUSIBLE> — what breaks, one line
+   <file:line> — the mechanism, one line
+   repro: <input or state> ⇒ <wrong result vs. right one>
+   fix: <the minimal change>
+
+deferred: <thing> (<where it was specified>) · <thing>
+```
+
+Four lines is a ceiling, not a quota — a finding that fits in two ships in two. Drop `repro:`
+only when the finding is the absence of something (no test, no guard); never drop the citation.
+
+**Cut on sight:** the four passes as headings or prose · what you walked, ran, or ruled out ·
+anything restating the diff, the plan, or the author's reasoning · a nit riding along under a
+blocker · hedging that does not change the verdict.
+
+Finding nothing is a valid result. Then the whole report is the verdict line plus one line
+naming what you walked, so the reader can judge the coverage — not a tour of it.
 
 ## After: record the verdict (fapony)
 
@@ -156,13 +170,13 @@ failed.
 
 ## Rules
 
-- **Post the four lines once**, at the top, unchanged. Not again mid-review. If the user says to
-  skip them, skip the posting and run the four passes anyway.
+- **The report is a decision aid, not a transcript.** Budget above is binding: verdict, ≤3
+  findings, ≤4 lines each, one deferred line. Over budget means you are reporting process.
 - **Order is not optional.** No line-by-line notes before pass 1 has asked whether the change
   should exist. No finding before pass 2 has walked its path. No finding before pass 3 has tried
   to disprove it. Nothing stated as fact that pass 4 cannot cite.
-- **No rubber-stamps.** "LGTM" is not an output. Finding nothing is a valid result — then say what
-  you walked and what you ran, so the user can judge the coverage instead of trusting it.
+- **No rubber-stamps.** "LGTM" is not an output. Finding nothing is a valid result — say in one
+  line what you walked, so the user can judge the coverage instead of trusting it.
 - **Forget who wrote it.** The author's reasoning is context, never evidence.
 - **Never restate the diff.** If a line tells the author something they already know, cut it.
 - The four passes are a constraint you carry, not advice you hand back.
@@ -178,4 +192,27 @@ post. verdict_submit(verdict="pass-adequate", reason_code="other",
         note="evidence entry `bun test` exits 0 while running zero tests — real entry is `bun run test`",
         worktree="/Users/you/Project/fapony/wt-fapony",
         plan=".fapony/plan/PLAN-verdict-notes.md")
+```
+
+A report in budget — same review that, narrated, ran five paragraphs:
+
+```
+rework — Finding 1 corrupts the ledger this feature exists to keep.
+
+1. blocker CONFIRMED — incremental scan replaces cached history with a delta
+   cache.ts:81 overwrites by client; claude-code.ts:191 returns only new lines
+   repro: line(1000 tok) → scan → +line(500) → scan ⇒ cache 500, truth 1500
+   fix: merge per session_id (plan §5), or drop incremental and always full-scan
+
+2. major CONFIRMED — usage-scan crashes on a machine with no state dir (day 1)
+   cache.ts:68 writes the tmp file; writeCache never mkdirs, store.ts does
+   repro: FAPONY_STATE_DIR=/tmp/nonexistent bun fapony.ts usage-scan ⇒ ENOENT
+   fix: mkdirSync(faponyDir(config), { recursive: true }) before the write
+
+3. major CONFIRMED — SQLite `since` compares seconds to ms, so it never filters
+   helpers.ts:46 — max(time_created)=1789144099203 vs now_s=1789145895
+   repro: opencode all-time 1494 sessions == cached 1494; the filter cannot bite
+   fix: pass since*1000 — but only after 1, or these two clients corrupt too
+
+deferred: bytes_by_tool (plan step 7) · per-client watermark (plan §6.3)
 ```

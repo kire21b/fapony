@@ -52,6 +52,8 @@ Ref PLAN-analyze.md
 ## Rules
 
 - **NEVER push from this skill** — it only commits. Push/PR/merge is [git-ship](../git-ship/SKILL.md)'s job
+- **Report in lines, not paragraphs** — what you did, what needs the user, nothing else. Never
+  narrate the steps; the commands are already in the transcript.
 - **NEVER `--amend`** an existing commit unless explicitly authorized
 - **NEVER `--no-verify`** — if a pre-commit hook (lint/typecheck) fails on pre-existing code you
   didn't write, fix it for real (safe autofix + minimal manual fix) and note in the body that

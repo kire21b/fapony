@@ -95,6 +95,8 @@ otherwise, it isn't the branch you were asked to ship.
 ## Rules
 
 - **Never push to `main`/`master` directly** — always via PR
+- **Report in lines, not paragraphs** — what you did, what needs the user, nothing else. Never
+  narrate the steps; the commands are already in the transcript.
 - **Never merge with failing CI** — check `gh pr checks` first; if red or pending, report and wait
 - **Never `--admin` merge** (bypassing branch protection) unless the user explicitly says to
 - **Never force-push** an existing PR branch without saying so first
