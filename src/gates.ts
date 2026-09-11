@@ -14,6 +14,7 @@
 import { sumSpawnCost } from "./cost.js";
 import type { Event } from "./db/index.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
+import { findSessionModel } from "./session/index.js";
 
 export interface GateWindow {
   runId: number;
@@ -79,6 +80,14 @@ export function enrichGateWindows(events: Event[]): GateWindow[] {
         ) {
           model = sd.model;
         }
+      }
+
+      // No spawn in window (the execute→review loop that wrote them is gone):
+      // fall back to session_id on the gate event — resolve model from the
+      // client's own session log. Spawn-based model always wins when present.
+      if (model === null && typeof d.session_id === "string" && d.session_id) {
+        const resolved = findSessionModel(d.session_id);
+        if (resolved) model = resolved.model;
       }
 
       const grade = verdict as VerdictGrade;

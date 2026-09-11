@@ -139,6 +139,12 @@ export const TOOLS = [
           description:
             "Optional plan file path for a new run (used only when run_id is omitted)",
         },
+        session_id: {
+          type: "string",
+          description:
+            "Optional client session id (OpenCode/ZCode session id, or Claude Code/Codex .jsonl path). " +
+            "Used to resolve model attribution when no spawn events exist in the gate window.",
+        },
       },
       required: ["verdict", "reason_code"],
     },

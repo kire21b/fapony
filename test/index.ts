@@ -41,6 +41,18 @@ import {
   testSchemaVersionStamped,
 } from "./db.test.js";
 import {
+  testFindSessionModelClaudeCodeHit,
+  testFindSessionModelClaudeCodeMiss,
+  testFindSessionModelCodexHit,
+  testFindSessionModelCodexMiss,
+  testFindSessionModelEmptyId,
+  testFindSessionModelNoReadersAvailable,
+  testFindSessionModelOpenCodeHit,
+  testFindSessionModelOpenCodeMiss,
+  testFindSessionModelZcodeHit,
+  testFindSessionModelZcodeMiss,
+} from "./findModel.test.js";
+import {
   testGateOnceAlreadyPassed,
   testGateOnceFail,
   testGateOnceMaxRounds,
@@ -257,7 +269,6 @@ import {
   testValidateWorktreePathRejectsFile,
 } from "./setup.test.js";
 import {
-  testCountPendingPlans,
   testStatsBestPassing,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
@@ -270,10 +281,12 @@ import {
   testStatsGateWithoutSpawnsInWindow,
   testStatsLegacyPassMergedWithPassAdequate,
   testStatsModelFromExecutorSpawn,
+  testStatsModelFromSessionIdWhenNoSpawn,
   testStatsMultiRoundSeparateGates,
   testStatsNoPricingValueIsNull,
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
+  testStatsSpawnModelWinsOverSessionId,
   testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -383,6 +396,16 @@ export async function cmdTest(): Promise<void> {
   testGateOncePassGood();
   testGateOncePassAdequate();
   testGateOnceUncertain();
+  testFindSessionModelOpenCodeHit();
+  testFindSessionModelOpenCodeMiss();
+  testFindSessionModelZcodeHit();
+  testFindSessionModelZcodeMiss();
+  testFindSessionModelClaudeCodeHit();
+  testFindSessionModelClaudeCodeMiss();
+  testFindSessionModelCodexHit();
+  testFindSessionModelCodexMiss();
+  testFindSessionModelEmptyId();
+  testFindSessionModelNoReadersAvailable();
   testInitCreatesDirectories();
   testInitIdempotent();
   testInitNoArgs();
@@ -577,7 +600,6 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportSurfacesCollectError();
   // Stats enrichment tests
   testStatsEmptyDb();
-  testCountPendingPlans();
   testStatsNoPricingValueIsNull();
   testStatsZeroCostValueIsNull();
   testStatsMultiRoundSeparateGates();
@@ -589,6 +611,8 @@ export async function cmdTest(): Promise<void> {
   testStatsPlanBreakdown();
   testStatsBestPassing();
   testStatsModelFromExecutorSpawn();
+  testStatsModelFromSessionIdWhenNoSpawn();
+  testStatsSpawnModelWinsOverSessionId();
   testStatsEfficiencyUsd();
   testStatsEfficiencyBytesProxy();
   testStatsEfficiencyFailIsInfinite();

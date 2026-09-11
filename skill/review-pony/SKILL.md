@@ -138,6 +138,11 @@ Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), a
 PLAN file path under review, omitted for a bare PR/diff). No `run_id` — a run row is created
 automatically for external callers.
 
+`session_id` (optional) — the client session id so fapony can attribute the model from the session
+log when no spawn events exist. OpenCode/ZCode: the session id string. Claude Code/Codex: the
+`.jsonl` file path. Only send it if the client exposes it; if not, omit — never block the submit
+on it.
+
 If `verdict_submit` errors, say so in one line and move on. Never re-run a review because storage
 failed.
 

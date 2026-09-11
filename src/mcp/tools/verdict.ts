@@ -15,7 +15,8 @@ import { resolveWorktreeArg } from "../worktree.js";
 // --- Tool implementation ---
 
 export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
-  const { run_id, verdict, reason_code, note, worktree, plan } = args;
+  const { run_id, verdict, reason_code, note, worktree, plan, session_id } =
+    args;
 
   if (typeof verdict !== "string" || !VERDICT_GRADES.has(verdict)) {
     return errorResult(
@@ -71,7 +72,14 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   }
 
   // Patch the gate event with MCP-specific fields (reason_code, source).
-  patchLastGateEvent(db, resolvedRunId, { reason_code, source: "mcp" });
+  // session_id lets gates.ts resolve model from client session logs when the
+  // window has no spawn events (the old execute→review loop that wrote spawns
+  // is gone). Optional — agents that can't expose it just omit it.
+  const patch: Record<string, unknown> = { reason_code, source: "mcp" };
+  if (typeof session_id === "string" && session_id) {
+    patch.session_id = session_id;
+  }
+  patchLastGateEvent(db, resolvedRunId, patch);
 
   return jsonResult({
     stored: true,

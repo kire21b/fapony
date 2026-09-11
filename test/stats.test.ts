@@ -1,6 +1,10 @@
 // test/stats.test.ts — tests for getStatsData enrichment
 
+import { Database } from "bun:sqlite";
 import assert from "node:assert";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beginSpawn, endSpawn } from "../src/cost.js";
 import {
   addEvent,
@@ -226,6 +230,134 @@ export function testStatsModelFromExecutorSpawn(): void {
     assert.equal(data.byModel[0].model, "mimo-v2");
   });
   console.log("  ✓ getStatsData: model attribution from executor spawn");
+}
+
+export function testStatsModelFromSessionIdWhenNoSpawn(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // No spawn events — gate has session_id only
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-opencode",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    // Point OpenCode DB at a fixture that has this session
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-"));
+    const dbPath = join(dir, "opencode.db");
+    const ocdb = new Database(dbPath);
+    ocdb.run(
+      `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+    );
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+    );
+    ocdb.run(
+      `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+      .run("p1", "/tmp/wt1");
+    ocdb
+      .prepare(
+        `INSERT INTO session (id, project_id, model, time_created) VALUES (?, ?, ?, ?)`,
+      )
+      .run(
+        "sess-opencode",
+        "p1",
+        '{"providerID":"anthropic","id":"claude-sonnet-5"}',
+        1000,
+      );
+    ocdb.close();
+
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 1);
+      assert.equal(data.byModel[0].model, "claude-sonnet-5");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log(
+    "  ✓ getStatsData: model from session_id when no spawn in window",
+  );
+}
+
+export function testStatsSpawnModelWinsOverSessionId(): void {
+  withTmpDb((db) => {
+    const config: Config = {
+      ...baseConfig(),
+      roles: { executor: { model: "mimo-v2" } },
+      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
+    };
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // Executor spawn with model — gate also has session_id pointing elsewhere
+    const s1 = beginSpawn(db, runId, config, "executor", "prompt");
+    endSpawn(db, s1, config, "executor", "output");
+
+    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-other",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    // OpenCode DB with a *different* model for session_id
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-"));
+    const dbPath = join(dir, "opencode.db");
+    const ocdb = new Database(dbPath);
+    ocdb.run(
+      `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+    );
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+    );
+    ocdb.run(
+      `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+      .run("p1", "/tmp/wt1");
+    ocdb
+      .prepare(
+        `INSERT INTO session (id, project_id, model, time_created) VALUES (?, ?, ?, ?)`,
+      )
+      .run(
+        "sess-other",
+        "p1",
+        '{"providerID":"anthropic","id":"claude-opus-5"}',
+        1000,
+      );
+    ocdb.close();
+
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 1);
+      // Spawn model wins — session_id is fallback only
+      assert.equal(data.byModel[0].model, "mimo-v2");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ getStatsData: spawn model wins over session_id fallback");
 }
 
 function setRunMinutes(

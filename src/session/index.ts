@@ -5,6 +5,7 @@
 
 export { readClaudeCodeUsage } from "./claude-code.js";
 export { readCodexUsage } from "./codex.js";
+export { findSessionModel, type SessionModel } from "./findModel.js";
 export {
   aggregateDetail,
   buildWhereClause,
