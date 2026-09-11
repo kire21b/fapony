@@ -61,11 +61,32 @@ export function buildProjectHealthContext(
   }
   notes = notes.slice(0, 3);
 
+  // File risk for exactly the files being touched. Unlike the trend lines
+  // below this is NOT gated by minRuns: "this file failed last time" is
+  // actionable at n=1, and the count is printed so the reader can weigh it.
+  let riskLine: string | null = null;
+  if (files && files.length > 0) {
+    const fileSet = new Set(files.map((f) => f.toLowerCase()));
+    const hits = data.byFile
+      .filter((f) => (worktree ? f.worktree === worktree : true))
+      .filter((f) => f.fails > 0 && fileSet.has(f.file.toLowerCase()))
+      .slice(0, 3);
+    if (hits.length > 0) {
+      riskLine = `- Files you are touching that failed before: ${hits
+        .map(
+          (h) =>
+            `${h.file} (${h.fails}/${h.gates} graded touches failed${h.lastReason ? `, last: ${h.lastReason}` : ""})`,
+        )
+        .join(" · ")}`;
+    }
+  }
+
   if (total < minRuns) {
     const lines = [
       header,
       `- Not enough history yet (${total} runs, need ${minRuns}+) for recurring patterns; draft freely.`,
     ];
+    if (riskLine) lines.push(riskLine);
     if (notes.length > 0) {
       lines.push(
         `- Recent verdict notes: ${notes.map((n) => `[${n.reason}] ${n.note}`).join(" · ")}`,
@@ -89,6 +110,7 @@ export function buildProjectHealthContext(
   ).slice(0, 3);
 
   const lines = [header];
+  if (riskLine) lines.push(riskLine);
   if (reasons.length > 0) {
     const list = reasons.map((r) => `${r.reason} (${r.count}×)`).join(", ");
     lines.push(

@@ -9,7 +9,12 @@ import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
 import { REASON_CODES } from "../mcp/types.js";
-import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "../parse.js";
+import {
+  isPassFamily,
+  qualityScore,
+  VERDICT_GRADES,
+  type VerdictGrade,
+} from "../parse.js";
 import {
   type PassiveUsageResult,
   readClaudeCodeUsage,
@@ -277,6 +282,84 @@ function gateReason(data: string | null): string | null {
     return null;
   }
   return eventReasonCode(data);
+}
+
+export interface FileRisk {
+  worktree: string;
+  file: string;
+  /** Gate verdicts that listed this file. */
+  gates: number;
+  /** Of those, non-pass-family verdicts. */
+  fails: number;
+  /** reason_code of the most recent failing gate on this file. */
+  lastReason: string | null;
+}
+
+/**
+ * Per-file risk: how often a file appeared in a gate verdict, and how often
+ * that verdict was non-pass. Reads files[] already stored on gate events —
+ * no new table, no new write path.
+ *
+ * Counts are "touches that were graded", not edits: a file only shows up here
+ * once someone submitted a verdict naming it, so absence means unmeasured,
+ * never safe. Read a row as a prior, not a score — at gates=1 it is one
+ * anecdote.
+ */
+export function getFileRisk(runs: Run[], events: Event[]): FileRisk[] {
+  const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+  const map = new Map<
+    string,
+    {
+      worktree: string;
+      file: string;
+      gates: number;
+      fails: number;
+      lastReason: string | null;
+    }
+  >();
+  for (const e of events) {
+    if (e.kind !== "gate") continue;
+    let verdict: string | null = null;
+    let files: string[] = [];
+    try {
+      const d = JSON.parse(e.data ?? "{}") as {
+        verdict?: unknown;
+        files?: unknown;
+      };
+      if (typeof d.verdict === "string" && VERDICT_GRADES.has(d.verdict))
+        verdict = d.verdict;
+      if (Array.isArray(d.files))
+        files = d.files.filter(
+          (f): f is string => typeof f === "string" && !!f,
+        );
+    } catch {
+      continue; // unparseable gate data — nothing to attribute
+    }
+    if (!verdict || files.length === 0) continue;
+    const wt = wtByRun.get(e.run_id) ?? "(unknown)";
+    const failed = !isPassFamily(verdict);
+    const reason = failed ? eventReasonCode(e.data) : null;
+    for (const file of files) {
+      const key = `${wt}\u0000${file}`;
+      let b = map.get(key);
+      if (!b) {
+        b = { worktree: wt, file, gates: 0, fails: 0, lastReason: null };
+        map.set(key, b);
+      }
+      b.gates++;
+      if (failed) {
+        b.fails++;
+        // events arrive oldest-first, so the last write wins = most recent.
+        if (reason) b.lastReason = reason;
+      }
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) =>
+      b.fails - a.fails ||
+      b.gates - a.gates ||
+      (a.file < b.file ? -1 : a.file > b.file ? 1 : 0),
+  );
 }
 
 /** Top reason_code per worktree, sorted by count desc (spec §2 query). */
@@ -554,6 +637,8 @@ export interface StatsData {
   escalatedRuns: EscalatedRun[];
   bestPassing: BestPassing[];
   recentVerdictNotes: RecentVerdictNote[];
+  /** Per-file gate/fail counts (risk heatmap), worst first. */
+  byFile: FileRisk[];
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -738,6 +823,7 @@ export function getStatsData(): StatsData {
       // list by worktree and files[] before slicing, so a cap of 3 here would
       // throw away the very notes a file-scoped query is looking for.
       recentVerdictNotes: getRecentVerdictNotes(runs, events, 50),
+      byFile: getFileRisk(runs, events),
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:

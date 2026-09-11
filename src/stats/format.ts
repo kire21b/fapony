@@ -93,6 +93,19 @@ export function formatStatsText(data: StatsData): string {
     }
   }
 
+  if (data.byFile.length > 0) {
+    lines.push(
+      "\nby file (graded touches — absence means unmeasured, not safe):",
+    );
+    lines.push("  file | gates | fails | last reason");
+    lines.push("  -----|-------|-------|------------");
+    for (const f of data.byFile.slice(0, 10)) {
+      lines.push(
+        `  ${f.file.padEnd(40)} | ${String(f.gates).padStart(5)} | ${String(f.fails).padStart(5)} | ${f.lastReason ?? "—"}`,
+      );
+    }
+  }
+
   if (data.escalatedRuns.length > 0) {
     lines.push("\nescalated runs (round past cap — likely plan signal):");
     for (const e of data.escalatedRuns.slice(0, 3)) {

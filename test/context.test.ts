@@ -47,6 +47,7 @@ function statsFixture(): StatsData {
     ],
     bestPassing: [{ plan: "usage-web-cli", worktree: "wt1" }],
     recentVerdictNotes: [],
+    byFile: [],
     usage: EMPTY_RESULT,
     latestRunAt: "",
   };

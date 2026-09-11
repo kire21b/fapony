@@ -44,7 +44,7 @@ You are about to move a PLAN that has been shipped to the archive.
    ```
 
 7. **Record the verdict** — call the `verdict_submit` MCP tool (fapony) so this ship feeds
-   `project_health_context` for the next plan-with-pony draft. No `run_id` needed:
+   `project_health_context` for whoever touches these files next. No `run_id` needed:
    - `verdict`: `pass` (adjust if the ship had known rough edges — see VERDICT_GRADES)
    - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
      — pick `other` with a `note` if nothing fits, or leave a `note` on any grade to record
@@ -53,6 +53,9 @@ You are about to move a PLAN that has been shipped to the archive.
      every other fapony tool (`fapony_usage`, `fapony_stats`, `project_health_context`)
      scopes by absolute path too; a bare repo name won't match those queries
    - `plan`: the archived plan's path (post-move, e.g. `.fapony/plan/done/PLAN-foo.md`)
+   - `files`: repo-relative paths this plan touched (`git diff --name-only <base>..HEAD`) —
+     the only input to per-file risk history; without it the verdict says something happened
+     but not where
    Skip only if fapony's MCP tools aren't available in this session — don't block the archive on it.
 
 ## Example

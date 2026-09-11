@@ -137,8 +137,9 @@ Always attach a one-line `note`. Grades and codes only count; the note is the on
 review can act on. Say what specifically broke or was walked, not that a review happened.
 
 Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), `plan` (the
-PLAN file path under review, omitted for a bare PR/diff), and `files` (optional — the files
-that were reviewed/changed, so fapony can track file-level patterns across runs).
+PLAN file path under review, omitted for a bare PR/diff), and `files` — the repo-relative paths
+you actually walked. **Always send `files`.** It is the only input to per-file risk history; a
+verdict without it tells the next session that something failed but not where.
 No `run_id` — fapony reuses the
 latest still-open run for the same worktree+plan (so round 2+ counts toward the round cap),
 creating a row only when none is open.

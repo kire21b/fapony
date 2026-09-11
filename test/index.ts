@@ -291,6 +291,7 @@ import {
 import {
   testCountPendingPlans,
   testStatsBestPassing,
+  testStatsByFileRisk,
   testStatsByModelGroupsByClientProviderAgent,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
@@ -653,6 +654,7 @@ export async function cmdTest(): Promise<void> {
   testStatsEscalatedRuns();
   testStatsPlanBreakdown();
   testStatsBestPassing();
+  testStatsByFileRisk();
   testStatsModelFromExecutorSpawn();
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();

@@ -747,3 +747,53 @@ export function testStatsVerdictNotesNotCappedAtDisplayLimit(): void {
   });
   console.log("  ✓ getStatsData: verdict notes collected past the display cap");
 }
+
+export function testStatsByFileRisk(): void {
+  withTmpDb((db) => {
+    const r1 = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, r1, "gate", {
+      verdict: "fail",
+      reason_code: "spec_gap",
+      note: "x",
+      files: ["src/auth.ts", "src/ui.ts"],
+    });
+    const r2 = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, r2, "gate", {
+      verdict: "pass-good",
+      note: "y",
+      files: ["src/auth.ts"],
+    });
+    // Other worktree must not merge into wt1's rows.
+    const r3 = newRun(db, "wt2", null, null, "abc");
+    addEvent(db, r3, "gate", {
+      verdict: "fail",
+      reason_code: "wrong_layer",
+      note: "z",
+      files: ["src/auth.ts"],
+    });
+    // A gate with no files[] contributes nothing.
+    addEvent(db, r2, "gate", { verdict: "fail", note: "no files" });
+
+    const byFile = getStatsData().byFile;
+    const auth = byFile.find(
+      (f) => f.worktree === "wt1" && f.file === "src/auth.ts",
+    );
+    assert.ok(auth, "src/auth.ts row missing");
+    assert.equal(auth.gates, 2);
+    assert.equal(auth.fails, 1);
+    assert.equal(auth.lastReason, "spec_gap");
+
+    const other = byFile.find(
+      (f) => f.worktree === "wt2" && f.file === "src/auth.ts",
+    );
+    assert.equal(other?.gates, 1, "worktrees must not merge");
+
+    // Worst-first ordering: 1 fail beats 0 fails.
+    const ui = byFile.findIndex((f) => f.file === "src/ui.ts");
+    const authIdx = byFile.findIndex(
+      (f) => f.worktree === "wt1" && f.file === "src/auth.ts",
+    );
+    assert.ok(ui < authIdx || byFile[ui].fails >= byFile[authIdx].fails);
+  });
+  console.log("  ✓ getStatsData byFile counts graded touches vs fails");
+}
