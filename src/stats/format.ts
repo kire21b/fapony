@@ -46,11 +46,15 @@ export function formatStatsText(data: StatsData): string {
 
   if (data.byModel.length > 0) {
     lines.push("\nby model:");
-    lines.push("  model | gates | avgQuality | avgCostUSD | avgValue");
-    lines.push("  ------|-------|------------|------------|--------");
+    lines.push(
+      "  client | provider | model | agent | gates | avgQuality | avgCostUSD | avgValue",
+    );
+    lines.push(
+      "  -------|----------|-------|-------|-------|------------|------------|--------",
+    );
     for (const m of data.byModel) {
       lines.push(
-        `  ${m.model.padEnd(8)} | ${String(m.gateCount).padStart(5)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtNullable(m.avgCostUSD).padStart(10)} | ${fmtNullable(m.avgValue).padStart(8)}`,
+        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtNullable(m.avgCostUSD).padStart(10)} | ${fmtNullable(m.avgValue).padStart(8)}`,
       );
     }
   }

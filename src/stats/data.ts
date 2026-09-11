@@ -47,6 +47,9 @@ interface EnrichedGate {
   verdict: string;
   costUSD: number | null;
   model: string | null;
+  provider: string | null;
+  client: string | null;
+  agent: string | null;
   valueScore: number | null;
 }
 
@@ -67,6 +70,9 @@ function enrichGates(events: Event[]): EnrichedGate[] {
       verdict: w.verdict,
       costUSD: w.costUSD,
       model: w.model,
+      provider: w.provider,
+      client: w.client,
+      agent: w.agent,
       valueScore,
     };
   });
@@ -500,7 +506,10 @@ export interface StatsData {
     review: { avg: number; count: number };
   };
   byModel: Array<{
+    client: string;
+    provider: string;
     model: string;
+    agent: string;
     gateCount: number;
     avgQuality: number;
     avgCostUSD: number | null;
@@ -587,9 +596,16 @@ export function getStatsData(): StatsData {
     // --- Gate enrichment ---
     const enriched = enrichGates(events);
 
+    // Group by client+provider+model+agent — the same model name on two
+    // providers is two different things. Unknown dimension → "—" (never ""
+    // or "(unknown)").
     const modelMap: Record<
       string,
       {
+        client: string;
+        provider: string;
+        model: string;
+        agent: string;
         gateCount: number;
         qualities: number[];
         costs: number[];
@@ -597,8 +613,16 @@ export function getStatsData(): StatsData {
       }
     > = {};
     for (const g of enriched) {
-      const m = g.model ?? "(unknown)";
-      const bucket = (modelMap[m] ??= {
+      const client = g.client ?? "—";
+      const provider = g.provider ?? "—";
+      const model = g.model ?? "—";
+      const agent = g.agent ?? "—";
+      const key = [client, provider, model, agent].join("\0");
+      const bucket = (modelMap[key] ??= {
+        client,
+        provider,
+        model,
+        agent,
         gateCount: 0,
         qualities: [],
         costs: [],
@@ -610,9 +634,12 @@ export function getStatsData(): StatsData {
       if (g.costUSD !== null) bucket.costs.push(g.costUSD);
       if (g.valueScore !== null) bucket.values.push(g.valueScore);
     }
-    const byModel = Object.entries(modelMap)
-      .map(([model, b]) => ({
-        model,
+    const byModel = Object.values(modelMap)
+      .map((b) => ({
+        client: b.client,
+        provider: b.provider,
+        model: b.model,
+        agent: b.agent,
         gateCount: b.gateCount,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         avgCostUSD: b.costs.length ? avg(b.costs) : null,

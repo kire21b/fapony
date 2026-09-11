@@ -110,9 +110,12 @@ export function testStatsMultiRoundSeparateGates(): void {
       16,
       "gate 2 cost = round 2 spawns only, not cumulative",
     );
-    // Both gates share the (unknown)-model bucket with gateCount 2
+    // Both gates share the "—"-model bucket with gateCount 2
     assert.equal(data.byModel.length, 1);
-    assert.equal(data.byModel[0].model, "(unknown)");
+    assert.equal(data.byModel[0].model, "—");
+    assert.equal(data.byModel[0].client, "—");
+    assert.equal(data.byModel[0].provider, "—");
+    assert.equal(data.byModel[0].agent, "—");
     assert.equal(data.byModel[0].gateCount, 2);
     // avgQuality over fail(0) + pass-good(4) = 2
     assert.equal(data.byModel[0].avgQuality, 2);
@@ -290,6 +293,94 @@ export function testStatsModelFromSessionIdWhenNoSpawn(): void {
   console.log(
     "  ✓ getStatsData: model from session_id when no spawn in window",
   );
+}
+
+export function testStatsByModelGroupsByClientProviderAgent(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+
+    // Same model name on two providers — must land in two different buckets
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 0,
+      session_id: "sess-zcode-1",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    addEvent(db, runId, "gate", {
+      verdict: "pass-good",
+      note: "",
+      round: 1,
+      session_id: "sess-oc-1",
+      reason_code: "missing_test",
+      source: "mcp",
+    });
+    setStatus(db, runId, "passed");
+
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-gates-split-"));
+    const zcPath = join(dir, "zcode.sqlite");
+    const zdb = new Database(zcPath);
+    zdb.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
+        computed_total_tokens INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    zdb
+      .prepare(
+        `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "m1",
+        "sess-zcode-1",
+        "GLM-5.3-Flash",
+        "builtin:zai-start-plan",
+        "zcode-Explore",
+        5000,
+      );
+    zdb.close();
+
+    const ocPath = join(dir, "opencode.db");
+    const ocdb = new Database(ocPath);
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO session (id, project_id, model) VALUES (?, ?, ?)`)
+      .run(
+        "sess-oc-1",
+        "p1",
+        '{"providerID":"other-provider","id":"GLM-5.3-Flash"}',
+      );
+    ocdb.close();
+
+    const prevOC = process.env.FAPONY_OPENCODE_DB;
+    const prevZC = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = ocPath;
+      process.env.FAPONY_ZCODE_DB = zcPath;
+      const data = getStatsData();
+      assert.equal(data.byModel.length, 2, "same name ≠ same bucket");
+      const zc = data.byModel.find((m) => m.client === "zcode")!;
+      const oc = data.byModel.find((m) => m.client === "opencode")!;
+      assert.ok(zc && oc);
+      assert.equal(zc.provider, "builtin:zai-start-plan");
+      assert.equal(zc.model, "GLM-5.3-Flash");
+      assert.equal(zc.agent, "zcode-Explore");
+      assert.equal(oc.provider, "other-provider");
+      assert.equal(oc.model, "GLM-5.3-Flash");
+      assert.equal(oc.agent, "—");
+    } finally {
+      if (prevOC === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prevOC;
+      if (prevZC === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = prevZC;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log("  ✓ getStatsData: byModel splits same model across providers");
 }
 
 export function testStatsSpawnModelWinsOverSessionId(): void {

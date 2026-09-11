@@ -14,7 +14,7 @@
 import { sumSpawnCost } from "./cost.js";
 import type { Event } from "./db/index.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
-import { findSessionModel } from "./session/index.js";
+import { findSessionModel, type SessionClient } from "./session/index.js";
 
 export interface GateWindow {
   runId: number;
@@ -24,6 +24,12 @@ export interface GateWindow {
   quality: number | null;
   /** Executor model from the window's spawns, or null when unknown. */
   model: string | null;
+  /** Provider from the gate's session_id (null when unknown or spawn-based). */
+  provider: string | null;
+  /** Client owning the session log (null when unknown or spawn-based). */
+  client: SessionClient | null;
+  /** Subagent name, ZCode only (null otherwise, or when spawn-based). */
+  agent: string | null;
   /** USD estimate for the window's spawns, or null when unpriced/empty. */
   costUSD: number | null;
   /** Round number from the gate event data (defaults to 1). */
@@ -83,18 +89,37 @@ export function enrichGateWindows(events: Event[]): GateWindow[] {
       }
 
       // No spawn in window (the execute→review loop that wrote them is gone):
-      // fall back to session_id on the gate event — resolve model from the
-      // client's own session log. Spawn-based model always wins when present.
+      // fall back to session_id on the gate event — resolve model + provider
+      // + client + agent from the client's own session log. Spawn-based model
+      // always wins when present (the three new fields stay null then).
+      let provider: string | null = null;
+      let client: SessionClient | null = null;
+      let agent: string | null = null;
       if (model === null && typeof d.session_id === "string" && d.session_id) {
         const resolved = findSessionModel(d.session_id);
-        if (resolved) model = resolved.model;
+        if (resolved) {
+          model = resolved.model;
+          provider = resolved.provider;
+          client = resolved.client;
+          agent = resolved.agent;
+        }
       }
 
       const grade = verdict as VerdictGrade;
       const quality = VERDICT_GRADES.has(grade) ? qualityScore(grade) : null;
       const round = typeof d.round === "number" ? d.round : 1;
 
-      out.push({ runId, verdict, quality, model, costUSD, round });
+      out.push({
+        runId,
+        verdict,
+        quality,
+        model,
+        costUSD,
+        round,
+        provider,
+        client,
+        agent,
+      });
     }
   }
   return out;

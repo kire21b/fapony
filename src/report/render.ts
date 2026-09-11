@@ -89,12 +89,15 @@ ${insufficientData(stats.runs.total, "runs")}
 <h2>By Model <span class="sample">(n=${gates})</span></h2>
 ${insufficientData(gates, "gates")}
 <table id="t-model">
-  <thead><tr><th>Model</th><th>Gates</th><th>Avg Quality</th><th>Avg Cost</th></tr></thead>
+  <thead><tr><th>Client</th><th>Provider</th><th>Model</th><th>Agent</th><th>Gates</th><th>Avg Quality</th><th>Avg Cost</th></tr></thead>
   <tbody>
 ${stats.byModel
   .map(
     (m) => `    <tr data-model="${esc(m.model)}">
+      <td>${esc(m.client)}</td>
+      <td>${esc(m.provider)}</td>
       <td>${esc(m.model)}</td>
+      <td>${esc(m.agent)}</td>
       <td>${m.gateCount}</td>
       <td>${m.avgQuality.toFixed(1)} <span class="sample">/ 5</span></td>
       <td>${fmtUsd(m.avgCostUSD)}</td>

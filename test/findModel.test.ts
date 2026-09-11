@@ -59,6 +59,8 @@ export function testFindSessionModelOpenCodeHit(): void {
       assert.ok(result, "should find session");
       assert.equal(result!.model, "claude-sonnet-5");
       assert.equal(result!.provider, "anthropic");
+      assert.equal(result!.client, "opencode");
+      assert.equal(result!.agent, null);
     } finally {
       if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
       else process.env.FAPONY_OPENCODE_DB = prev;
@@ -98,6 +100,7 @@ function withZcodeFixture(fn: (dbPath: string) => void): void {
     db.run(
       `CREATE TABLE model_usage (
         id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
         input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
         reasoning_tokens INTEGER DEFAULT 0, cache_creation_input_tokens INTEGER DEFAULT 0,
         cache_read_input_tokens INTEGER DEFAULT 0, computed_total_tokens INTEGER DEFAULT 0
@@ -107,8 +110,17 @@ function withZcodeFixture(fn: (dbPath: string) => void): void {
       `INSERT INTO session (id, project_id, directory, time_created, time_updated) VALUES (?, ?, ?, ?, ?)`,
     ).run("z1", "p1", "/tmp/zwt", 1700000000, 1700000100);
     db.prepare(
-      `INSERT INTO model_usage (id, session_id, model_id, input_tokens, output_tokens, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run("mu1", "z1", "claude-opus-5", 1000, 500, 1500);
+      `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, input_tokens, output_tokens, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "mu1",
+      "z1",
+      "claude-opus-5",
+      "anthropic",
+      "zcode-Explore",
+      1000,
+      500,
+      1500,
+    );
     fn(dbPath);
   } finally {
     db.close();
@@ -124,6 +136,9 @@ export function testFindSessionModelZcodeHit(): void {
       const result = findSessionModel("z1");
       assert.ok(result, "should find session");
       assert.equal(result!.model, "claude-opus-5");
+      assert.equal(result!.provider, "anthropic");
+      assert.equal(result!.client, "zcode");
+      assert.equal(result!.agent, "zcode-Explore");
     } finally {
       if (prev === undefined) delete process.env.FAPONY_ZCODE_DB;
       else process.env.FAPONY_ZCODE_DB = prev;
@@ -145,6 +160,117 @@ export function testFindSessionModelZcodeMiss(): void {
     }
   });
   console.log("  ✓ findSessionModel ZCode miss → null");
+}
+
+export function testFindSessionModelZcodeRawProviderPassthrough(): void {
+  // provider_id is sometimes a raw UUID — pass through as-is, never map it
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-uuid-"));
+  const dbPath = join(dir, "db.sqlite");
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
+        computed_total_tokens INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "m1",
+      "zu",
+      "some-model",
+      "ce20a13d-8549-4e5a-823a-0b1359247b17",
+      null,
+      10,
+    );
+    const prev = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_ZCODE_DB = dbPath;
+      const result = findSessionModel("zu");
+      assert.ok(result, "should find session");
+      assert.equal(result!.provider, "ce20a13d-8549-4e5a-823a-0b1359247b17");
+      assert.equal(result!.agent, null);
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = prev;
+    }
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel ZCode raw provider passes through");
+}
+
+export function testFindSessionModelOpenCodePlainTextProviderUnknown(): void {
+  // Plain-text session.model carries no provider — "—", never ""
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-opencode-plain-"));
+  const dbPath = join(dir, "opencode.db");
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT)`,
+    );
+    db.prepare(
+      `INSERT INTO session (id, project_id, model) VALUES (?, ?, ?)`,
+    ).run("sp", "p1", "some-plain-model");
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const result = findSessionModel("sp");
+      assert.ok(result, "should find session");
+      assert.equal(result!.model, "some-plain-model");
+      assert.equal(result!.provider, "—");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+    }
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel OpenCode plain-text provider → —");
+}
+
+export function testFindSessionModelZcodeMultiModel(): void {
+  // 3 small rows of model-a vs 1 big row of model-b → max tokens wins
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-multi-"));
+  const dbPath = join(dir, "db.sqlite");
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
+        computed_total_tokens INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    const ins = db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    ins.run("m1", "zm", "model-a", "prov-a", "zcode-agent", 100);
+    ins.run("m2", "zm", "model-a", "prov-a", "zcode-agent", 200);
+    ins.run("m3", "zm", "model-a", "prov-a", "zcode-agent", 150);
+    ins.run("m4", "zm", "model-b", "prov-b", "zcode-general-purpose", 5000);
+    const prev = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_ZCODE_DB = dbPath;
+      const result = findSessionModel("zm");
+      assert.ok(result, "should find session");
+      assert.equal(result!.model, "model-b");
+      // Same dominant row picks provider + agent too
+      assert.equal(result!.provider, "prov-b");
+      assert.equal(result!.agent, "zcode-general-purpose");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = prev;
+    }
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel ZCode multi-model → max tokens");
 }
 
 // --- Claude Code fixture ---
@@ -175,6 +301,8 @@ export function testFindSessionModelClaudeCodeHit(): void {
     assert.ok(result, "should find session");
     assert.equal(result!.model, "claude-sonnet-5");
     assert.equal(result!.provider, "anthropic");
+    assert.equal(result!.client, "claude-code");
+    assert.equal(result!.agent, null);
   });
   console.log("  ✓ findSessionModel Claude Code hit");
 }
@@ -183,6 +311,63 @@ export function testFindSessionModelClaudeCodeMiss(): void {
   const result = findSessionModel("/nonexistent/path/session.jsonl");
   assert.equal(result, null);
   console.log("  ✓ findSessionModel Claude Code miss → null");
+}
+
+function writeClaudeLines(dir: string, name: string, models: string[]): string {
+  const filePath = join(dir, name);
+  const content = models
+    .map((m, i) =>
+      JSON.stringify({
+        message: {
+          model: m,
+          usage: { input_tokens: 100 + i, output_tokens: 50 },
+        },
+        timestamp: `2026-09-09T03:${String(i).padStart(2, "0")}:00.000Z`,
+      }),
+    )
+    .join("\n");
+  writeFileSync(filePath, content);
+  return filePath;
+}
+
+export function testFindSessionModelClaudeCodeMajority(): void {
+  // Opus diagnose (first, 2 turns) → Sonnet implements (5 turns): majority wins
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-claude-multi-"));
+  try {
+    const filePath = writeClaudeLines(dir, "session-multi.jsonl", [
+      "claude-opus-5",
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-sonnet-5",
+      "claude-sonnet-5",
+      "claude-sonnet-5",
+      "claude-sonnet-5",
+    ]);
+    const result = findSessionModel(filePath);
+    assert.ok(result, "should find session");
+    assert.equal(result!.model, "claude-sonnet-5");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel Claude Code multi-model → majority");
+}
+
+export function testFindSessionModelClaudeCodeTieGoesLast(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-claude-tie-"));
+  try {
+    const filePath = writeClaudeLines(dir, "session-tie.jsonl", [
+      "claude-opus-5",
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-sonnet-5",
+    ]);
+    const result = findSessionModel(filePath);
+    assert.ok(result, "should find session");
+    assert.equal(result!.model, "claude-sonnet-5", "tie → last seen");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel Claude Code tie → last");
 }
 
 // --- Codex fixture ---
@@ -224,6 +409,8 @@ export function testFindSessionModelCodexHit(): void {
     assert.ok(result, "should find session");
     assert.equal(result!.model, "gpt-5.6-terra");
     assert.equal(result!.provider, "openai");
+    assert.equal(result!.client, "codex");
+    assert.equal(result!.agent, null);
   });
   console.log("  ✓ findSessionModel Codex hit");
 }
@@ -232,6 +419,60 @@ export function testFindSessionModelCodexMiss(): void {
   const result = findSessionModel("/nonexistent/path/rollout.jsonl");
   assert.equal(result, null);
   console.log("  ✓ findSessionModel Codex miss → null");
+}
+
+function writeCodexMetas(dir: string, name: string, models: string[]): string {
+  const filePath = join(dir, name);
+  const content = models
+    .map((m, i) =>
+      JSON.stringify({
+        timestamp: `2026-09-09T10:59:0${i}.000Z`,
+        type: "session_meta",
+        payload: {
+          session_id: "multi",
+          cwd: "/tmp/test",
+          model_provider: "openai",
+          model: m,
+        },
+      }),
+    )
+    .join("\n");
+  writeFileSync(filePath, content);
+  return filePath;
+}
+
+export function testFindSessionModelCodexMultiMeta(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-codex-multi-"));
+  try {
+    const filePath = writeCodexMetas(dir, "rollout-multi.jsonl", [
+      "gpt-a",
+      "gpt-b",
+      "gpt-b",
+    ]);
+    const result = findSessionModel(filePath);
+    assert.ok(result, "should find session");
+    assert.equal(result!.model, "gpt-b", "majority of session_meta wins");
+    assert.equal(result!.provider, "openai");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel Codex multi session_meta → majority");
+}
+
+export function testFindSessionModelCodexMultiMetaTieGoesLast(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-codex-tie-"));
+  try {
+    const filePath = writeCodexMetas(dir, "rollout-tie.jsonl", [
+      "gpt-a",
+      "gpt-b",
+    ]);
+    const result = findSessionModel(filePath);
+    assert.ok(result, "should find session");
+    assert.equal(result!.model, "gpt-b", "tie → last seen");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel Codex multi session_meta tie → last");
 }
 
 // --- Edge cases ---

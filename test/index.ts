@@ -42,18 +42,26 @@ import {
 } from "./db.test.js";
 import {
   testFindSessionModelClaudeCodeHit,
+  testFindSessionModelClaudeCodeMajority,
   testFindSessionModelClaudeCodeMiss,
+  testFindSessionModelClaudeCodeTieGoesLast,
   testFindSessionModelCodexHit,
   testFindSessionModelCodexMiss,
+  testFindSessionModelCodexMultiMeta,
+  testFindSessionModelCodexMultiMetaTieGoesLast,
   testFindSessionModelEmptyId,
   testFindSessionModelNoReadersAvailable,
   testFindSessionModelOpenCodeHit,
   testFindSessionModelOpenCodeMiss,
+  testFindSessionModelOpenCodePlainTextProviderUnknown,
   testFindSessionModelZcodeHit,
   testFindSessionModelZcodeMiss,
+  testFindSessionModelZcodeMultiModel,
+  testFindSessionModelZcodeRawProviderPassthrough,
 } from "./findModel.test.js";
 import {
   testGateOnceAlreadyPassed,
+  testGateOnceAlreadyStalled,
   testGateOnceFail,
   testGateOnceMaxRounds,
   testGateOncePass,
@@ -205,7 +213,10 @@ import {
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
   testVerdictSubmitInvalidVerdict,
+  testVerdictSubmitNullPlanAlwaysCreatesNew,
   testVerdictSubmitOtherRequiresNote,
+  testVerdictSubmitPassedRunNotReused,
+  testVerdictSubmitReusesOpenRunAcrossRounds,
   testVerdictSubmitRunNotFound,
   testVerdictSubmitStoresMcpSource,
   testVerdictSubmitSuccess,
@@ -229,6 +240,7 @@ import {
   testQualityScore,
 } from "./parse.test.js";
 import {
+  testReportHtmlByModelHasAttributionColumns,
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
@@ -271,6 +283,7 @@ import {
 import {
   testCountPendingPlans,
   testStatsBestPassing,
+  testStatsByModelGroupsByClientProviderAgent,
   testStatsByWorktree,
   testStatsEfficiencyBytesProxy,
   testStatsEfficiencyFailIsInfinite,
@@ -392,6 +405,7 @@ export async function cmdTest(): Promise<void> {
   testGateOncePass();
   testGateOnceFail();
   testGateOnceAlreadyPassed();
+  testGateOnceAlreadyStalled();
   testGateOnceMaxRounds();
   testGateOncePassExcellent();
   testGateOncePassGood();
@@ -401,10 +415,17 @@ export async function cmdTest(): Promise<void> {
   testFindSessionModelOpenCodeMiss();
   testFindSessionModelZcodeHit();
   testFindSessionModelZcodeMiss();
+  testFindSessionModelZcodeMultiModel();
+  testFindSessionModelZcodeRawProviderPassthrough();
+  testFindSessionModelOpenCodePlainTextProviderUnknown();
   testFindSessionModelClaudeCodeHit();
   testFindSessionModelClaudeCodeMiss();
+  testFindSessionModelClaudeCodeMajority();
+  testFindSessionModelClaudeCodeTieGoesLast();
   testFindSessionModelCodexHit();
   testFindSessionModelCodexMiss();
+  testFindSessionModelCodexMultiMeta();
+  testFindSessionModelCodexMultiMetaTieGoesLast();
   testFindSessionModelEmptyId();
   testFindSessionModelNoReadersAvailable();
   testInitCreatesDirectories();
@@ -553,6 +574,9 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitStoresMcpSource();
   testVerdictSubmitAutoCreatesRun();
   testVerdictSubmitAllGrades();
+  testVerdictSubmitReusesOpenRunAcrossRounds();
+  testVerdictSubmitNullPlanAlwaysCreatesNew();
+  testVerdictSubmitPassedRunNotReused();
   testPlanListRequiresWorktree();
   testPlanListMissingDir();
   testPlanListNeverAttempted();
@@ -614,6 +638,7 @@ export async function cmdTest(): Promise<void> {
   testStatsBestPassing();
   testStatsModelFromExecutorSpawn();
   testStatsModelFromSessionIdWhenNoSpawn();
+  testStatsByModelGroupsByClientProviderAgent();
   testStatsSpawnModelWinsOverSessionId();
   testStatsEfficiencyUsd();
   testStatsEfficiencyBytesProxy();
@@ -659,6 +684,7 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlTotalCostCountsEachSpawnOnce();
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
+  testReportHtmlByModelHasAttributionColumns();
   testReportHtmlEscapesContent();
   // Usage-web tests
   testFmtTokensZero();

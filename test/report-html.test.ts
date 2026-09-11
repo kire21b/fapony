@@ -88,6 +88,24 @@ export function testReportHtmlFiltersAndMethodology(): void {
   console.log("  ✓ report-html has filters, methodology, insufficient-data");
 }
 
+export function testReportHtmlByModelHasAttributionColumns(): void {
+  // Spawn-based windows carry no client/provider/agent → "—", never blank.
+  withTestDb((db) => {
+    seedTwoRounds(db);
+    const html = renderReportHtml(getStatsData(), new Date().toISOString());
+    for (const h of [
+      "<th>Client</th>",
+      "<th>Provider</th>",
+      "<th>Agent</th>",
+    ]) {
+      assert.ok(html.includes(h), `By Model table has ${h}`);
+    }
+    assert.ok(html.includes("<td>—</td>"), "unknown dims render as —");
+  });
+
+  console.log("  ✓ report-html By Model shows client/provider/agent");
+}
+
 export function testReportHtmlEscapesContent(): void {
   // Worktree basenames are interpolated into HTML — must not break markup.
   withTestDb((db) => {

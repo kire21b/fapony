@@ -1,4 +1,4 @@
-// src/session/findModel.ts — resolve model+provider from a session_id
+// src/session/findModel.ts — resolve model+provider+client+agent from a session_id
 //
 // Tries each client reader in order: OpenCode → ZCode → Claude Code → Codex.
 // Returns null when the id is not found in any session log. Never throws —
@@ -12,10 +12,19 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+export type SessionClient = "opencode" | "zcode" | "claude-code" | "codex";
+
 export interface SessionModel {
   model: string;
+  /** Provider as the client logs it (raw — never mapped); "—" when unknown. */
   provider: string;
+  client: SessionClient;
+  /** Subagent name (ZCode model_usage.agent only); null elsewhere. */
+  agent: string | null;
 }
+
+/** Single unknown-value sentinel — never "" or "(unknown)" (see task). */
+const UNKNOWN = "—";
 
 function resolveOpenCodeDbPath(): string {
   return (
@@ -32,6 +41,9 @@ function resolveZcodeDbPath(): string {
 }
 
 function findInOpenCode(sessionId: string): SessionModel | null {
+  // NOTE: session.model is the *current* model, not the majority one — a
+  // mid-run /model switch leaves only the latest here. That's the best this
+  // reader can do: never scan the part table for this (per-task rule).
   const dbPath = resolveOpenCodeDbPath();
   if (!existsSync(dbPath)) return null;
 
@@ -56,13 +68,20 @@ function findInOpenCode(sessionId: string): SessionModel | null {
           };
           return {
             model: parsed.id ?? row.model,
-            provider: parsed.providerID ?? "",
+            provider: parsed.providerID || UNKNOWN,
+            client: "opencode",
+            agent: null,
           };
         }
       } catch {
         // fall through to plain text
       }
-      return { model: row.model, provider: "" };
+      return {
+        model: row.model,
+        provider: UNKNOWN,
+        client: "opencode",
+        agent: null,
+      };
     }
     return null;
   } catch {
@@ -81,19 +100,33 @@ function findInZcode(sessionId: string): SessionModel | null {
     db = new Database(dbPath, { readonly: true });
     db.run("PRAGMA query_only = ON");
 
-    // ZCode: session has no model column — model lives in model_usage
+    // ZCode: session has no model column — model lives in model_usage, one
+    // row per request, so a mid-run /model switch leaves several model_ids.
+    // Majority proxy: the row with the most computed_total_tokens (no JOIN —
+    // no session column is used, and session_id is FK'd to session anyway).
+    // provider_id is taken raw (sometimes a UUID, never mapped); agent tells
+    // which subagent did the work. Same dominant-row rule picks all three.
     const row = db
       .prepare(
-        `SELECT mu.model_id AS model
-         FROM model_usage mu
-         JOIN session s ON mu.session_id = s.id
-         WHERE s.id = ?
+        `SELECT model_id AS model, provider_id AS provider, agent
+         FROM model_usage
+         WHERE session_id = ?
+         ORDER BY computed_total_tokens DESC
          LIMIT 1`,
       )
-      .get(sessionId) as { model: string } | null;
+      .get(sessionId) as {
+      model: string;
+      provider: string | null;
+      agent: string | null;
+    } | null;
 
     if (!row) return null;
-    return { model: row.model, provider: "" };
+    return {
+      model: row.model,
+      provider: row.provider || UNKNOWN,
+      client: "zcode",
+      agent: row.agent ?? null,
+    };
   } catch {
     return null;
   } finally {
@@ -112,21 +145,43 @@ function findInClaudeCode(sessionId: string): SessionModel | null {
     return null;
   }
 
+  // One session routinely uses several models (Opus diagnose → /model
+  // Sonnet to implement), so count message.model on every line and return the
+  // majority — never the first hit. Tie → last seen. Verified on real data:
+  // opus first (122 turns) but sonnet the worker (572 turns) must win.
+  const counts = new Map<string, number>();
+  const lastIdx = new Map<string, number>();
   const lines = content.split("\n");
-  for (const line of lines) {
-    if (!line.includes("input_tokens")) continue;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
     try {
       const parsed = JSON.parse(line) as {
         message?: { model?: string };
       };
-      if (typeof parsed.message?.model === "string" && parsed.message.model) {
-        return { model: parsed.message.model, provider: "anthropic" };
+      const m = parsed.message?.model;
+      if (typeof m === "string" && m) {
+        counts.set(m, (counts.get(m) ?? 0) + 1);
+        lastIdx.set(m, i);
       }
     } catch {
       // skip malformed
     }
   }
-  return null;
+  let best: string | null = null;
+  for (const [m, c] of counts) {
+    if (
+      best === null ||
+      c > (counts.get(best) ?? 0) ||
+      (c === (counts.get(best) ?? 0) &&
+        (lastIdx.get(m) ?? 0) > (lastIdx.get(best) ?? 0))
+    ) {
+      best = m;
+    }
+  }
+  return best
+    ? { model: best, provider: "anthropic", client: "claude-code", agent: null }
+    : null;
 }
 
 function findInCodex(sessionId: string): SessionModel | null {
@@ -140,8 +195,16 @@ function findInCodex(sessionId: string): SessionModel | null {
     return null;
   }
 
+  // session_meta normally appears exactly once per file (verified: 59/59
+  // on this machine), but count anyway — same majority/tie→last rule as
+  // Claude Code in case a rollout ever carries several.
+  const counts = new Map<
+    string,
+    { n: number; lastIdx: number; provider: string }
+  >();
   const lines = content.split("\n");
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!line) continue;
     try {
       const parsed = JSON.parse(line) as {
@@ -157,19 +220,37 @@ function findInCodex(sessionId: string): SessionModel | null {
           parsed.payload.model ??
           parsed.payload.base_instructions?.provenance?.model;
         if (model) {
-          return { model, provider: parsed.payload.model_provider ?? "" };
+          const prev = counts.get(model);
+          counts.set(model, {
+            n: (prev?.n ?? 0) + 1,
+            lastIdx: i,
+            provider: parsed.payload.model_provider ?? prev?.provider ?? "",
+          });
         }
       }
     } catch {
       // skip malformed
     }
   }
-  return null;
+  let best: string | null = null;
+  for (const [m, s] of counts) {
+    const b = best === null ? undefined : counts.get(best);
+    if (!b || s.n > b.n || (s.n === b.n && s.lastIdx > b.lastIdx)) {
+      best = m;
+    }
+  }
+  if (!best) return null;
+  return {
+    model: best,
+    provider: counts.get(best)?.provider || UNKNOWN,
+    client: "codex",
+    agent: null,
+  };
 }
 
 /**
- * Resolve model+provider from a session_id by trying each client reader.
- * Returns null when not found in any session log.
+ * Resolve model+provider+client+agent from a session_id by trying each
+ * client reader. Returns null when not found in any session log.
  */
 export function findSessionModel(sessionId: string): SessionModel | null {
   if (typeof sessionId !== "string" || !sessionId) return null;
