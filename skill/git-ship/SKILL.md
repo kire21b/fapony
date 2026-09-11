@@ -1,6 +1,6 @@
 ---
 name: git-ship
-description: Ship a branch end to end — push it, open a PR with an AI-drafted title/body, merge it, then reset a long-lived branch onto the base. Use with Claude Code. Trigger on /git-ship, /ship, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
+description: Ship a branch end to end — push it, open a PR with an AI-drafted title/body, merge it, then reset a long-lived branch onto the base. Stops at the PR for team review with `pr`, lands an approved one with `land`. Use with Claude Code. Trigger on /git-ship, /ship, /pr, and when the user asks to open a PR, ship a branch, or merge for them.
 ---
 
 # Git Ship — push, PR, merge, reset
@@ -8,6 +8,28 @@ description: Ship a branch end to end — push it, open a PR with an AI-drafted 
 You are shipping a branch: push it, open a PR with a drafted title/body, merge it, reset it.
 Commits should already be split by concern — see [git-commit-conventional](../git-commit-conventional/SKILL.md)
 if they aren't yet.
+
+## Where to stop
+
+The argument picks the stop point. Everything else on this page is identical in all three.
+
+| Invocation | Does | For |
+|---|---|---|
+| `/git-ship` | push → PR → merge → reset | working solo, or a branch nobody else reviews |
+| `/git-ship pr` | push → PR, then **stop** and report the URL | a team — someone else reviews and merges |
+| `/git-ship land` | the PR exists and is approved → merge → reset | a team, after approval lands |
+
+No argument, and the repo's default branch requires a review to merge
+(`gh api repos/{owner}/{repo}/branches/<default> --jq '.protection.required_pull_request_reviews'`
+returns anything but `null`)? Treat it as `pr` and say why — merging is not yours to do when the
+repo says a human must approve first. `--admin` stays off the table either way.
+
+For `pr`, stop after `gh pr create` and report the URL, plus who needs to review if the repo
+declares owners. Don't merge, don't reset — the branch must stay as the reviewer sees it.
+
+For `land`, skip drafting: the PR is already written. Start at the CI gate below, then merge and
+reset. Re-read the PR body first and say in one line whether it still matches the commits, since
+review may have added some.
 
 ## Before anything
 
