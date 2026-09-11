@@ -17,6 +17,26 @@ Ask one group at a time, wait for the dev to answer, then ask the next.
 - **Never push back** — if the dev's answer contradicts best practice, log it in "constraints" don't argue
 - **The dev's result** > the "theoretically correct" result
 
+## Phase 0 — What the dev already said
+
+Most devs arrive here *after* talking the idea through, not before. Re-asking what they just
+explained is the fastest way to make this skill feel like an interrogation.
+
+So before Round 1, read back through the conversation you are already in:
+
+- Answer as many of Phase 1's rounds as the conversation already answers, and show the dev that
+  summary **in one message** — one line per round, marked `(from our conversation)`.
+- Ask them to correct it, not to confirm it: *"Fix anything I got wrong — I'll only ask about
+  the rounds that are still blank."*
+- Then ask **only** the rounds nothing in the conversation covers.
+
+A round the dev corrects counts as discussed (hard rule #5 is satisfied by their correction, not
+by a question you asked). If you were started fresh with no prior conversation, skip this phase
+and open at Round 1.
+
+In practice Rounds 3 (done criteria) and 5 (where it breaks) are the ones ordinary discussion
+leaves empty — expect those two to be the questions you still have to ask.
+
 ## Phase 1 — Understand (3–5 rounds of questions)
 
 ### Round 1 — Goal
@@ -56,11 +76,16 @@ Ask:
 
 When all answers are in, **before writing the file**, check past-run history:
 
-- If the `project_health_context` MCP tool is available, call it and paste the returned block
-  into the conversation under "Known patterns from past runs". Pass `worktree` as the **absolute
-  path** to this repo (`git rev-parse --show-toplevel`) — every fapony tool scopes by absolute
-  path, and a bare repo name lands in a different bucket that later queries won't find. Omit
-  `worktree` entirely for the cross-project view.
+- If the `project_health_context` MCP tool is available, call it **twice** and paste both blocks
+  into the conversation under "Known patterns from past runs":
+  1. `worktree` = the **absolute path** to this repo (`git rev-parse --show-toplevel`) — patterns
+     from this project. Every fapony tool scopes by absolute path, and a bare repo name lands in
+     a different bucket that later queries won't find.
+  2. **no `worktree` argument at all** — patterns across *every* project sharing this fapony
+     state db. This is the cross-project view: habits you repeat everywhere (same reason_code
+     failing in three repos) show up here and nowhere else. Skip this call only if the dev asks
+     for a project-only view.
+  Label them so the dev can tell which is which, e.g. "this project" vs "all projects".
 - If fapony isn't wired up (no MCP tool) or the block says "not enough history yet", skip
   silently — never block drafting on this.
 - Show the block to the dev and ask which watch-fors (if any) should carry into the new plan's
