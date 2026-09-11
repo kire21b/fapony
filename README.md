@@ -163,6 +163,46 @@ Code expects, so a client can symlink the directory rather than copy the file:
 | `skill/git-commit-conventional/` | Commit split by concern + conventional message | `/git-commit` |
 | `skill/git-ship/` | Push branch, open PR with drafted title/body, merge, reset branch onto base | `/ship`, `/pr` |
 
+### When to call what
+
+```mermaid
+flowchart TD
+    I([idea]) --> P["/plan-with-pony"]
+    P --> W[you and your agent build]
+    W --> C["/git-commit"]
+    C --> R["/review-pony"]
+    R -->|findings| W
+    R -->|clean| S["/git-ship"]
+    S --> D["/move-to-done"]
+    D -.-> H[(fapony history)]
+    R -.-> H
+    H -.->|known patterns| P
+
+    style H fill:#2d333b,stroke:#768390,color:#adbac7
+```
+
+The dotted edges are the whole point. `/review-pony` and `/move-to-done` write a verdict with a
+`reason_code` and a one-line note; `/plan-with-pony` reads them back before the next plan is
+written. Nothing else in the loop knows what went wrong last month.
+
+| Moment | Call | What fapony gets out of it |
+|---|---|---|
+| Before writing a plan | `/plan-with-pony` | reads `project_health_context` — what keeps failing here |
+| Before committing | `/git-commit` | nothing; it just keeps commits reviewable |
+| Before merging | `/review-pony` | writes a verdict + `reason_code` + note |
+| Merging | `/git-ship` (`pr` / `land` on a team) | nothing; pure git plumbing |
+| After it ships | `/move-to-done` | writes the ship verdict, closes the loop |
+| Any time | ask for `verification_report` | git facts + allowlisted evidence, one call |
+
+**Team flow.** `/git-ship pr` stops once the PR is open and hands you the URL; the reviewer does
+their pass; `/git-ship land` merges it after approval. If the default branch requires reviews,
+plain `/git-ship` detects that and behaves like `pr` on its own.
+
+**What this is not.** It doesn't reduce your token bill — an agent that plans against known
+failure patterns tends to spend fewer rounds getting there, but fapony measures that, it doesn't
+cause it. Use `fapony_usage` to find out whether it actually happened for you rather than taking
+the claim on faith.
+
 `fapony install --platform claude` (or `opencode`) symlinks these directories into
 `~/.claude/skills` rather than copying them, so `fapony update` refreshes every client
 at once. A destination that already exists and isn't a fapony link is reported and left
