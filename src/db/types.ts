@@ -76,7 +76,6 @@ export interface Config {
   usageWeb?: {
     port?: number;
     hostname?: string;
-    pollInterval?: number;
     ownerName?: string;
   } | null;
 }

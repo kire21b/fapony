@@ -143,7 +143,7 @@ is the only reason to keep it. Everything in between is the agent's own business
 discover: plan_list (pending plan files joined with their run history)
 measure:  handoff_collect ── fapony_stats ── fapony_usage
 verify:   handoff_check ── verdict_submit ── verification_report
-plan:     project_health_context (known patterns from history → plan-with-pony)
+recall:   project_health_context (what failed in these files before — call it before editing)
           (facts + checks + evidence + verdict + cost, in one call)
 ```
 
@@ -151,14 +151,14 @@ plan:     project_health_context (known patterns from history → plan-with-pony
 |------|------|---------|
 | `plan_list` | discover | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
 | `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
-| `fapony_stats` | measure | KPIs across runs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N slices |
+| `fapony_stats` | measure | KPIs across runs: by-model (with fail rate), by-grade, by-value, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `handoff_check` | verify | Check the agent's handoff claims against those facts |
 | `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
-| `project_health_context` | plan | Known-patterns block for plan-with-pony: recurring fail reasons, escalated runs, round-1-pass shapes |
+| `project_health_context` | recall | Known-patterns block for the files you are about to touch: recurring fail reasons, escalated runs, round-1-pass shapes. Any task, no plan file required |
 
-Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-web [port]` starts a live comparison dashboard across OpenCode, ZCode, Claude Code, and Codex sessions — by default it samples (OpenCode/ZCode timing: last 20k parts; Claude Code/Codex: last 30 days, skipped by file mtime so old JSONL history is never read) instead of scanning everything; pass `--full` for an exact all-time scan. The dashboard title shows which mode is active.
+Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 
@@ -256,7 +256,8 @@ Example plans produced by it live in [examples/](examples/).
 fapony mcp                               # MCP server (stdio JSON-RPC — 8 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
-fapony usage-web [port] [--full]         # live usage comparison dashboard (OpenCode / ZCode / Claude Code / Codex) — default samples (last 30d + last 20k parts), --full for an exact all-time scan
+fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
+fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
 # Setup & maintenance
@@ -281,7 +282,7 @@ fapony test                              # self-check
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
 - `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
-- `usageWeb` — optional `{ port, hostname, pollInterval }` for `fapony usage-web` server defaults (CLI args override)
+- `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 
@@ -289,7 +290,9 @@ Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB locat
 
 **Supported:**
 - MCP server — 8 tools via stdio JSON-RPC, works with any MCP client
-- Measurement: cross-run KPIs by model/grade/value + passive usage (tokens, cost)
+- Measurement: cross-run KPIs by model/grade/value, per-file risk (graded touches vs. fails) + passive usage (tokens, cost)
+- Model attribution across clients — resolved from the session log that was live when the verdict landed, so a verdict carries a model without the caller declaring one
+- Zero setup beyond install: the two habits fapony depends on ship in the MCP `initialize` response, not in your rules file
 - Verification (beta): handoff conformance, 6-grade verdicts, allowlisted evidence collector (`.fapony/evidence.json` — agent-proposed commands are never executed); reports stamped with the producing build's `server_sha`
 - Vendor-neutral executor/reviewer roles — anything that reads stdin
 - Memory integration via shell adapter, per project (configurable or default-wired)

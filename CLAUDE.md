@@ -17,7 +17,7 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 
 ```
 fapony/
-  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|analyze|setup|stats|telemetry|test|update
+  fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-scan|usage-web|analyze|setup|stats|telemetry|test|update
   fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
@@ -90,7 +90,7 @@ fapony/
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 8 tools
       index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout)
+      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn habits 7/8 without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
@@ -157,7 +157,7 @@ events(
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
   "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
-  "usageWeb": { "port": 8080, "hostname": "127.0.0.1", "pollInterval": 3000 }
+  "usageWeb": { "port": 8080, "hostname": "127.0.0.1" }
 }
 ```
 
@@ -166,7 +166,7 @@ events(
 - `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
 - `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
-- `usageWeb` — optional, `{ port, hostname, pollInterval }` for `fapony usage-web` defaults. CLI args override config. `null` or omit = use defaults (port 8080, localhost, 3000ms)
+- `usageWeb` — optional, `{ port, hostname }` for `fapony usage-web` defaults. `null` or omit = use defaults (port 8080, localhost). Run `fapony usage-scan` to populate data before opening the web view.
 - env override: `FAPONY_CONFIG` (เลือกไฟล์ config), `FAPONY_STATE_DIR` (ย้าย state.db, ชนะ `paths.stateDir`)
 - getters รวมศูนย์ใน `src/db/getters.ts` — ห้าม hardcode ค่า default ซ้ำที่ call site
 
@@ -213,9 +213,10 @@ events(
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
 | AI สร้าง plan filename ซ้ำทับของเก่า | `skill/plan-with-pony/SKILL.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
-| `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | `readTimingFromDb` ([src/session/helpers.ts](src/session/helpers.ts)) parse JSON ทุกแถวใน JS — คือ bottleneck ไม่ใช่ SQL aggregate จึง default `ORDER BY time_created DESC LIMIT 20000` (sampling) แทน full scan · `fapony usage-web --full` สั่ง exact scan |
-| `usage-web` ช้าอยู่ต่อแม้ limit OpenCode/ZCode แล้ว (บล็อค startup ~10s) | Claude Code/Codex reader ไม่มี SQL ให้ aggregate — `readFileSync` ทุกไฟล์ `.jsonl` เต็มไฟล์เสมอ (ไม่มี fast path) จึง (1) default `since` = 30 วันย้อนหลังใน `fetchAllUsage` ([src/usage/cli.ts](src/usage/cli.ts)) เว้นแต่ `--full` (2) ใน `claude-code.ts`/`codex.ts` เช็ค `statSync(file).mtimeMs` ก่อน `readFileSync` — ไฟล์ session เป็น append-only ถ้า mtime เก่ากว่า `since` ข้ามได้เลยไม่ต้องอ่าน |
+| `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | แก้แล้ว — `usage-web` อ่าน cache (`~/.config/fapony/usage-cache.jsonl`) ไม่แตะ session log · scan เกิดตอนคนสั่ง `fapony usage-scan` เท่านั้น · `--full` ย้ายไปเป็น flag ของ `usage-scan` |
+| `usage-web` ไม่มี cache | แสดงข้อความให้รัน `fapony usage-scan` ก่อน — ไม่ scan เองเด็ดขาด (done criteria #5) |
 | gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
+| ผู้ใช้คนอื่นต้องแปะกฎ 7/8 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7/8 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -324,7 +325,8 @@ Spec link กลับหา plan ด้วย (`> **Used by:** [PLAN-x.md](...)
 fapony mcp                          # MCP server — stdio JSON-RPC, 8 tools
 fapony report <run-id>              # verification report for a run
 fapony report-web [file]            # static HTML report page
-fapony usage-web [port] [--full]    # live usage comparison dashboard (OpenCode / ZCode / Claude Code) — default samples (last 30d + last 20k parts), --full for exact all-time
+fapony usage-scan                    # scan session logs → usage-cache.jsonl (incremental, progress bar)
+fapony usage-web [port]              # live usage comparison dashboard from cache (no session log access)
 fapony stats                        # KPIs: pass/stall rate, by-model, by-grade
 fapony init <path>                  # scaffold .fapony/ (plan/spec/memory/evidence.json)
 fapony install --platform opencode|claude|zcode|codex  # wire mcp.fapony into an MCP client (+ symlink skills for claude/opencode)

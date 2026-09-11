@@ -797,3 +797,23 @@ export function testStatsByFileRisk(): void {
   });
   console.log("  ✓ getStatsData byFile counts graded touches vs fails");
 }
+
+export function testStatsPassRateFromVerdicts(): void {
+  withTmpDb((db) => {
+    // Abandoned with no verdict — never judged, must not count either way.
+    newRun(db, "wt1", null, null, "abc");
+    // fail closed by a pass: the unit of work ended up passing.
+    const fixed = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, fixed, "gate", { verdict: "fail", note: "x" });
+    addEvent(db, fixed, "gate", { verdict: "pass-good", note: "y" });
+    // Still failing at its last verdict.
+    const broken = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, broken, "gate", { verdict: "fail", note: "z" });
+
+    const data = getStatsData();
+    assert.equal(data.runs.total, 3);
+    // 1 of 2 graded runs passed — the ungraded run is out of the denominator.
+    assert.equal(data.runs.passRate, 0.5);
+  });
+  console.log("  ✓ passRate counts graded runs only, by last verdict");
+}

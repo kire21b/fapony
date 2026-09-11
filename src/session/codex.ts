@@ -4,7 +4,9 @@
 // Each line is a JSON object; usage data lives in type: "token_usage_record"
 // payloads. No cost field — total_cost is always 0.
 //
-// No detail (tool/step breakdown) in v1 — Codex JSONL has no equivalent.
+// detail:true adds tool_breakdown/bytes_by_tool from response_item lines of
+// type custom_tool_call / custom_tool_call_output, matched by call_id — the
+// Codex equivalent of Claude Code's tool_use/tool_result pair.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -54,6 +56,7 @@ interface CodexLine {
   timestamp?: string;
   type?: string;
   payload?: {
+    type?: string; // "custom_tool_call" | "custom_tool_call_output" for response_item lines
     session_id?: string;
     cwd?: string;
     usage?: TokenUsageRecord["usage"];
@@ -67,6 +70,10 @@ interface CodexLine {
         model?: string;
       };
     };
+    // custom_tool_call / custom_tool_call_output fields
+    call_id?: string;
+    name?: string;
+    output?: unknown;
   };
 }
 
@@ -110,9 +117,10 @@ function walkJsonl(dir: string): string[] {
  * Returns EMPTY_RESULT when the sessions dir is missing, inaccessible,
  * or has no qualifying token records.
  *
- * detail:true adds a UsageDetail — Codex JSONL has no tool_use/tool_result
- * blocks, so tool_breakdown and bytes_by_tool are empty. Steps are counted
- * from token_usage_record lines.
+ * detail:true adds a UsageDetail — tool_breakdown/bytes_by_tool come from
+ * custom_tool_call/custom_tool_call_output pairs (matched by call_id); no
+ * per-session or timing breakdown yet. Steps are counted from
+ * token_usage_record lines.
  */
 export function readCodexUsage(
   worktree?: string,
@@ -139,6 +147,10 @@ export function readCodexUsage(
   let totalCacheWrite = 0;
   let totalSteps = 0;
 
+  // Detail accumulators (only filled when detail:true).
+  const toolBreakdown: Record<string, number> = {};
+  const bytesByTool: Record<string, number> = {};
+
   for (const filePath of files) {
     // ponytail: skip files untouched since `since` before reading them —
     // see claude-code.ts for the rationale (append-only JSONL, mtime gate
@@ -159,6 +171,7 @@ export function readCodexUsage(
 
     // Track per-file state for session attribution.
     const fileSessions = new Set<string>();
+    const callNames = new Map<string, string>(); // call_id -> tool name, for this file
     let fileCwd: string | undefined;
     let fileTimestamp: string | undefined;
     let fileModel: string | undefined;
@@ -184,6 +197,30 @@ export function readCodexUsage(
           parsed.payload.model ??
           parsed.payload.base_instructions?.provenance?.model;
         fileProvider = parsed.payload.model_provider ?? "";
+        continue;
+      }
+
+      // Detail pass: custom_tool_call → custom_tool_call_output, matched by
+      // call_id (Codex's equivalent of tool_use/tool_result).
+      if (detail && parsed.type === "response_item" && parsed.payload) {
+        const p = parsed.payload;
+        if (
+          p.type === "custom_tool_call" &&
+          typeof p.call_id === "string" &&
+          typeof p.name === "string"
+        ) {
+          callNames.set(p.call_id, p.name);
+          toolBreakdown[p.name] = (toolBreakdown[p.name] ?? 0) + 1;
+        } else if (
+          p.type === "custom_tool_call_output" &&
+          typeof p.call_id === "string"
+        ) {
+          const name = callNames.get(p.call_id);
+          if (name) {
+            const bytes = JSON.stringify(p.output ?? "").length;
+            bytesByTool[name] = (bytesByTool[name] ?? 0) + bytes;
+          }
+        }
         continue;
       }
 
@@ -297,10 +334,12 @@ export function readCodexUsage(
     ...(detail
       ? {
           detail: {
-            tool_breakdown: {},
+            tool_breakdown: toolBreakdown,
+            bytes_by_tool:
+              Object.keys(bytesByTool).length > 0 ? bytesByTool : undefined,
             steps: totalSteps,
             by_session: [],
-            note: "Codex JSONL has no tool_use/tool_result blocks — tool breakdown unavailable",
+            note: "Codex has no per-session/timing breakdown — tool_breakdown and bytes_by_tool come from custom_tool_call pairs",
           } satisfies UsageDetail,
         }
       : {}),

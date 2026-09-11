@@ -37,6 +37,7 @@ interface UsageLine {
       id?: string;
       name?: string;
       tool_use_id?: string;
+      input?: { file_path?: string };
     }>;
     usage?: {
       input_tokens?: number;
@@ -122,6 +123,10 @@ export function readClaudeCodeUsage(
   const toolBreakdown: Record<string, number> = {};
   const bytesByTool: Record<string, number> = {};
   const bySession: SessionDetail[] = [];
+  // file -> {reads, sessions that read it} — for stale_reads (PLAN-loop-and-savings step 10).
+  const fileReads = new Map<string, { reads: number; sessions: Set<string> }>();
+  const filesEverEdited = new Set<string>();
+  const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
   const timingInput: TimingInput = {
     durationsMs: [],
     stepTokens: [],
@@ -274,6 +279,20 @@ export function readClaudeCodeUsage(
                 useTs.set(b.id, { name, ts });
                 fileTools[name] = (fileTools[name] ?? 0) + 1;
                 toolBreakdown[name] = (toolBreakdown[name] ?? 0) + 1;
+                const fp = b.input?.file_path;
+                if (typeof fp === "string" && fp) {
+                  if (name === "Read") {
+                    let acc = fileReads.get(fp);
+                    if (!acc) {
+                      acc = { reads: 0, sessions: new Set() };
+                      fileReads.set(fp, acc);
+                    }
+                    acc.reads++;
+                    acc.sessions.add(filePath);
+                  } else if (EDIT_TOOLS.has(name)) {
+                    filesEverEdited.add(fp);
+                  }
+                }
               } else if (
                 b?.type === "tool_result" &&
                 typeof b.tool_use_id === "string"
@@ -340,6 +359,18 @@ export function readClaudeCodeUsage(
 
   if (totalSessions === 0) return EMPTY_RESULT;
 
+  // Files read in 2+ sessions and never edited in this window — candidates
+  // for CLAUDE.md instead of a Read every session.
+  const staleReads = [...fileReads.entries()]
+    .filter(([fp, acc]) => acc.sessions.size >= 2 && !filesEverEdited.has(fp))
+    .map(([file, acc]) => ({
+      file,
+      sessions: acc.sessions.size,
+      reads: acc.reads,
+    }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 20);
+
   const by_model: ModelBreakdown[] = [...models.entries()]
     .map(([model, acc]) => ({
       provider: acc.provider,
@@ -371,6 +402,7 @@ export function readClaudeCodeUsage(
               Object.keys(bytesByTool).length > 0 ? bytesByTool : undefined,
             steps: timingInput.steps,
             by_session: bySession.sort((a, b) => b.steps - a.steps),
+            stale_reads: staleReads.length > 0 ? staleReads : undefined,
             note: "per-turn usage overlaps like per-step tokens — steps is a count only",
             timing: summarizeTiming(timingInput),
           } satisfies UsageDetail,

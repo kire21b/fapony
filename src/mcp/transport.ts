@@ -19,6 +19,28 @@ import {
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
 
+// --- Server instructions ---
+//
+// MCP's initialize response carries an `instructions` string that clients
+// inject into the model's context. This is the vendor-neutral place for the
+// two habits fapony depends on — a user should never have to paste rules
+// into their own CLAUDE.md (or AGENTS.md, or a hook) to make the tools work,
+// and a rule pasted there would only cover one client anyway.
+//
+// Kept short on purpose: this text is spent on every session of every user.
+// Both habits degrade silently — an agent that ignores them still gets
+// correct answers from every tool, just a thinner history.
+
+const SERVER_INSTRUCTIONS = `fapony records what went wrong in this project and plays it back to whoever touches the same files next. Two habits keep it fed.
+
+1. Before editing, call project_health_context with files[] — the paths you are about to touch. It returns what has failed in those files before. The unit is touched files, not plans: a one-file bug fix qualifies.
+
+2. The moment you realize your first attempt was wrong and the cause was not where the symptom was, call verdict_submit with "fail" — then, not at the end of the task: that is when you still know what you believed and why it was wrong. Close with a pass-family verdict once the fix is verified ("uncertain" if you could not verify; never guess pass). Work that went right the first time needs no verdict: only three notes reach a future session, and an empty pass evicts one that teaches something.
+
+Always send files[] and worktree. Without files[] a verdict says something failed but not where. worktree must be the absolute path (git rev-parse --show-toplevel): every query scopes by it, so a bare name or none files the verdict where nothing reads it, and nothing errors to say so. Write the note standalone — symptom, actual cause, rule learned — it is read months later with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.
+
+Both habits degrade silently: skip them and every tool still answers correctly, on a thinner history.`;
+
 // --- Statusline cache ---
 //
 // Written after every MCP tool call. The Claude Code statusline script reads
@@ -108,6 +130,7 @@ export function dispatch(
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+        instructions: SERVER_INSTRUCTIONS,
       };
     case "notifications/initialized":
       return null; // no response needed
