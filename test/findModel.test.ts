@@ -273,6 +273,45 @@ export function testFindSessionModelZcodeMultiModel(): void {
   console.log("  ✓ findSessionModel ZCode multi-model → max tokens");
 }
 
+export function testFindSessionModelZcodeSummedTokensWin(): void {
+  // Model A: 3 small rows summing past B's single big row → A wins.
+  // A lone max-row rule (no GROUP BY) would wrongly pick B.
+  const dir = mkdtempSync(join(tmpdir(), "fapony-fm-zcode-sum-"));
+  const dbPath = join(dir, "db.sqlite");
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `CREATE TABLE model_usage (
+        id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
+        provider_id TEXT, agent TEXT,
+        computed_total_tokens INTEGER NOT NULL DEFAULT 0
+      )`,
+    );
+    const ins = db.prepare(
+      `INSERT INTO model_usage (id, session_id, model_id, provider_id, agent, computed_total_tokens) VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    ins.run("m1", "zs", "model-a", "prov-a", "zcode-agent", 2000);
+    ins.run("m2", "zs", "model-a", "prov-a", "zcode-agent", 2000);
+    ins.run("m3", "zs", "model-a", "prov-a", "zcode-agent", 2000);
+    ins.run("m4", "zs", "model-b", "prov-b", "zcode-agent", 5000);
+    const prev = process.env.FAPONY_ZCODE_DB;
+    try {
+      process.env.FAPONY_ZCODE_DB = dbPath;
+      const result = findSessionModel("zs");
+      assert.ok(result, "should find session");
+      assert.equal(result!.model, "model-a", "summed 6000 beats lone 5000");
+      assert.equal(result!.provider, "prov-a");
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_ZCODE_DB;
+      else process.env.FAPONY_ZCODE_DB = prev;
+    }
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ findSessionModel ZCode summed tokens beat lone max row");
+}
+
 // --- Claude Code fixture ---
 
 function withClaudeCodeFixture(fn: (filePath: string) => void): void {

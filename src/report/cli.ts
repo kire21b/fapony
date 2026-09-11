@@ -28,10 +28,11 @@ export function cmdReport(args: string[]): void {
 
 export function cmdReportWeb(args: string[]): void {
   const outFile = args[0];
+  const config = loadConfig();
+
   if (outFile) {
     // Rule #5: fapony never writes into a target worktree — refuse output
     // paths inside a configured worktree. Stdout stays always available.
-    const config = loadConfig();
     const abs = resolve(outFile);
     for (const wt of Object.values(config.worktrees ?? {})) {
       if (abs === wt || abs.startsWith(wt + sep)) {
@@ -43,8 +44,11 @@ export function cmdReportWeb(args: string[]): void {
     }
   }
 
+  const uw = config.usageWeb ?? {};
+
+  const ownerName = uw.ownerName?.trim() ? uw.ownerName.trim() : undefined;
   const stats = getStatsData();
-  const html = renderReportHtml(stats, new Date().toISOString());
+  const html = renderReportHtml(stats, new Date().toISOString(), ownerName);
 
   if (outFile) {
     writeFileSync(outFile, html, "utf-8");

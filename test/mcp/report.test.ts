@@ -66,6 +66,28 @@ export function testVerificationReportJsonFormat(): void {
   });
 }
 
+export function testVerificationReportWorktreeOnlyCreatesNoRun(): void {
+  // A report is a read, not a unit of work — no run row, no events.
+  withTmpDb(() => {
+    const result = toolVerificationReport({ worktree: "/tmp" });
+    assert.equal(result.isError, undefined);
+    const db = openDb();
+    try {
+      const runs = db.prepare("SELECT COUNT(*) AS n FROM runs").get() as {
+        n: number;
+      };
+      assert.equal(runs.n, 0, "worktree-only report must not open a run");
+    } finally {
+      db.close();
+    }
+    const data = parseToolResult(
+      toolVerificationReport({ worktree: "/tmp", format: "json" }),
+    ) as { meta: { run_id: number | null } };
+    assert.equal(data.meta.run_id, null);
+  });
+  console.log("  ✓ verification_report worktree-only run leaves no trace");
+}
+
 export function testVerificationReportToolCount(): void {
   // Verify the tool is registered by checking tools/list includes it
   // (integration test — depends on transport.ts registration)

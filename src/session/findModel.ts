@@ -102,16 +102,18 @@ function findInZcode(sessionId: string): SessionModel | null {
 
     // ZCode: session has no model column — model lives in model_usage, one
     // row per request, so a mid-run /model switch leaves several model_ids.
-    // Majority proxy: the row with the most computed_total_tokens (no JOIN —
-    // no session column is used, and session_id is FK'd to session anyway).
-    // provider_id is taken raw (sometimes a UUID, never mapped); agent tells
-    // which subagent did the work. Same dominant-row rule picks all three.
+    // Majority rule (same as the JSONL readers): the (model, provider,
+    // agent) group with the most summed computed_total_tokens — a single
+    // big row must not beat many small rows doing most of the work
+    // (no JOIN — no session column is used, and session_id is FK'd anyway).
+    // provider_id is taken raw (sometimes a UUID, never mapped).
     const row = db
       .prepare(
         `SELECT model_id AS model, provider_id AS provider, agent
          FROM model_usage
          WHERE session_id = ?
-         ORDER BY computed_total_tokens DESC
+         GROUP BY model_id, provider_id, agent
+         ORDER BY SUM(computed_total_tokens) DESC
          LIMIT 1`,
       )
       .get(sessionId) as {

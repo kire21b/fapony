@@ -58,6 +58,7 @@ import {
   testFindSessionModelZcodeMiss,
   testFindSessionModelZcodeMultiModel,
   testFindSessionModelZcodeRawProviderPassthrough,
+  testFindSessionModelZcodeSummedTokensWin,
 } from "./findModel.test.js";
 import {
   testGateOnceAlreadyPassed,
@@ -183,6 +184,7 @@ import {
   testVerificationReportTextFormat,
   testVerificationReportToolCount,
   testVerificationReportVerdictFromGateEvent,
+  testVerificationReportWorktreeOnlyCreatesNoRun,
 } from "./mcp/report.test.js";
 import {
   testStatsEfficiencyTextFailCensored,
@@ -416,6 +418,7 @@ export async function cmdTest(): Promise<void> {
   testFindSessionModelZcodeHit();
   testFindSessionModelZcodeMiss();
   testFindSessionModelZcodeMultiModel();
+  testFindSessionModelZcodeSummedTokensWin();
   testFindSessionModelZcodeRawProviderPassthrough();
   testFindSessionModelOpenCodePlainTextProviderUnknown();
   testFindSessionModelClaudeCodeHit();
@@ -620,6 +623,7 @@ export async function cmdTest(): Promise<void> {
   testVerificationReportTextFormat();
   testVerificationReportJsonFormat();
   testVerificationReportToolCount();
+  testVerificationReportWorktreeOnlyCreatesNoRun();
   testVerificationReportVerdictFromGateEvent();
   testVerificationReportCheckParity();
   testVerificationReportSurfacesCollectError();
