@@ -106,7 +106,9 @@ export const TOOLS = [
     name: "verdict_submit",
     description:
       "Record a verdict with reason code into the event log. " +
-      "Creates a new run entry if run_id is not provided.",
+      "Without run_id, binds to the latest still-open run for the same " +
+      "worktree+plan (round keeps counting toward review.maxRounds); " +
+      "creates a new run entry only when none is open.",
     inputSchema: {
       type: "object" as const,
       properties: {

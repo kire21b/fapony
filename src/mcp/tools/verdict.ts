@@ -1,6 +1,12 @@
 // src/mcp/tools/verdict.ts — verdict_submit tool
 
-import { getRun, newRun, openDb, patchLastGateEvent } from "../../db/index.js";
+import {
+  findOpenRun,
+  getRun,
+  newRun,
+  openDb,
+  patchLastGateEvent,
+} from "../../db/index.js";
 import { gateOnce } from "../../gate.js";
 import { VERDICT_GRADES, type VerdictGrade } from "../../parse.js";
 import {
@@ -44,20 +50,28 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     }
     resolvedRunId = run_id;
   } else {
-    // Auto-create a run entry for external agents. worktree/plan let callers
-    // (e.g. move-to-done) attribute the verdict so byReasonCode/bestPassing
-    // aggregate correctly instead of collapsing into "mcp-external".
+    // Bind to the latest still-open run for the same worktree+plan so a
+    // round-2+ verdict lands on the original row (round keeps counting and
+    // review.maxRounds can actually trigger). Only when no open run matches
+    // is a fresh row created. plan=null never matches — bare-diff reviews
+    // always open a new run rather than guessing which work they belong to.
     const resolvedWorktree =
       typeof worktree === "string" && worktree
         ? resolveWorktreeArg(worktree)
         : "mcp-external";
-    resolvedRunId = newRun(
-      db,
-      resolvedWorktree,
-      typeof plan === "string" && plan ? plan : null,
-      null,
-      "mcp",
-    );
+    const resolvedPlan = typeof plan === "string" && plan ? plan : null;
+    const open =
+      resolvedPlan === null
+        ? null
+        : findOpenRun(db, resolvedWorktree, resolvedPlan);
+    if (open) {
+      resolvedRunId = open.id;
+    } else {
+      // worktree/plan let callers (e.g. move-to-done) attribute the verdict
+      // so byReasonCode/bestPassing aggregate correctly instead of collapsing
+      // into "mcp-external".
+      resolvedRunId = newRun(db, resolvedWorktree, resolvedPlan, null, "mcp");
+    }
   }
 
   // Route through gateOnce for consistent status/round/memory handling.
@@ -68,7 +82,13 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   const result = gateOnce(resolvedRunId, grade, mcpNote);
 
   if (result.error) {
-    return jsonResult({ stored: false, error: result.error });
+    return jsonResult({
+      stored: false,
+      error: result.error,
+      run_id: resolvedRunId,
+      status: result.status,
+      round: result.round,
+    });
   }
 
   // Patch the gate event with MCP-specific fields (reason_code, source).
@@ -87,5 +107,6 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     verdict: grade,
     reason_code,
     status: result.status,
+    round: result.round,
   });
 }
