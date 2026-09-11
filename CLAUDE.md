@@ -43,6 +43,7 @@ fapony/
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
     session/           # passive usage readers — OpenCode (SQLite), ZCode (SQLite), Claude Code (JSONL), Codex (JSONL)
+      activeSession.ts # loadSessionSpans/findSessionAt — which client session was live in a worktree at time T (model attribution without asking the caller)
       index.ts         # re-exports (backward compat)
       types.ts         # ModelBreakdown, SessionDetail, UsageDetail, StepTimingSummary, PassiveUsageResult
       helpers.ts       # buildWhereClause(), aggregateDetail(), readDetailFromDb(), parseTimeMs()/extractPartTiming()/summarizeTiming()/collectTiming()/readTimingFromDb()
@@ -214,6 +215,7 @@ events(
 | AI สร้าง plan filename ซ้ำทับของเก่า | `skill/plan-with-pony/SKILL.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
 | `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | `readTimingFromDb` ([src/session/helpers.ts](src/session/helpers.ts)) parse JSON ทุกแถวใน JS — คือ bottleneck ไม่ใช่ SQL aggregate จึง default `ORDER BY time_created DESC LIMIT 20000` (sampling) แทน full scan · `fapony usage-web --full` สั่ง exact scan |
 | `usage-web` ช้าอยู่ต่อแม้ limit OpenCode/ZCode แล้ว (บล็อค startup ~10s) | Claude Code/Codex reader ไม่มี SQL ให้ aggregate — `readFileSync` ทุกไฟล์ `.jsonl` เต็มไฟล์เสมอ (ไม่มี fast path) จึง (1) default `since` = 30 วันย้อนหลังใน `fetchAllUsage` ([src/usage/cli.ts](src/usage/cli.ts)) เว้นแต่ `--full` (2) ใน `claude-code.ts`/`codex.ts` เช็ค `statSync(file).mtimeMs` ก่อน `readFileSync` — ไฟล์ session เป็น append-only ถ้า mtime เก่ากว่า `since` ข้ามได้เลยไม่ต้องอ่าน |
+| gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -252,6 +254,31 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
    ไล่ note ที่สอนอะไรได้ออก · `note` ต้อง standalone: อาการ / ต้นเหตุจริง / กฎที่ได้
    ห้ามอ้างอิงบทสนทนา · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree
    นั้นมาเกาะ ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
+
+---
+
+## Moat — สามข้อที่ต้องถืออย่างน้อยสอง
+
+ภัยคุกคามที่ฆ่า fapony ได้จริงมีแบบเดียว: **client เจ้าของ model ทำเอง** (Claude Code/Cursor ออกฟีเจอร์
+"จำสิ่งที่พังในโปรเจกต์นี้") — รูปเดียวกับที่ดูด execute→review loop ไปแล้วครั้งหนึ่ง ดู History
+
+สิ่งที่กันได้มีสามอย่าง ทุกฟีเจอร์ต้องถืออย่างน้อยสองข้อ ถ้าข้อไหนก็ไม่ถือ = client เดียวก็ทำได้ = อย่าทำ:
+
+1. **ข้ามไคลเอนต์** — ไม้บรรทัดเดียวกันทับ Claude Code + OpenCode (หลัก), ZCode (เสริม), Codex (ยังไม่ใช้จริง)
+   session log ของแต่ละเจ้าไม่มีวันข้ามหากัน เพราะไม่มีใครได้ประโยชน์จากการทำให้ข้าม
+2. **ข้ามโปรเจกต์** — `runs.worktree` เป็น key ตั้งแต่แรก dogfood ปัจจุบัน: `wt-fapony` → `wt-vela`
+   (vela ใกล้เสร็จ ใช้ review-pony ทุกครั้ง แต่ยังไม่ค่อยมี plan — verdict ต้องทำงานได้โดยไม่มี plan ดูกฎ 8)
+3. **เจ้าของถือข้อมูลเอง** — db อยู่ `~/.config/fapony/` เครื่องผู้ใช้ ไม่มี server ไม่มี account
+   telemetry opt-in และ allowlist เท่านั้น
+
+**ทีม = ฟีเจอร์เก็บเงินในอนาคต ยังไม่ทำ** public repo เล็งบุคคลล้วน เพราะคนเดียวได้ประโยชน์ตั้งแต่ verdict แรก
+ส่วนทีมต้องมี shared ledger (จะเป็น hosted หรือให้เขา build server เอง ค่อยว่ากัน) และทีมที่ต้องการมัน
+คือบริษัทที่จ่ายไหว — เขียนไว้เฉย ๆ อย่าเผลอสร้าง infra รอล่วงหน้า (ละเมิดกฎข้อ 1)
+
+**แกนที่ลึกได้และไม่มีใครแตะ:** `model × project × failure-shape` — "ในโปรเจกต์นี้ model ไหนพลาดเรื่องไหน"
+ต้องมี verdict + model + files ครบสามในที่เดียวถึงจะถามได้ · session log ไม่มี verdict · code graph ไม่มีผลลัพธ์
+ความลึกต้องมาจาก **derive ตอนอ่าน** ไม่ใช่ field ใหม่ให้ agent กรอก (ทุก field ที่เพิ่ม ลด fill rate — พิสูจน์มาแล้ว
+ด้วย `files[]`: optional + คำอธิบาย passive = 0/17)
 
 ---
 

@@ -56,6 +56,8 @@ interface EnrichedGate {
   client: string | null;
   agent: string | null;
   valueScore: number | null;
+  /** How `model` was resolved — "inferred" is a guess, not a declaration. */
+  modelSource: "spawn" | "session_id" | "inferred" | null;
 }
 
 /**
@@ -64,8 +66,11 @@ interface EnrichedGate {
  * never cumulative. Delegates windowing to enrichGateWindows (src/gates.ts)
  * and adds the value score on top.
  */
-function enrichGates(events: Event[]): EnrichedGate[] {
-  return enrichGateWindows(events).map((w) => {
+function enrichGates(
+  events: Event[],
+  worktreeByRun?: Map<number, string>,
+): EnrichedGate[] {
+  return enrichGateWindows(events, worktreeByRun).map((w) => {
     let valueScore: number | null = null;
     if (w.costUSD !== null && w.costUSD > 0 && w.quality !== null) {
       valueScore = w.quality / w.costUSD;
@@ -78,6 +83,7 @@ function enrichGates(events: Event[]): EnrichedGate[] {
       provider: w.provider,
       client: w.client,
       agent: w.agent,
+      modelSource: w.modelSource,
       valueScore,
     };
   });
@@ -612,10 +618,16 @@ export interface StatsData {
     model: string;
     agent: string;
     gateCount: number;
+    /** Non-pass-family verdicts in this bucket. */
+    fails: number;
+    /** fails / gateCount — the per-model question nothing else can answer. */
+    failRate: number;
     avgQuality: number;
     avgCostUSD: number | null;
     avgValue: number | null;
   }>;
+  /** How many gates got their model by inference vs. a declared session_id. */
+  modelAttribution: { inferred: number; declared: number; none: number };
   byGrade: Array<{
     grade: string;
     count: number;
@@ -697,7 +709,10 @@ export function getStatsData(): StatsData {
     }
 
     // --- Gate enrichment ---
-    const enriched = enrichGates(events);
+    const enriched = enrichGates(
+      events,
+      new Map(runs.map((r) => [r.id, r.worktree])),
+    );
 
     // Group by client+provider+model+agent — the same model name on two
     // providers is two different things. Unknown dimension → "—" (never ""
@@ -710,6 +725,7 @@ export function getStatsData(): StatsData {
         model: string;
         agent: string;
         gateCount: number;
+        fails: number;
         qualities: number[];
         costs: number[];
         values: number[];
@@ -727,11 +743,13 @@ export function getStatsData(): StatsData {
         model,
         agent,
         gateCount: 0,
+        fails: 0,
         qualities: [],
         costs: [],
         values: [],
       });
       bucket.gateCount++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
       if (g.costUSD !== null) bucket.costs.push(g.costUSD);
@@ -744,11 +762,20 @@ export function getStatsData(): StatsData {
         model: b.model,
         agent: b.agent,
         gateCount: b.gateCount,
+        fails: b.fails,
+        failRate: b.gateCount ? b.fails / b.gateCount : 0,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
         avgCostUSD: b.costs.length ? avg(b.costs) : null,
         avgValue: b.values.length ? avg(b.values) : null,
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
+
+    const modelAttribution = { inferred: 0, declared: 0, none: 0 };
+    for (const g of enriched) {
+      if (g.modelSource === "inferred") modelAttribution.inferred++;
+      else if (g.modelSource === null) modelAttribution.none++;
+      else modelAttribution.declared++;
+    }
 
     const gradeMap: Record<string, { count: number; costs: number[] }> = {};
     for (const g of enriched) {
@@ -812,6 +839,7 @@ export function getStatsData(): StatsData {
         review: { avg: avg(reviewAll), count: reviewAll.length },
       },
       byModel,
+      modelAttribution,
       byGrade,
       byWorktree,
       efficiency,
