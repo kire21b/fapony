@@ -1,112 +1,98 @@
 // src/usage/cli.ts — cmdUsageWeb + Bun.serve routes
+//
+// Reads from usage-cache.jsonl (written by `fapony usage-scan`).
+// No live session scanning — serves static HTML.
 
 import { loadConfig } from "../db/index.js";
-import {
-  readClaudeCodeUsage,
-  readCodexUsage,
-  readPassiveUsage,
-  readZcodeUsage,
-} from "../session/index.js";
 import type { PassiveUsageResult } from "../session/types.js";
+import { type CacheEntry, cacheMeta, readCache } from "./cache.js";
 import { renderUsageHtml } from "./render.js";
 
-const FAVICON_GIF = Buffer.from(
-  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
-  "base64",
-);
-
-/**
- * Default lookback window for Claude Code / Codex — those readers have no
- * SQL to aggregate in, every call fully reads+parses every JSONL session
- * file on disk. A `since` cutoff lets the file loop skip whole files by
- * mtime (see claude-code.ts/codex.ts) instead of reading years of history
- * on every poll. --full lifts it for an exact all-time total.
- */
-const DEFAULT_JSONL_LOOKBACK_DAYS = 30;
-
-function fetchAllUsage(full: boolean): {
-  opencode: PassiveUsageResult;
-  zcode: PassiveUsageResult | null;
-  claude_code: PassiveUsageResult | null;
-  codex: PassiveUsageResult | null;
-} {
-  const since = full
-    ? undefined
-    : Date.now() / 1000 - DEFAULT_JSONL_LOOKBACK_DAYS * 86400;
-  const opencode = readPassiveUsage(undefined, undefined, undefined, {
-    detail: true,
-    full,
-  });
-  const zcode = readZcodeUsage(undefined, undefined, undefined, true, full);
-  const claude_code = readClaudeCodeUsage(undefined, since);
-  const codex = readCodexUsage(undefined, since);
+function cacheToResult(entry: CacheEntry | undefined): PassiveUsageResult {
+  if (!entry) {
+    return {
+      total_tokens_input: 0,
+      total_tokens_output: 0,
+      total_tokens_reasoning: 0,
+      total_tokens_cache_read: 0,
+      total_tokens_cache_write: 0,
+      total_cost: 0,
+      session_count: 0,
+      by_model: [],
+    };
+  }
   return {
-    opencode,
-    zcode: zcode.session_count > 0 ? zcode : null,
-    claude_code: claude_code.session_count > 0 ? claude_code : null,
-    codex: codex.session_count > 0 ? codex : null,
+    total_tokens_input: entry.total_tokens_input,
+    total_tokens_output: entry.total_tokens_output,
+    total_tokens_reasoning: entry.total_tokens_reasoning,
+    total_tokens_cache_read: entry.total_tokens_cache_read,
+    total_tokens_cache_write: entry.total_tokens_cache_write,
+    total_cost: entry.total_cost,
+    session_count: entry.session_count,
+    by_model: entry.by_model.map((m) => ({
+      ...m,
+    })),
   };
 }
 
 export function cmdUsageWeb(rawArgs: string[]): void {
-  const full = rawArgs.includes("--full");
-  const args = rawArgs.filter((a) => a !== "--full");
   const config = loadConfig();
   const uw = config.usageWeb ?? {};
 
-  const portArg = parseInt(args[0], 10);
-  const port = Number.isNaN(portArg) ? (uw.port ?? 8080) : portArg;
-  const hostname = args[1] || uw.hostname || "127.0.0.1";
-  const intervalArg = parseInt(args[2], 10);
-  const pollInterval = Number.isNaN(intervalArg)
-    ? (uw.pollInterval ?? 3000)
-    : intervalArg;
-  const ownerName = uw.ownerName?.trim() ? uw.ownerName.trim() : undefined;
-
-  if (args[0] && Number.isNaN(parseInt(args[0], 10))) {
+  if (rawArgs.includes("--full")) {
     console.error(
-      "usage: fapony usage-web [port] [hostname] [pollInterval] [--full]",
+      "fapony usage-web: --full moved to `fapony usage-scan --full`",
     );
     process.exit(1);
   }
 
-  const initialData = fetchAllUsage(full);
+  const portArg = parseInt(rawArgs[0], 10);
+  const port = Number.isNaN(portArg) ? (uw.port ?? 8080) : portArg;
+  const hostname = rawArgs[1] || uw.hostname || "127.0.0.1";
+  const ownerName = uw.ownerName?.trim() ? uw.ownerName.trim() : undefined;
+
+  if (rawArgs[0] && Number.isNaN(parseInt(rawArgs[0], 10))) {
+    console.error("usage: fapony usage-web [port] [hostname]");
+    process.exit(1);
+  }
+
+  const entries = readCache(config);
+  const meta = cacheMeta(entries);
+
+  if (!meta) {
+    console.error(
+      "fapony usage-web: no usage cache found. Run `fapony usage-scan` first.",
+    );
+    process.exit(1);
+  }
+
+  const byClient = new Map(entries.map((e) => [e.client, e]));
+  const data = {
+    opencode: cacheToResult(byClient.get("opencode")),
+    zcode: cacheToResult(byClient.get("zcode")),
+    claude_code: cacheToResult(byClient.get("claude_code")),
+    codex: cacheToResult(byClient.get("codex")),
+  };
 
   const server = Bun.serve({
     hostname,
     port,
-    fetch(req) {
-      const url = new URL(req.url);
-
-      if (url.pathname === "/") {
-        const html = renderUsageHtml(
-          initialData.opencode,
-          initialData.zcode,
-          initialData.claude_code,
-          initialData.codex,
-          pollInterval,
-          ownerName,
-          full,
-        );
-        return new Response(html, {
-          headers: { "Content-Type": "text/html; charset=utf-8" },
-        });
-      }
-
-      if (url.pathname === "/data") {
-        const data = fetchAllUsage(full);
-        return Response.json(data);
-      }
-
-      if (url.pathname === "/favicon.ico") {
-        return new Response(FAVICON_GIF, {
-          headers: { "Content-Type": "image/gif" },
-        });
-      }
-
-      return new Response("Not Found", { status: 404 });
+    fetch(_req) {
+      const html = renderUsageHtml(
+        data.opencode,
+        data.zcode.session_count > 0 ? data.zcode : null,
+        data.claude_code.session_count > 0 ? data.claude_code : null,
+        data.codex.session_count > 0 ? data.codex : null,
+        meta.scanned_at,
+        ownerName,
+      );
+      return new Response(html, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     },
   });
 
-  console.log(`fapony usage-web → http://${server.hostname}:${server.port}`);
+  console.log(
+    `fapony usage-web → http://${server.hostname}:${server.port}  (cache: ${meta.scanned_at}, ${meta.total_sessions} sessions)`,
+  );
 }

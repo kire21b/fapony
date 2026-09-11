@@ -674,12 +674,38 @@ export function getStatsData(): StatsData {
     const byStatus: Record<string, number> = {};
     for (const r of runs) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
 
-    const terminal = runs.filter((r) =>
-      ["passed", "stopped", "stalled"].includes(r.status),
-    );
+    // Pass rate is computed from verdicts, not run status. Status is set BY
+    // the verdict, so scoring status counted the same fact twice and let
+    // ungraded rows distort it: 32 runs from the deleted CLI loop carry no
+    // gate at all (see History — kept as a record, not scored), and a `fail`
+    // leaves a run non-terminal, so a status-based rate never saw one.
+    // Denominator: runs with any verdict. Numerator: those whose LAST
+    // verdict is pass-family (a fail that was later fixed counts as passed).
+    const lastVerdictByRun = new Map<number, string>();
+    for (const e of events) {
+      if (e.kind !== "gate" || !e.data) continue;
+      try {
+        const d = JSON.parse(e.data) as { verdict?: unknown };
+        if (typeof d.verdict === "string" && VERDICT_GRADES.has(d.verdict))
+          lastVerdictByRun.set(e.run_id, d.verdict);
+      } catch {
+        // unparseable gate data — not a verdict
+      }
+    }
+    const graded = [...lastVerdictByRun.values()];
     const passed = runs.filter((r) => r.status === "passed");
 
-    const passRate = terminal.length ? passed.length / terminal.length : 0;
+    const passRate = graded.length
+      ? graded.filter((v) => isPassFamily(v)).length / graded.length
+      : 0;
+    // Stalls are a status-only condition (no verdict is ever submitted for
+    // one), so this stays over terminal rows — but only graded ones, so the
+    // loop-era rows do not dilute it.
+    const terminal = runs.filter(
+      (r) =>
+        ["passed", "stopped", "stalled"].includes(r.status) &&
+        lastVerdictByRun.has(r.id),
+    );
     const stallRate = terminal.length
       ? (byStatus.stalled ?? 0) / terminal.length
       : 0;

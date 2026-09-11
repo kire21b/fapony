@@ -264,6 +264,8 @@ import {
   testReadClaudeCodeUsageNoDir,
   testReadClaudeCodeUsagePrimaryPath,
   testReadClaudeCodeUsageSkipsMalformedLines,
+  testReadClaudeCodeUsageStaleReads,
+  testReadCodexUsageDetailBytesByTool,
   testReadCodexUsageFilterByWorktree,
   testReadCodexUsageNoDir,
   testReadCodexUsagePrimaryPath,
@@ -311,6 +313,7 @@ import {
   testStatsModelFromSessionIdWhenNoSpawn,
   testStatsMultiRoundSeparateGates,
   testStatsNoPricingValueIsNull,
+  testStatsPassRateFromVerdicts,
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
@@ -377,6 +380,8 @@ import {
   testUpdateRootIsRepoRoot,
 } from "./update.test.js";
 import {
+  testCacheMetaCalculatesOldest,
+  testCacheMetaEmpty,
   testFmtCostNull,
   testFmtCostPositive,
   testFmtCostZero,
@@ -386,10 +391,12 @@ import {
   testFmtTokensMillions,
   testFmtTokensThousands,
   testFmtTokensZero,
+  testMergeEntriesDedup,
   testRenderHtmlCostWide,
+  testRenderHtmlFreshnessBar,
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
-  testRenderHtmlPollInterval,
+  testRenderHtmlNoPollInterval,
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
   testRenderHtmlTokenValues,
@@ -397,6 +404,7 @@ import {
   testShortModelJsonId,
   testShortModelJsonNoId,
   testShortModelPlainText,
+  testWriteCacheCreatesStateDir,
 } from "./usage.test.js";
 import { testIsAffirmative } from "./util.test.js";
 
@@ -661,6 +669,7 @@ export async function cmdTest(): Promise<void> {
   testClaudeProjectSlug();
   testStatsBestPassing();
   testStatsByFileRisk();
+  testStatsPassRateFromVerdicts();
   testStatsModelFromExecutorSpawn();
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();
@@ -684,8 +693,10 @@ export async function cmdTest(): Promise<void> {
   testReadClaudeCodeUsagePrimaryPath();
   testReadClaudeCodeUsageFilterByWorktree();
   testReadClaudeCodeUsageSkipsMalformedLines();
+  testReadClaudeCodeUsageStaleReads();
   testReadCodexUsageNoDir();
   testReadCodexUsagePrimaryPath();
+  testReadCodexUsageDetailBytesByTool();
   testReadCodexUsageFilterByWorktree();
   testReadCodexUsageSkipsMalformedLines();
   // Telemetry tests
@@ -730,12 +741,19 @@ export async function cmdTest(): Promise<void> {
   testResolveWorktreeArgKeyLookup();
   testResolveWorktreeArgKeyNotFound();
   testResolveWorktreeArgSentinel();
+  // Cache tests
+  testMergeEntriesDedup();
+  testCacheMetaEmpty();
+  testCacheMetaCalculatesOldest();
+  testWriteCacheCreatesStateDir();
+  // Render tests
   testRenderHtmlStructure();
   testRenderHtmlModelNames();
   testRenderHtmlTokenValues();
   testRenderHtmlNoData();
   testRenderHtmlSummaryCards();
   testRenderHtmlCostWide();
-  testRenderHtmlPollInterval();
+  testRenderHtmlFreshnessBar();
+  testRenderHtmlNoPollInterval();
   console.log("\nall tests passed ✓");
 }

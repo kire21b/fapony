@@ -158,7 +158,7 @@ plan:     project_health_context (known patterns from history → plan-with-pony
 | `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
 | `project_health_context` | plan | Known-patterns block for plan-with-pony: recurring fail reasons, escalated runs, round-1-pass shapes |
 
-Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-web [port]` starts a live comparison dashboard across OpenCode, ZCode, Claude Code, and Codex sessions — by default it samples (OpenCode/ZCode timing: last 20k parts; Claude Code/Codex: last 30 days, skipped by file mtime so old JSONL history is never read) instead of scanning everything; pass `--full` for an exact all-time scan. The dashboard title shows which mode is active.
+Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
 Full protocol, adapter examples (bash, Python), and safety rules: [docs/mcp-handcheck.md](docs/mcp-handcheck.md).
 
@@ -256,7 +256,8 @@ Example plans produced by it live in [examples/](examples/).
 fapony mcp                               # MCP server (stdio JSON-RPC — 8 tools)
 fapony report <run-id>                   # verification report for a run
 fapony report-web [file]                 # static HTML report page
-fapony usage-web [port] [--full]         # live usage comparison dashboard (OpenCode / ZCode / Claude Code / Codex) — default samples (last 30d + last 20k parts), --full for an exact all-time scan
+fapony usage-scan                        # scan session logs → cache (incremental, progress bar)
+fapony usage-web [port]                   # live usage comparison dashboard from cache
 fapony stats                             # KPIs: pass/stall rate, by-model, by-grade
 
 # Setup & maintenance
@@ -281,7 +282,7 @@ fapony test                              # self-check
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
 - `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
 - `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
-- `usageWeb` — optional `{ port, hostname, pollInterval }` for `fapony usage-web` server defaults (CLI args override)
+- `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.
 

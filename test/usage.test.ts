@@ -1,8 +1,18 @@
-// test/usage.test.ts — unit tests for src/usage/format.ts + render.ts
+// test/usage.test.ts — unit tests for src/usage/format.ts + render.ts + cache.ts
 
 import assert from "node:assert";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PassiveUsageResult } from "../src/session/types.js";
 import { EMPTY_RESULT } from "../src/session/types.js";
+import {
+  type CacheEntry,
+  cacheMeta,
+  mergeEntries,
+  readCache,
+  writeCache,
+} from "../src/usage/cache.js";
 import {
   fmtCost,
   fmtDelta,
@@ -35,13 +45,13 @@ export function testFmtTokensMillions(): void {
 // ─── fmtCost ──────────────────────────────────────────────────────────
 
 export function testFmtCostNull(): void {
-  assert.equal(fmtCost(null), "—");
-  console.log("  ✓ fmtCost(null) → '—'");
+  assert.equal(fmtCost(null), "\u2014");
+  console.log("  ✓ fmtCost(null) → '\u2014'");
 }
 
 export function testFmtCostZero(): void {
-  assert.equal(fmtCost(0), "—");
-  console.log("  ✓ fmtCost(0) → '—'");
+  assert.equal(fmtCost(0), "\u2014");
+  console.log("  ✓ fmtCost(0) → '\u2014'");
 }
 
 export function testFmtCostPositive(): void {
@@ -92,6 +102,83 @@ export function testShortModelEmptyString(): void {
   console.log("  ✓ shortModel empty → empty");
 }
 
+// ─── cache helpers ────────────────────────────────────────────────────
+
+function mkEntry(
+  client: string,
+  sessions: number,
+  scannedAt: string,
+): CacheEntry {
+  return {
+    client,
+    scanned_at: scannedAt,
+    session_count: sessions,
+    total_tokens_input: sessions * 100,
+    total_tokens_output: sessions * 50,
+    total_tokens_reasoning: sessions * 10,
+    total_tokens_cache_read: sessions * 30,
+    total_tokens_cache_write: sessions * 5,
+    total_cost: sessions * 0.1,
+    by_model: [],
+  };
+}
+
+export function testMergeEntriesDedup(): void {
+  const existing = [
+    mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
+    mkEntry("zcode", 5, "2026-09-10T10:00:00Z"),
+  ];
+  const updated = [
+    mkEntry("opencode", 12, "2026-09-11T10:00:00Z"),
+    mkEntry("claude_code", 8, "2026-09-11T10:00:00Z"),
+  ];
+  const merged = mergeEntries(existing, updated);
+  assert.equal(merged.length, 3);
+  const oc = merged.find((e) => e.client === "opencode");
+  assert.equal(oc?.session_count, 12, "opencode updated");
+  const zc = merged.find((e) => e.client === "zcode");
+  assert.equal(zc?.session_count, 5, "zcode preserved");
+  const cc = merged.find((e) => e.client === "claude_code");
+  assert.equal(cc?.session_count, 8, "claude_code added");
+  console.log("  ✓ mergeEntries dedup by client, last wins");
+}
+
+export function testCacheMetaEmpty(): void {
+  assert.equal(cacheMeta([]), null);
+  console.log("  ✓ cacheMeta([]) → null");
+}
+
+export function testCacheMetaCalculatesOldest(): void {
+  const entries = [
+    mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
+    mkEntry("zcode", 5, "2026-09-11T10:00:00Z"),
+  ];
+  const meta = cacheMeta(entries);
+  assert.ok(meta);
+  assert.equal(meta.scanned_at, "2026-09-10T10:00:00Z");
+  assert.equal(meta.total_sessions, 15);
+  console.log("  ✓ cacheMeta → oldest scanned_at + total sessions");
+}
+
+export function testWriteCacheCreatesStateDir(): void {
+  const prev = process.env.FAPONY_STATE_DIR;
+  const dir = join(tmpdir(), `fapony-scan-test-${Date.now()}`);
+  try {
+    // Point at a state dir that does not exist (fresh-machine first scan).
+    process.env.FAPONY_STATE_DIR = join(dir, "nested");
+    writeCache([mkEntry("opencode", 2, new Date().toISOString())]);
+    const back = readCache();
+    assert.equal(back.length, 1);
+    assert.equal(back[0].client, "opencode");
+    assert.equal(back[0].session_count, 2);
+  } finally {
+    if (prev === undefined) delete process.env.FAPONY_STATE_DIR;
+    else process.env.FAPONY_STATE_DIR = prev;
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log("  ✓ writeCache creates missing state dir");
+}
+
 // ─── renderUsageHtml ──────────────────────────────────────────────────
 
 const sampleData: PassiveUsageResult = {
@@ -128,8 +215,10 @@ const sampleData: PassiveUsageResult = {
   ],
 };
 
+const NOW = new Date().toISOString();
+
 export function testRenderHtmlStructure(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
   assert.ok(html.includes("<!DOCTYPE html>"), "has doctype");
   assert.ok(html.includes("OpenCode"), "has OpenCode title");
   assert.ok(html.includes("ZCode"), "has ZCode title");
@@ -139,20 +228,20 @@ export function testRenderHtmlStructure(): void {
   assert.ok(html.includes('id="t-zcode"'), "has zcode table id");
   assert.ok(html.includes('id="t-claude"'), "has claude table id");
   assert.ok(html.includes('id="t-codex"'), "has codex table id");
-  assert.ok(html.includes("<script>"), "has client-side JS");
-  assert.ok(html.includes("setInterval"), "has polling logic");
-  console.log("  ✓ renderUsageHtml → correct HTML structure");
+  assert.ok(!html.includes("setInterval"), "no setInterval (no polling)");
+  assert.ok(!html.includes("fetch("), "no fetch() calls (no polling)");
+  console.log("  ✓ renderUsageHtml → correct HTML structure (no polling)");
 }
 
 export function testRenderHtmlModelNames(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
   assert.ok(html.includes("mimo-v2.5"), "renders model name");
   assert.ok(html.includes("deepseek-v4-flash"), "renders model name");
   console.log("  ✓ renderUsageHtml → model names present");
 }
 
 export function testRenderHtmlTokenValues(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, 3000);
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
   assert.ok(html.includes("1K"), "renders input tokens (1000)");
   assert.ok(
     html.includes("200") || html.includes("200"),
@@ -163,13 +252,13 @@ export function testRenderHtmlTokenValues(): void {
 }
 
 export function testRenderHtmlNoData(): void {
-  const html = renderUsageHtml(EMPTY_RESULT, null, null, null, 3000);
+  const html = renderUsageHtml(EMPTY_RESULT, null, null, null, NOW);
   assert.ok(html.includes("no sessions"), "shows no sessions for empty data");
   console.log("  ✓ renderUsageHtml → handles empty data");
 }
 
 export function testRenderHtmlSummaryCards(): void {
-  const html = renderUsageHtml(sampleData, sampleData, null, null, 3000);
+  const html = renderUsageHtml(sampleData, sampleData, null, null, NOW);
   assert.ok(html.includes("summary-cards"), "has summary cards container");
   assert.ok(html.includes("Cache Hit"), "has cache hit metric");
   assert.ok(html.includes("Reasoning"), "has reasoning metric");
@@ -181,20 +270,23 @@ export function testRenderHtmlSummaryCards(): void {
 }
 
 export function testRenderHtmlCostWide(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, 3000);
-  // Cost metric should have the "wide" class to span 2 columns
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
   assert.ok(html.includes("card-metric wide"), "cost metric has wide class");
-  // Verify the CSS rule exists
   assert.ok(html.includes("card-metric.wide"), "wide CSS rule defined");
   console.log("  ✓ renderUsageHtml → Cost metric spans 2 columns");
 }
 
-export function testRenderHtmlPollInterval(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, 5000);
-  assert.ok(html.includes("5"), "poll interval in seconds shown");
-  assert.ok(
-    html.includes("5000") || html.includes("POLL_MS"),
-    "poll interval in ms",
-  );
-  console.log("  ✓ renderUsageHtml → poll interval rendered");
+export function testRenderHtmlFreshnessBar(): void {
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  assert.ok(html.includes("data as of"), "freshness bar shows data timestamp");
+  assert.ok(html.includes("usage-scan"), "freshness bar mentions usage-scan");
+  assert.ok(html.includes("status fresh"), "freshness bar has status dot");
+  console.log("  ✓ renderUsageHtml → freshness bar present");
+}
+
+export function testRenderHtmlNoPollInterval(): void {
+  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  assert.ok(!html.includes("pollInterval"), "no pollInterval in HTML");
+  assert.ok(!html.includes("polling"), "no 'polling' text in HTML");
+  console.log("  ✓ renderUsageHtml → no poll interval references");
 }

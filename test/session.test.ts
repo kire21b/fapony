@@ -446,6 +446,106 @@ export function testReadClaudeCodeUsagePrimaryPath(): void {
   });
 }
 
+export function testReadClaudeCodeUsageStaleReads(): void {
+  const dir = mkdtempSync(join(tmpdir(), "fapony-claude-code-stale-"));
+  const projectDir = join(dir, "projects", "-tmp-test-worktree");
+  const { mkdirSync } = require("node:fs");
+  mkdirSync(projectDir, { recursive: true });
+
+  const toolUseLine = (
+    model: string,
+    ts: string,
+    tool: "Read" | "Edit",
+    file: string,
+  ) =>
+    JSON.stringify({
+      message: {
+        model,
+        content: [
+          {
+            type: "tool_use",
+            id: `u-${ts}`,
+            name: tool,
+            input: { file_path: file },
+          },
+        ],
+      },
+      timestamp: ts,
+      cwd: "/tmp/test-worktree",
+    });
+  const usageLine = (model: string, ts: string) =>
+    JSON.stringify({
+      message: { model, usage: { input_tokens: 10, output_tokens: 5 } },
+      timestamp: ts,
+      cwd: "/tmp/test-worktree",
+    });
+
+  // Session 1: reads CLAUDE.md (never edited anywhere).
+  const session1 = [
+    toolUseLine(
+      "claude-sonnet-5",
+      "2026-09-09T03:00:00.000Z",
+      "Read",
+      "/repo/CLAUDE.md",
+    ),
+    usageLine("claude-sonnet-5", "2026-09-09T03:00:01.000Z"),
+  ].join("\n");
+  // Session 2: reads CLAUDE.md again (2nd distinct session → stale) and
+  // reads+edits scratch.ts in the same window (never stale).
+  const session2 = [
+    toolUseLine(
+      "claude-sonnet-5",
+      "2026-09-09T04:00:00.000Z",
+      "Read",
+      "/repo/CLAUDE.md",
+    ),
+    toolUseLine(
+      "claude-sonnet-5",
+      "2026-09-09T04:00:01.000Z",
+      "Read",
+      "/repo/scratch.ts",
+    ),
+    toolUseLine(
+      "claude-sonnet-5",
+      "2026-09-09T04:00:02.000Z",
+      "Edit",
+      "/repo/scratch.ts",
+    ),
+    usageLine("claude-sonnet-5", "2026-09-09T04:00:03.000Z"),
+  ].join("\n");
+
+  writeFileSync(join(projectDir, "session-1.jsonl"), session1);
+  writeFileSync(join(projectDir, "session-2.jsonl"), session2);
+
+  const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+  try {
+    process.env.FAPONY_CLAUDE_PROJECTS_DIR = join(dir, "projects");
+    const result = readClaudeCodeUsage(
+      "/tmp/test-worktree",
+      undefined,
+      undefined,
+      true,
+    );
+    assert.ok(result.detail, "detail:true must include detail");
+    const stale = result.detail!.stale_reads ?? [];
+    const claudeMd = stale.find((s) => s.file === "/repo/CLAUDE.md");
+    assert.ok(claudeMd, "CLAUDE.md flagged as stale");
+    assert.equal(claudeMd!.sessions, 2);
+    assert.equal(claudeMd!.reads, 2);
+    assert.ok(
+      !stale.find((s) => s.file === "/repo/scratch.ts"),
+      "edited file is never flagged as stale",
+    );
+    console.log(
+      "  ✓ readClaudeCodeUsage detail → stale_reads flags multi-session reads that are never edited",
+    );
+  } finally {
+    if (orig === undefined) delete process.env.FAPONY_CLAUDE_PROJECTS_DIR;
+    else process.env.FAPONY_CLAUDE_PROJECTS_DIR = orig;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export function testReadClaudeCodeUsageFilterByWorktree(): void {
   withClaudeCodeFixture((dir) => {
     const orig = process.env.FAPONY_CLAUDE_PROJECTS_DIR;
@@ -553,6 +653,44 @@ function withCodexFixture(fn: (dir: string) => void): void {
         },
       },
     }),
+    // Two tool calls, deliberately different output sizes, for the detail
+    // pass (tool_breakdown + bytes_by_tool matched by call_id).
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:14.000Z",
+      ordinal: 3,
+      type: "response_item",
+      payload: { type: "custom_tool_call", call_id: "call_1", name: "exec" },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:14.100Z",
+      ordinal: 4,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call_output",
+        call_id: "call_1",
+        output: [{ type: "input_text", text: "short" }],
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:15.000Z",
+      ordinal: 5,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call",
+        call_id: "call_2",
+        name: "apply_patch",
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-09-09T10:59:15.100Z",
+      ordinal: 6,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call_output",
+        call_id: "call_2",
+        output: [{ type: "input_text", text: "a".repeat(200) }],
+      },
+    }),
   ].join("\n");
 
   // Session 2: 1 token_usage_record line
@@ -638,6 +776,40 @@ export function testReadCodexUsagePrimaryPath(): void {
       assert.ok(terra, "gpt-5.6-terra found");
       assert.equal(terra!.tokens_input, 77216);
       console.log("  ✓ readCodexUsage primary path → reads JSONL files");
+    } finally {
+      if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
+      else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;
+    }
+  });
+}
+
+export function testReadCodexUsageDetailBytesByTool(): void {
+  withCodexFixture((dir) => {
+    const orig = process.env.FAPONY_CODEX_SESSIONS_DIR;
+    try {
+      process.env.FAPONY_CODEX_SESSIONS_DIR = dir;
+      const result = readCodexUsage(
+        "/tmp/test-worktree",
+        undefined,
+        undefined,
+        true,
+      );
+      assert.ok(result.detail, "detail:true must include detail");
+      assert.deepEqual(result.detail!.tool_breakdown, {
+        exec: 1,
+        apply_patch: 1,
+      });
+      const bbt = result.detail!.bytes_by_tool!;
+      assert.ok(bbt, "bytes_by_tool present");
+      // apply_patch's fixture output is ~40x longer than exec's — the
+      // proportion, not the exact byte count, is what matters.
+      assert.ok(
+        bbt.apply_patch > bbt.exec * 5,
+        `expected apply_patch >> exec, got ${JSON.stringify(bbt)}`,
+      );
+      console.log(
+        "  ✓ readCodexUsage detail → tool_breakdown + bytes_by_tool from custom_tool_call pairs",
+      );
     } finally {
       if (orig === undefined) delete process.env.FAPONY_CODEX_SESSIONS_DIR;
       else process.env.FAPONY_CODEX_SESSIONS_DIR = orig;

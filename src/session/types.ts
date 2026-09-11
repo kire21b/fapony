@@ -40,6 +40,14 @@ export interface StepTimingSummary {
   note: string;
 }
 
+export interface StaleReadFile {
+  file: string;
+  /** How many distinct sessions read this file (diversity, not just count). */
+  sessions: number;
+  /** Total Read calls across those sessions. */
+  reads: number;
+}
+
 export interface UsageDetail {
   /** Global tool-call counts across the filtered sessions (activity signal, not quality). */
   tool_breakdown: Record<string, number>;
@@ -49,6 +57,13 @@ export interface UsageDetail {
   steps: number;
   /** Per-session breakdown (SQL-aggregated, never raw part rows). */
   by_session: SessionDetail[];
+  /**
+   * Files read across 2+ sessions in this window and never edited/written —
+   * candidates for pasting into CLAUDE.md instead of re-reading every
+   * session. Top 20 by session count. Needs a wide `since` window (many
+   * sessions) before the pattern means anything — noise below that.
+   */
+  stale_reads?: StaleReadFile[];
   /**
    * Step-token sums are NOT reported: per-step tokens overlap (each step
    * carries the full context window), so SUM(step tokens) >> session tokens.

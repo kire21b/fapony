@@ -14,7 +14,7 @@ import { cmdStats } from "./src/stats.js";
 import { cmdTelemetry } from "./src/telemetry.js";
 import { cmdTest } from "./src/test.js";
 import { cmdUpdate } from "./src/update.js";
-import { cmdUsageWeb } from "./src/usage/index.js";
+import { cmdUsageScan, cmdUsageWeb } from "./src/usage/index.js";
 
 const [cmd, ...a] = process.argv.slice(2);
 
@@ -40,6 +40,8 @@ if (cmd === "analyze") {
   cmdReport(a);
 } else if (cmd === "report-web") {
   cmdReportWeb(a);
+} else if (cmd === "usage-scan") {
+  cmdUsageScan(a);
 } else if (cmd === "usage-web") {
   cmdUsageWeb(a);
 } else if (cmd === "test") {
@@ -47,7 +49,7 @@ if (cmd === "analyze") {
 } else {
   console.error(`fapony: unknown command "${cmd ?? ""}"`);
   console.error(
-    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|usage-web|analyze|mcp|test> [args]",
+    "usage: fapony <setup|update|stats|telemetry|init|install|report|report-web|usage-scan|usage-web|analyze|mcp|test> [args]",
   );
   process.exit(1);
 }
