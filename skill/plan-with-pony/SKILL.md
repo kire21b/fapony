@@ -1,9 +1,9 @@
 ---
-name: plan-with-me
-description: Draft a plan + spec from "what's in your head" through conversation. Vendor-neutral prompt for any agent (opencode, Claude Code, Codex, ZCode). Trigger on /plan-with-me and when the user asks to plan or brainstorm a feature.
+name: plan-with-pony
+description: Draft a plan + spec from "what's in your head" through conversation, one question group at a time. Vendor-neutral — works with Claude Code, OpenCode, Codex, ZCode. Pulls known failure patterns from fapony run history when it's wired up. Trigger on /plan-with-pony and when the user asks to plan or brainstorm a feature.
 ---
 
-# plan-with-me — start from what's in your head
+# plan-with-pony — start from what's in your head
 
 You are helping a dev draft a plan + spec from ideas in their head.
 Use conversational Q&A — never dump 10 questions at once.
@@ -56,15 +56,16 @@ Ask:
 
 When all answers are in, **before writing the file**, check past-run history:
 
-- If the `project_health_context` MCP tool is available, call it (no args for
-  the global view, or `worktree` scoped to this project) and paste the returned
-  block into the conversation under "Known patterns from past runs".
-- If fapony isn't wired up (no MCP tool) or the block says "not enough history
-  yet", skip silently — never block drafting on this.
-- Show the block to the dev and ask which watch-fors (if any) should carry
-  into the new plan's constraints. **What wasn't discussed = not in the plan**
-  (hard rule #5) — the block is input to the conversation, never auto-injected
-  into `.fapony/plan/*.md`.
+- If the `project_health_context` MCP tool is available, call it and paste the returned block
+  into the conversation under "Known patterns from past runs". Pass `worktree` as the **absolute
+  path** to this repo (`git rev-parse --show-toplevel`) — every fapony tool scopes by absolute
+  path, and a bare repo name lands in a different bucket that later queries won't find. Omit
+  `worktree` entirely for the cross-project view.
+- If fapony isn't wired up (no MCP tool) or the block says "not enough history yet", skip
+  silently — never block drafting on this.
+- Show the block to the dev and ask which watch-fors (if any) should carry into the new plan's
+  constraints. **What wasn't discussed = not in the plan** (hard rule #5) — the block is input to
+  the conversation, never auto-injected into `.fapony/plan/*.md`.
 
 ## Phase 2 — Draft (1 round)
 
@@ -72,7 +73,21 @@ When all answers are in, **before writing the file**: `ls .fapony/plan/` and che
 `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite it — pick a more specific
 name (e.g. `PLAN-<feature>-v2.md`) or ask the dev which one is stale.
 
-Then write the plan according to **Plan Core template** (templates/PLAN.md) and ask:
+Then write the plan with these eight sections, in this order — none may be missing:
+
+```
+1. Goal (why)                          5. Risks & Escape hatches (if it fails)
+2. Scope (do / don't do)               6. Steps (what in which order)
+3. Done criteria (how we know)         7. Examples (make it concrete)
+4. Constraints / Hard rules            8. References
+```
+
+Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
+**Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
+edge-case tables into section 7; link to the spec instead. The full template with per-section
+prompts lives at `templates/PLAN.md` in the fapony repo.
+
+Then ask:
 > "This is the draft plan based on what you told me.
 > - Is there anything I misunderstood?
 > - Is there anything you said that I didn't include?
@@ -86,10 +101,12 @@ If the dev says they need a spec too → ask:
 > example input/output, mockup, schema, etc.
 > Or if you're not sure yet, I can draft a spec from the plan first."
 
-Then draft spec/<filename>.md by:
+Then draft `.fapony/spec/SPEC-<feature>.md` by:
 - Referencing sections from the plan directly — don't rewrite
 - More concrete examples than abstract
 - Include "fail examples" to make boundaries clear
+- Opening with a backlink: `> **Used by:** [PLAN-<feature>.md](../plan/PLAN-<feature>.md)` — the
+  plan links out, the spec links back, and the pair becomes a graph with no tooling to maintain
 
 ## Hard rules
 
@@ -98,14 +115,14 @@ Then draft spec/<filename>.md by:
 3. **If the dev says "I don't know" → never guess** — follow up with narrowing questions
 4. **Every output is a file** — not chat (so git can track it)
 5. **What wasn't discussed = not in the plan** — never add on your own
-6. **Plan must follow Plan Core** — sections 1–8, no shortcuts (see templates/PLAN.md)
+6. **Plan must have all eight sections** — no shortcuts
 7. **Never overwrite an existing PLAN-<feature>.md** — check first, pick a different name if it exists
 
-## Examples
+## Piping into a non-MCP agent
 
-See [examples/](../examples/) for real plans produced by this prompt:
-- [PLAN-webapp-notifications.md](../examples/PLAN-webapp-notifications.md) — web app (spec-heavy, wide scope)
-- [PLAN-cli-logger.md](../examples/PLAN-cli-logger.md) — CLI tool (small, no spec)
-- [PLAN-refactor-auth.md](../examples/PLAN-refactor-auth.md) — refactor (existing code, no new feature)
-- [PLAN-fix-race-condition.md](../examples/PLAN-fix-race-condition.md) — bug fix (small, specific)
-- [PLAN-feature-export.md](../examples/PLAN-feature-export.md) — new feature (medium scope)
+This file is the prompt. Any agent that reads stdin can run it:
+
+```bash
+cat ~/.claude/skills/plan-with-pony/SKILL.md | claude -p
+cat ~/.claude/skills/plan-with-pony/SKILL.md | opencode run
+```

@@ -4,7 +4,7 @@
 
 Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 8 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
-**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **project health + knowledge accumulation ข้าม run/client/project** — reason_code ที่ fail ซ้ำ, plan ที่ escalate เกิน round cap, pattern ที่ผ่าน round แรก — สะสมใน `runs`+`events` แล้วป้อนกลับเข้า `plan-with-me` เป็น context (`project_health_context` tool, ดู [.fapony/plan/PLAN-project-health-context.md](.fapony/plan/PLAN-project-health-context.md)) fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
+**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **project health + knowledge accumulation ข้าม run/client/project** — reason_code ที่ fail ซ้ำ, plan ที่ escalate เกิน round cap, pattern ที่ผ่าน round แรก — สะสมใน `runs`+`events` แล้วป้อนกลับเข้า `plan-with-pony` เป็น context (`project_health_context` tool, ดู [.fapony/plan/PLAN-project-health-context.md](.fapony/plan/PLAN-project-health-context.md)) fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
@@ -19,10 +19,10 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 fapony/
   fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-web|analyze|setup|stats|telemetry|test|update
   fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
-  prompts/
-    plan-with-me.md   # draft plan + spec from conversation — piped to any agent's stdin
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
-    plan-with-me/               # draft plan + spec จาก conversation
+                                # each SKILL.md is self-contained — the symlink ships only
+                                # skill/<name>/, so a link out of that dir is dead on install
+    plan-with-pony/             # draft plan + spec จาก conversation (pipe to any agent's stdin)
     review-pony/                # review as verification + known patterns before, verdict after
     move-to-done/               # archive PLAN หลัง ship
     git-commit-conventional/    # commit แยก concern + conventional message
@@ -50,7 +50,7 @@ fapony/
       zcode.ts         # readZcodeUsage() — ZCode session DB
       claude-code.ts   # readClaudeCodeUsage() — Claude Code JSONL files
       codex.ts         # readCodexUsage() — Codex JSONL files
-    context/           # project-health context block for plan-with-me
+    context/           # project-health context block for plan-with-pony
       projectHealth.ts # buildProjectHealthContext() — pure over StatsData, ~15 lines max
       index.ts         # barrel re-export
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
@@ -100,7 +100,7 @@ fapony/
         usage.ts           # fapony_usage — passive OpenCode session usage
         report.ts          # verification_report — facts + checks + evidence + verdict + cost, one call
         plans.ts           # plan_list — pending plan files joined with run history
-        context.ts         # project_health_context — known patterns for plan-with-me
+        context.ts         # project_health_context — known patterns for plan-with-pony
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
   test/
     *.test.ts              # one file per src module
@@ -211,7 +211,7 @@ events(
 | `fapony init` ซ้ำ | เช็คทุก dir (plan/spec/memory/evidence.json) → error ถ้าเจอของเก่า ห้ามทับ |
 | memory: null + .fapony/.memory/mem.ts มี | default-wiring ใช้ claim/close/add อัตโนมัติ |
 | Evidence cmd ที่ agent เสนอเองนอก allowlist | ไม่รันเด็ดขาด — รายงานเป็น *proposed — not executed* ([src/mcp/evidence.ts](src/mcp/evidence.ts)) |
-| AI สร้าง plan filename ซ้ำทับของเก่า | `prompts/plan-with-me.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
+| AI สร้าง plan filename ซ้ำทับของเก่า | `skill/plan-with-pony/SKILL.md` กฎเหล็ก #7 — `ls .fapony/plan/` เช็คชื่อชนก่อนเขียนเสมอ |
 | `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | `readTimingFromDb` ([src/session/helpers.ts](src/session/helpers.ts)) parse JSON ทุกแถวใน JS — คือ bottleneck ไม่ใช่ SQL aggregate จึง default `ORDER BY time_created DESC LIMIT 20000` (sampling) แทน full scan · `fapony usage-web --full` สั่ง exact scan |
 | `usage-web` ช้าอยู่ต่อแม้ limit OpenCode/ZCode แล้ว (บล็อค startup ~10s) | Claude Code/Codex reader ไม่มี SQL ให้ aggregate — `readFileSync` ทุกไฟล์ `.jsonl` เต็มไฟล์เสมอ (ไม่มี fast path) จึง (1) default `since` = 30 วันย้อนหลังใน `fetchAllUsage` ([src/usage/cli.ts](src/usage/cli.ts)) เว้นแต่ `--full` (2) ใน `claude-code.ts`/`codex.ts` เช็ค `statSync(file).mtimeMs` ก่อน `readFileSync` — ไฟล์ session เป็น append-only ถ้า mtime เก่ากว่า `since` ข้ามได้เลยไม่ต้องอ่าน |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
@@ -227,7 +227,7 @@ fapony started as an execute→review→fix CLI loop (`fapony run`/`loop`/`kicko
 drives any agent — it's a measurement/verification layer any agent calls via MCP (see README.md). What's
 left of that era: `runs`/`events` SQLite schema (repurposed — a run row is one measured/verified unit of
 work, not one spawned loop iteration), `review.maxRounds` (still read as a cap signal), and the plan/spec
-templates + `move-to-done`/`plan-with-me` skills below (now agent-driven, not CLI-enforced).
+templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not CLI-enforced).
 
 ---
 
@@ -288,7 +288,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `fapony_stats` | Query KPIs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N failure/plan slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
-| `project_health_context` | Known-patterns block for plan-with-me: recurring fail reasons, escalations, round-1-pass shapes |
+| `project_health_context` | Known-patterns block for plan-with-pony: recurring fail reasons, escalations, round-1-pass shapes |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.
 

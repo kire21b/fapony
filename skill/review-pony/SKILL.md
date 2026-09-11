@@ -25,10 +25,15 @@ Then start at pass 1.
 
 ## Before: what already goes wrong here (fapony)
 
-Call `project_health_context` with `worktree` set to this project's repo name or worktree key
-(`basename $(git rev-parse --show-toplevel)` — never a hardcoded literal, this skill ships to
-other projects). It returns recurring `reason_code`s, escalated plans, round-1-pass shapes, and
-recent verdict notes.
+Call `project_health_context` with `worktree` set to the **absolute path** of this repo —
+`git rev-parse --show-toplevel`, never a hardcoded literal, this skill ships to other projects.
+It returns recurring `reason_code`s, escalated plans, round-1-pass shapes, and recent verdict
+notes.
+
+The absolute path is not a preference. `runs.worktree` is free text, so a bare repo name writes
+to a bucket no later query reads — `project_health_context` reports "not enough history" on a
+project that has plenty, and `verification_report` on that run fails outright with *worktree key
+"<name>" not found in config*. Every fapony tool scopes by absolute path. Match them.
 
 Skim it, don't quote it back. It tells you where to press harder: if `missing_test` has come up
 4×, coverage is not a nit in this repo. If the tool errors or fapony isn't wired in this session,
@@ -154,10 +159,12 @@ failed.
 ## Example
 
 ```
-pre.  project_health_context(worktree="fapony") → "missing_test (4×), spec_gap (2×)"
+pre.  project_health_context(worktree="/Users/you/Project/fapony/wt-fapony")
+        → "missing_test (4×), spec_gap (2×)"
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
 post. verdict_submit(verdict="pass-adequate", reason_code="other",
         note="evidence entry `bun test` exits 0 while running zero tests — real entry is `bun run test`",
-        worktree="fapony", plan=".fapony/plan/PLAN-verdict-notes.md")
+        worktree="/Users/you/Project/fapony/wt-fapony",
+        plan=".fapony/plan/PLAN-verdict-notes.md")
 ```

@@ -1,7 +1,7 @@
 // src/context/projectHealth.ts — project-health context block builder
 //
 // Composes the cross-run knowledge queries (PLAN-project-health-context §2)
-// into a short plain-text block fed to `plan-with-me` as "known patterns"
+// into a short plain-text block fed to `plan-with-pony` as "known patterns"
 // before drafting. Framed as "watch for", never "must follow" (overfitting
 // guard — PLAN §5). Pure function over StatsData: no DB, no I/O.
 
