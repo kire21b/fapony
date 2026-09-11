@@ -90,7 +90,7 @@ fapony/
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 8 tools
       index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout)
+      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn habits 7/8 without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
@@ -216,6 +216,7 @@ events(
 | `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | แก้แล้ว — `usage-web` อ่าน cache (`~/.config/fapony/usage-cache.jsonl`) ไม่แตะ session log · scan เกิดตอนคนสั่ง `fapony usage-scan` เท่านั้น · `--full` ย้ายไปเป็น flag ของ `usage-scan` |
 | `usage-web` ไม่มี cache | แสดงข้อความให้รัน `fapony usage-scan` ก่อน — ไม่ scan เองเด็ดขาด (done criteria #5) |
 | gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
+| ผู้ใช้คนอื่นต้องแปะกฎ 7/8 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7/8 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---

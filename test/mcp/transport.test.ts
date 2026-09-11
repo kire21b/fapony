@@ -21,10 +21,20 @@ export function testMcpToolsList(): void {
 export function testMcpInitialize(): void {
   const result = dispatch("initialize", {});
   assert.ok(result && typeof result === "object");
-  const r = result as { protocolVersion: string; serverInfo: { name: string } };
+  const r = result as {
+    protocolVersion: string;
+    serverInfo: { name: string };
+    instructions?: string;
+  };
   assert.equal(r.protocolVersion, "2025-03-26");
   assert.equal(r.serverInfo.name, "fapony-handcheck");
-  console.log("  ✓ mcp initialize returns protocol version");
+  // Instructions are the only carrier of the two habits that reaches every
+  // client without the user editing their own rules file — if this goes
+  // missing, fapony silently stops collecting anything new.
+  assert.ok(r.instructions, "initialize must carry server instructions");
+  assert.match(r.instructions ?? "", /project_health_context/);
+  assert.match(r.instructions ?? "", /verdict_submit/);
+  console.log("  ✓ mcp initialize returns protocol version + instructions");
 }
 
 export function testMcpNotificationsIgnored(): void {
