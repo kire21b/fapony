@@ -29,12 +29,16 @@ You are about to move a PLAN that has been shipped to the archive.
    ```
    If fewer than 5 → fix yourself · If more → report
 
-4. **Use `git mv` not rm + add** — preserves history:
+4. **Prefix the filename with its Created date, then `git mv` (not rm + add)** — preserves
+   history and makes `ls .fapony/plan/done/` sort chronologically without a git log lookup.
+   Date = the plan's own `**Created:** YYYY-MM-DD` line, not today's date:
    ```bash
-   git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/PLAN-foo.md
+   git mv .fapony/plan/PLAN-foo.md .fapony/plan/done/2026-09-05-PLAN-foo.md
    ```
-   If git refuses ("not under version control" — `.fapony/` is gitignored in this repo), plain
-   `mv` instead; there's nothing to commit for an untracked path, so skip step 6 in that case.
+   Already has a date prefix (re-archiving, or the source file was already named that way) →
+   don't double it. If git refuses ("not under version control" — `.fapony/` is gitignored in
+   this repo), plain `mv` instead; there's nothing to commit for an untracked path, so skip
+   step 6 in that case.
 
 5. **Archive the related spec too** — if the PLAN's "Source spec:" line points to a file under
    `.fapony/spec/`, move it to `.fapony/spec/done/` the same way (same git-mv-or-plain-mv rule,
@@ -70,13 +74,13 @@ You are about to move a PLAN that has been shipped to the archive.
 ## Example
 
 ```
-Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)"
+Input: .fapony/plan/PLAN-kickoff.md with header "> ✅ **shipped** (a1b2c3)", Created: 2026-09-05
 Steps:
 1. normalize links: [templates/](../templates/) → [../templates/](../templates/)
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
-3. git mv
+3. git mv .fapony/plan/PLAN-kickoff.md .fapony/plan/done/2026-09-05-PLAN-kickoff.md
 4. commit
-5. verdict_submit(verdict="pass", reason_code="other", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/PLAN-kickoff.md", files=["src/kickoff.ts"])
+5. verdict_submit(verdict="pass", reason_code="other", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/2026-09-05-PLAN-kickoff.md", files=["src/kickoff.ts"])
    — clean ship, so no note
 ```
 
