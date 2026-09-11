@@ -37,7 +37,7 @@ const SERVER_INSTRUCTIONS = `fapony records what went wrong in this project and 
 
 2. The moment you realize your first attempt was wrong and the cause was not where the symptom was, call verdict_submit with verdict "fail" — right then, not when the task ends, because that is when you still know what you believed and why it was wrong. Close it with a pass-family verdict once the fix is verified ("uncertain" if you could not verify; never guess pass). Work that went right the first time needs no verdict at all: only three notes reach a future session, and an empty pass evicts one that teaches something.
 
-Always send files[]. A verdict without it says something failed but not where. Write the note standalone — symptom, actual cause, rule learned — it is read months later by someone with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.`;
+Always send files[] and worktree. A verdict without files[] says something failed but not where; worktree must be the absolute path (git rev-parse --show-toplevel) because every fapony query scopes by it — a bare repo name, or omitting it, files the verdict in a bucket nothing reads, and nothing errors to tell you. Write the note standalone — symptom, actual cause, rule learned — it is read months later by someone with no access to this conversation. Never leave a run non-terminal; an open run absorbs later unrelated verdicts for that worktree.`;
 
 // --- Statusline cache ---
 //

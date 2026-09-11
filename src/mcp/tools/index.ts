@@ -141,7 +141,10 @@ export const TOOLS = [
         worktree: {
           type: "string",
           description:
-            "Optional worktree label for a new run (used only when run_id is omitted, e.g. move-to-done archiving a shipped plan)",
+            "Absolute path of the repo/worktree (git rev-parse --show-toplevel), used when run_id is omitted. " +
+            "Send it: every fapony query scopes by absolute path, so a bare repo name lands in a bucket no " +
+            'query reads, and omitting it files the verdict under "mcp-external" instead of the project. ' +
+            "Neither case errors.",
         },
         plan: {
           type: "string",
