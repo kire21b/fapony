@@ -131,8 +131,13 @@ export function testClaudeGetPointsToFapony(): void {
 export function testInstallClaudeAbsentAdds(): void {
   const ADD = claudeAddArgs().join(" ");
   const { run, calls } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+  // Tmp home: installStatusline copies the script + writes settings.json —
+  // must never touch the real ~/.claude during tests.
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const err = silentErrors(() =>
-    captureErrors(() => cmdInstallClaude(false, { run, exit: testExit })),
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
   );
   assert.deepStrictEqual(calls, [GET, ADD]);
   assert.ok(err.includes("configured for Claude Code"), `got: ${err}`);
@@ -141,8 +146,12 @@ export function testInstallClaudeAbsentAdds(): void {
 
 export function testInstallClaudeAlreadyConfiguredNoOp(): void {
   const { run, calls } = mapRun({ [GET]: PRESENT });
+  // Tmp home: the no-op path still runs linkSkills — keep it off real ~/.claude.
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
   const err = silentErrors(() =>
-    captureErrors(() => cmdInstallClaude(false, { run, exit: testExit })),
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
   );
   assert.deepStrictEqual(calls, [GET]);
   assert.ok(err.includes("already configured"), `got: ${err}`);
@@ -170,6 +179,68 @@ export function testInstallClaudeDifferentCommandRefusesOverwrite(): void {
   assert.deepStrictEqual(calls, [GET]);
   assert.ok(err.includes("not overwriting"), `got: ${err}`);
   console.log("  ✓ install claude foreign entry → refuse overwrite");
+}
+
+export function testInstallClaudeForeignStatuslineRefusesOverwrite(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const claudeDir = join(home, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  const before = JSON.stringify({
+    statusLine: { type: "command", command: "/tmp/mine.sh" },
+    other: 1,
+  });
+  writeFileSync(join(claudeDir, "settings.json"), before);
+  const ADD = claudeAddArgs().join(" ");
+  const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+  const err = silentErrors(() =>
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
+  );
+  const after = readFileSync(join(claudeDir, "settings.json"), "utf-8");
+  assert.equal(after, before, "foreign statusLine must not be overwritten");
+  assert.ok(err.includes("isn't fapony's"), `got: ${err}`);
+  console.log("  ✓ install claude foreign statusLine → refuse overwrite");
+}
+
+export function testInstallClaudeForeignScriptRefusesOverwrite(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const claudeDir = join(home, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(join(claudeDir, "statusline.sh"), "#!/bin/bash\necho mine\n");
+  const ADD = claudeAddArgs().join(" ");
+  const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+  const err = silentErrors(() =>
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
+  );
+  assert.equal(
+    readFileSync(join(claudeDir, "statusline.sh"), "utf-8"),
+    "#!/bin/bash\necho mine\n",
+    "foreign script must not be overwritten",
+  );
+  assert.ok(err.includes("isn't fapony's"), `got: ${err}`);
+  console.log("  ✓ install claude foreign script → refuse overwrite");
+}
+
+export function testInstallClaudeStatuslineWiresSettings(): void {
+  const home = mkdtempSync(join(tmpdir(), "fapony-claude-home-"));
+  const ADD = claudeAddArgs().join(" ");
+  const { run } = mapRun({ [GET]: ABSENT, [ADD]: ADDED });
+  silentErrors(() =>
+    captureErrors(() =>
+      cmdInstallClaude(false, { run, exit: testExit, homedir: () => home }),
+    ),
+  );
+  const scriptDest = join(home, ".claude", "statusline.sh");
+  assert.ok(existsSync(scriptDest), "statusline script copied");
+  const settings = JSON.parse(
+    readFileSync(join(home, ".claude", "settings.json"), "utf-8"),
+  ) as { statusLine?: { type?: unknown; command?: unknown } };
+  assert.equal(settings.statusLine?.type, "command");
+  assert.equal(settings.statusLine?.command, scriptDest);
+  console.log("  ✓ install claude wires statusline script + settings");
 }
 
 export function testInstallClaudeDryRunNeverAdds(): void {

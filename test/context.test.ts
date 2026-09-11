@@ -46,7 +46,7 @@ function statsFixture(): StatsData {
       { id: 9, worktree: "wt1", plan: "auth-refactor", round: 4 },
     ],
     bestPassing: [{ plan: "usage-web-cli", worktree: "wt1" }],
-    recentFailNotes: [],
+    recentVerdictNotes: [],
     usage: EMPTY_RESULT,
     latestRunAt: "",
   };
@@ -140,7 +140,7 @@ export function testContextToolEndToEnd(): void {
 
 export function testContextBlockRecentNotes(): void {
   const data = statsFixture();
-  data.recentFailNotes = [
+  data.recentVerdictNotes = [
     {
       worktree: "wt1",
       reason: "scope_mismatch",
@@ -161,7 +161,7 @@ export function testContextBlockLowHistoryStillShowsNotes(): void {
   data.byWorktree = [
     { worktree: "wt1", runs: 1, passed: 0, stalled: 0, pending: null },
   ];
-  data.recentFailNotes = [
+  data.recentVerdictNotes = [
     {
       worktree: "wt1",
       reason: "spec_gap",
@@ -184,4 +184,32 @@ export function testContextToolEmptyDb(): void {
     assert.ok(result.content[0].text.includes("Not enough history yet"));
   });
   console.log("  ✓ project_health_context on empty db → low-history line");
+}
+
+export function testContextBlockFilesFilterBeyondTop3(): void {
+  const data = statsFixture();
+  data.recentVerdictNotes = [
+    { worktree: "wt1", reason: "other", note: "unrelated one", ts: "" },
+    { worktree: "wt1", reason: "other", note: "unrelated two", ts: "" },
+    { worktree: "wt1", reason: "other", note: "unrelated three", ts: "" },
+    {
+      worktree: "wt1",
+      reason: "spec_gap",
+      note: "findSessionModel picks first model",
+      ts: "",
+      files: ["src/session/findModel.ts"],
+    },
+  ];
+  const block = buildProjectHealthContext(data, {
+    files: ["src/session/findModel.ts"],
+  });
+  assert.ok(
+    block.includes("findSessionModel picks first model"),
+    "match past the top-3 cutoff still surfaces when files[] is given",
+  );
+  assert.ok(
+    !block.includes("unrelated one"),
+    "non-matching notes stay filtered out",
+  );
+  console.log("  ✓ context block files filter applies before the top-3 slice");
 }

@@ -722,3 +722,28 @@ export function testCountPendingPlans(): void {
   }
   console.log("  ✓ countPendingPlans: done/ excluded, null when uncountable");
 }
+
+/**
+ * Tripwire: getStatsData must collect MORE notes than project_health_context
+ * displays. It filters by worktree/files[] before slicing to 3, so a
+ * collection cap of 3 here silently hides every file-scoped match older than
+ * the three newest gates in the whole DB.
+ */
+export function testStatsVerdictNotesNotCappedAtDisplayLimit(): void {
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+    for (let i = 0; i < 5; i++) {
+      addEvent(db, runId, "gate", {
+        verdict: "fail",
+        reason_code: "spec_gap",
+        note: `[spec_gap] note ${i}`,
+        round: i,
+      });
+    }
+
+    const notes = getStatsData().recentVerdictNotes;
+    assert.equal(notes.length, 5, "all notes collected, not capped at 3");
+    assert.equal(notes[0].note, "note 4", "newest first, reason_code stripped");
+  });
+  console.log("  ✓ getStatsData: verdict notes collected past the display cap");
+}

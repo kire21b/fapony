@@ -27,6 +27,8 @@ Then start at pass 1.
 
 Call `project_health_context` with `worktree` set to the **absolute path** of this repo —
 `git rev-parse --show-toplevel`, never a hardcoded literal, this skill ships to other projects.
+When the review scope is clear (specific files or a focused PR), also pass `files` with the
+list of files being changed — this filters findings to only those relevant to your scope.
 It returns recurring `reason_code`s, escalated plans, round-1-pass shapes, and recent verdict
 notes.
 
@@ -134,8 +136,10 @@ let it change the report's content.
 Always attach a one-line `note`. Grades and codes only count; the note is the only field a later
 review can act on. Say what specifically broke or was walked, not that a review happened.
 
-Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), and `plan` (the
-PLAN file path under review, omitted for a bare PR/diff). No `run_id` — fapony reuses the
+Args: `verdict`, `reason_code`, `note`, `worktree` (same key as the pre-step), `plan` (the
+PLAN file path under review, omitted for a bare PR/diff), and `files` (optional — the files
+that were reviewed/changed, so fapony can track file-level patterns across runs).
+No `run_id` — fapony reuses the
 latest still-open run for the same worktree+plan (so round 2+ counts toward the round cap),
 creating a row only when none is open.
 

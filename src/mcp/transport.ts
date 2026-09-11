@@ -1,6 +1,10 @@
 // src/mcp/transport.ts — JSON-RPC dispatch + stdio entry point
 
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { mergeBytesByTool, type UsageDetail } from "../session/index.js";
 import { getServerSha } from "./primitives.js";
 import {
   TOOLS,
@@ -14,6 +18,77 @@ import {
   toolVerificationReport,
 } from "./tools/index.js";
 import { errorResult, type ToolResult } from "./types.js";
+
+// --- Statusline cache ---
+//
+// Written after every MCP tool call. The Claude Code statusline script reads
+// this file (< 1ms, no spawn, no db). Format: single line of text.
+// Only fapony_usage with detail:true produces meaningful data (bytes_by_tool,
+// aggregated across all clients — the bytes live on the claude_code
+// sub-object, never top-level); other tools write a minimal "fapony" marker.
+
+const STATUSLINE_PATH = join(homedir(), ".config", "fapony", "statusline");
+
+function writeStatuslineCache(toolResult: ToolResult): void {
+  try {
+    // Extract bytes_by_tool from fapony_usage detail JSON response.
+    let line = "fapony";
+    if (
+      toolResult &&
+      typeof toolResult === "object" &&
+      "content" in toolResult &&
+      Array.isArray(toolResult.content)
+    ) {
+      for (const c of toolResult.content) {
+        if (
+          c &&
+          typeof c === "object" &&
+          c.type === "text" &&
+          typeof c.text === "string"
+        ) {
+          // Try to extract bytes_by_tool from JSON text response.
+          // Aggregated across all clients: the bytes live on the Claude Code
+          // sub-object (claude_code.detail), never on the top-level detail,
+          // so reading top-level alone would always miss.
+          try {
+            const parsed = JSON.parse(c.text) as {
+              detail?: UsageDetail | null;
+              zcode?: { detail?: UsageDetail | null } | null;
+              claude_code?: { detail?: UsageDetail | null } | null;
+              codex?: { detail?: UsageDetail | null } | null;
+            };
+            const bbt = mergeBytesByTool(
+              parsed?.detail,
+              parsed?.zcode?.detail,
+              parsed?.claude_code?.detail,
+              parsed?.codex?.detail,
+            );
+            const entries = Object.entries(bbt).sort((a, b) => b[1] - a[1]);
+            const total = entries.reduce((s, e) => s + e[1], 0);
+            if (total > 0) {
+              // Format: "84.2k" for total, or "Read 42k · Grep 31k" for top tools.
+              const fmt = (n: number) =>
+                n >= 1024 ? `${(n / 1024).toFixed(1)}k` : `${Math.round(n)}`;
+              if (entries.length <= 3) {
+                line = `fapony ${entries.map((e) => `${e[0]} ${fmt(e[1])}`).join(" · ")}`;
+              } else {
+                line = `fapony ${fmt(total)}`;
+              }
+            }
+          } catch {
+            // Not JSON — that's fine, use default "fapony" marker.
+          }
+          break;
+        }
+      }
+    }
+    const dir = join(homedir(), ".config", "fapony");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(STATUSLINE_PATH, line, "utf-8");
+  } catch {
+    // Cache write is best-effort — never block MCP on it.
+  }
+}
 
 // --- MCP protocol constants ---
 
@@ -55,26 +130,38 @@ function dispatchToolCall(params: {
   arguments?: Record<string, unknown>;
 }): ToolResult {
   const args = params.arguments ?? {};
+  let result: ToolResult;
   switch (params.name) {
     case "handoff_collect":
-      return toolHandoffCollect(args);
+      result = toolHandoffCollect(args);
+      break;
     case "handoff_check":
-      return toolHandoffCheck(args);
+      result = toolHandoffCheck(args);
+      break;
     case "verdict_submit":
-      return toolVerdictSubmit(args);
+      result = toolVerdictSubmit(args);
+      break;
     case "fapony_stats":
-      return toolFaponyStats(args);
+      result = toolFaponyStats(args);
+      break;
     case "fapony_usage":
-      return toolPassiveUsage(args);
+      result = toolPassiveUsage(args);
+      break;
     case "project_health_context":
-      return toolProjectHealthContext(args);
+      result = toolProjectHealthContext(args);
+      break;
     case "plan_list":
-      return toolPlanList(args);
+      result = toolPlanList(args);
+      break;
     case "verification_report":
-      return toolVerificationReport(args);
+      result = toolVerificationReport(args);
+      break;
     default:
       return errorResult(`unknown tool: ${params.name}`);
   }
+  // Write statusline cache after every tool call — best-effort, never blocks.
+  writeStatuslineCache(result);
+  return result;
 }
 
 // --- Entry point ---

@@ -239,8 +239,32 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
 6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
+7. **ก่อนแก้ไฟล์ ถาม `project_health_context` ก่อน** — ส่ง `files[]` ของไฟล์ที่จะแตะ
+   รู้ pattern ที่เคย fail กับไฟล์นั้นก่อนลงมือ · ลืมได้ ไม่เรียกก็ยังทำงานได้เท่าเดิม
+   (optional degradation ไม่ใช่ precondition)
 
 ---
+
+## Positioning — กฎกันโดนถล่มตอนโปรโมท
+
+เขียนไว้เพราะจะลืม ทุกครั้งที่เขียน README / โพสต์ / reply comment ให้ผ่านสี่ข้อนี้ก่อน:
+
+1. **ห้ามใช้คำว่า "verifies" เป็นหัวเรื่อง** — `handoff_check` ตรวจ *conformance ของการรายงาน*
+   (มี `## HANDOFF` ไหม, sha ที่อ้างอยู่ใน commit ไหม, กรอก `uncertain`/`not_done`/`checks` ครบไหม)
+   ไม่ใช่พิสูจน์ว่าโค้ดทำงาน fapony ไม่รันเทสต์เอง ไม่ตัดสินเอง — มันคือ **ledger ไม่ใช่ judge**
+   คนอ่าน HN เปิดซอร์สจริง พูดเกินคำเดียวเสียเครดิตทั้งโพสต์
+2. **นำด้วย day-1 value เสมอ** — `usage-web` / `fapony_usage` ทำงานทันทีที่ติดตั้งเพราะอ่าน log
+   ที่เขามีอยู่แล้ว ส่วน project health คือ **retention ไม่ใช่ acquisition** (`N=0 runs` ในนาทีแรก)
+   ใครติดตั้งแล้วเจอ "ยังไม่มีประวัติพอ" เป็นอย่างแรก = ปิดทิ้ง
+3. **ประกาศข้อจำกัดเองก่อนคนอื่นจับได้** — section "What fapony is not" ใน README ห้ามลบ
+   สิ่งที่ยอมรับเองด้วยปากตัวเองไม่มีใครเอามาแฉได้
+4. **cross-client คือจุดต่าง ไม่ใช่ตัว dashboard** — tool อ่าน usage ของ Claude Code มีเยอะแล้ว
+   ที่อ่าน 4 client บนไม้บรรทัดเดียวกันแทบไม่มี ย้ำตรงนั้น
+
+**เกณฑ์ว่าพร้อมโปรโมท:** คนที่ไม่ใช่เจ้าของติดตั้งแล้วเห็นอะไรที่มีประโยชน์ภายใน 60 วินาที
+— ไม่ใช่จำนวน feature · ลำดับช่อง: awesome-mcp-servers PR → r/ClaudeAI + ชุมชนไทย →
+บทความ *"I built the agent loop everyone builds first, then deleted it"* (ดู History ด้านบน) →
+Show HN **นัดเดียว อย่าเผา**
 
 ## Plan Core — template สำหรับทุก plan
 

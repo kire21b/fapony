@@ -66,7 +66,8 @@ draft, which is worth far more than a question about constraints.
 - If the `project_health_context` MCP tool is available, call it **twice**:
   1. `worktree` = the **absolute path** to this repo (`git rev-parse --show-toplevel`) — patterns
      from this project. Every fapony tool scopes by absolute path, and a bare repo name lands in
-     a different bucket that later queries won't find.
+     a different bucket that later queries won't find. When the plan scope mentions specific files,
+     also pass `files` with those file paths to get file-scoped findings.
   2. **no `worktree` argument at all** — patterns across *every* project sharing this fapony
      state db. This is the cross-project view: habits you repeat everywhere (same reason_code
      failing in three repos) show up here and nowhere else.

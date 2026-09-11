@@ -1,6 +1,7 @@
 // src/mcp/tools/usage.ts — fapony_usage tool
 
 import {
+  mergeBytesByTool,
   type PassiveUsageResult,
   readClaudeCodeUsage,
   readCodexUsage,
@@ -27,10 +28,10 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
   const zcodeData = readZcodeUsage(worktree, since, until, detail);
 
   // Claude Code data is always fetched when the projects dir exists
-  const claudeCodeData = readClaudeCodeUsage(worktree, since, until);
+  const claudeCodeData = readClaudeCodeUsage(worktree, since, until, detail);
 
   // Codex data is always fetched when the sessions dir exists
-  const codexData = readCodexUsage(worktree, since, until);
+  const codexData = readCodexUsage(worktree, since, until, detail);
 
   if (args.json === true) {
     return jsonResult({
@@ -85,6 +86,31 @@ export function toolPassiveUsage(args: Record<string, unknown>): ToolResult {
       }
       if (tools.length > 20) {
         lines.push(`    ... +${tools.length - 20} more (see json:true)`);
+      }
+    }
+    // Context bytes by tool — proportion of context window consumed per tool.
+    // Bytes are a proxy for tokens; shown as % of total, never as "tokens".
+    // Merged across all clients: only the Claude Code reader populates the
+    // field today, so reading the top-level (opencode) detail alone would
+    // always come back empty.
+    const bytes = mergeBytesByTool(
+      data.detail,
+      zcodeData.detail,
+      claudeCodeData.detail,
+      codexData.detail,
+    );
+    if (bytes) {
+      const entries = Object.entries(bytes).sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((s, e) => s + e[1], 0);
+      if (entries.length > 0 && total > 0) {
+        lines.push("  context bytes by tool (% of total):");
+        for (const [tool, b] of entries.slice(0, 10)) {
+          const pct = ((b / total) * 100).toFixed(1);
+          lines.push(`    ${tool}: ${pct}%`);
+        }
+        if (entries.length > 10) {
+          lines.push(`    ... +${entries.length - 10} more (see json:true)`);
+        }
       }
     }
     lines.push(`  sessions with activity: ${data.detail.by_session.length}`);

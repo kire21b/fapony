@@ -32,6 +32,7 @@ export function gateOnce(
   runId: number,
   verdict: VerdictGrade,
   note: string,
+  files?: string[],
 ): GateResult {
   const db = openDb();
   const run = getRun(db, runId);
@@ -58,7 +59,12 @@ export function gateOnce(
   if (isPassFamily(verdict)) {
     setStatus(db, runId, "passed");
     // round = run's current round at review time (pre-increment for fail).
-    addEvent(db, runId, "gate", { verdict, note, round: run.round });
+    addEvent(db, runId, "gate", {
+      verdict,
+      note,
+      round: run.round,
+      ...(files && files.length > 0 ? { files } : {}),
+    });
 
     if (run.mem_id && config.memory) {
       closeMemory(config, worktree, run.mem_id, note || `run ${runId} passed`);
@@ -74,7 +80,12 @@ export function gateOnce(
   // --- uncertain → stop (plan problem, same as round-cap) ---
   if (verdict === "uncertain") {
     setStatus(db, runId, "stopped");
-    addEvent(db, runId, "gate", { verdict, note, round: run.round });
+    addEvent(db, runId, "gate", {
+      verdict,
+      note,
+      round: run.round,
+      ...(files && files.length > 0 ? { files } : {}),
+    });
     addEvent(db, runId, "stop", { reason: "verdict_uncertain" });
 
     if (run.mem_id) {
@@ -92,7 +103,12 @@ export function gateOnce(
   // --- fail → back to executor, one more round ---
   incrementRound(db, runId);
   setStatus(db, runId, "fixing");
-  addEvent(db, runId, "gate", { verdict, note, round: run.round });
+  addEvent(db, runId, "gate", {
+    verdict,
+    note,
+    round: run.round,
+    ...(files && files.length > 0 ? { files } : {}),
+  });
 
   const updated = getRun(db, runId);
   if (!updated) {

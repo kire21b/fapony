@@ -147,6 +147,12 @@ export const TOOLS = [
             "Optional client session id (OpenCode/ZCode session id, or Claude Code/Codex .jsonl path). " +
             "Used to resolve model attribution when no spawn events exist in the gate window.",
         },
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional files touched in this work unit. Stored in the gate event for project_health_context filtering.",
+        },
       },
       required: ["verdict", "reason_code"],
     },
@@ -301,6 +307,13 @@ export const TOOLS = [
           type: "string",
           description:
             "Scope to one worktree path (absolute). Global across worktrees when omitted.",
+        },
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Filter findings to only those related to these files. " +
+            "Matches against stored gate event files and note text.",
         },
       },
       required: [],

@@ -304,26 +304,31 @@ export function getReasonCodeBreakdown(
   return out.sort((a, b) => b.count - a.count);
 }
 
-export interface RecentFailNote {
+export interface RecentVerdictNote {
   worktree: string;
   reason: string;
   note: string;
   ts: string;
+  files?: string[];
 }
 
 /**
- * Most recent gate notes with actual text, any verdict (spec §2 knowledge-
+ * Most recent gate notes with actual text, ANY verdict (spec §2 knowledge-
  * accumulation extra) — unlike byReasonCode (fail-only KPI), a pass-adequate
  * note still carries signal ("worked around X"). Sorted newest first, capped
  * at `limit`.
+ *
+ * `limit` is a collection cap, not a display cap: callers filter this list
+ * (by worktree, by files[]) and slice it themselves, so pass enough to filter
+ * over — see the getStatsData call site.
  */
-export function getRecentFailNotes(
+export function getRecentVerdictNotes(
   runs: Run[],
   events: Event[],
   limit = 3,
-): RecentFailNote[] {
+): RecentVerdictNote[] {
   const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
-  const out: RecentFailNote[] = [];
+  const out: RecentVerdictNote[] = [];
   // events is oldest→first per typical read order; walk backwards for recency.
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i];
@@ -339,11 +344,24 @@ export function getRecentFailNotes(
     }
     note = note.replace(/^\[[a-z_]+\]\s*/, "").trim();
     if (!note) continue; // no free-text note beyond the reason_code tag
+    // Extract files[] stored in gate event data (added by step 3 of
+    // PLAN-loop-and-savings). When present, enables file-scoped filtering
+    // in project_health_context.
+    let files: string[] | undefined;
+    try {
+      const d2 = JSON.parse(e.data ?? "{}") as { files?: unknown };
+      if (Array.isArray(d2.files) && d2.files.length > 0) {
+        files = d2.files.filter((f): f is string => typeof f === "string");
+      }
+    } catch {
+      // no files field — that's fine
+    }
     out.push({
       worktree: wtByRun.get(e.run_id) ?? "(unknown)",
       reason,
       note,
       ts: e.ts,
+      ...(files ? { files } : {}),
     });
     if (out.length >= limit) break;
   }
@@ -535,7 +553,7 @@ export interface StatsData {
   byPlan: PlanBreakdown[];
   escalatedRuns: EscalatedRun[];
   bestPassing: BestPassing[];
-  recentFailNotes: RecentFailNote[];
+  recentVerdictNotes: RecentVerdictNote[];
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -716,7 +734,10 @@ export function getStatsData(): StatsData {
       byPlan: getPlanBreakdown(runs, maxRounds),
       escalatedRuns: getEscalatedRuns(runs, maxRounds),
       bestPassing: getBestPassing(runs, events),
-      recentFailNotes: getRecentFailNotes(runs, events),
+      // 50, not the display cap of 3: project_health_context filters this
+      // list by worktree and files[] before slicing, so a cap of 3 here would
+      // throw away the very notes a file-scoped query is looking for.
+      recentVerdictNotes: getRecentVerdictNotes(runs, events, 50),
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:

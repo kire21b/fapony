@@ -247,6 +247,19 @@ export function renderUsageHtml(
   const cx = calcMetrics(codex);
   const owner = ownerName?.trim() ? esc(ownerName.trim()) : "";
 
+  // Context share: proportion of total context tokens per client.
+  const ctxTokens = [
+    { name: "OpenCode", color: "var(--green)", tokens: oc.input + oc.output },
+    { name: "ZCode", color: "var(--accent)", tokens: zc.input + zc.output },
+    {
+      name: "Claude Code",
+      color: "var(--yellow)",
+      tokens: cc.input + cc.output,
+    },
+    { name: "Codex", color: "var(--accent)", tokens: cx.input + cx.output },
+  ];
+  const ctxTotal = ctxTokens.reduce((s, c) => s + c.tokens, 0);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -290,6 +303,13 @@ export function renderUsageHtml(
   .metric-value { font-size: 0.95rem; font-weight: 700; color: var(--fg); }
   .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.15rem; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .share-section { margin-bottom: 1.5rem; }
+  .share-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
+  .share-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--border); }
+  .share-seg { height: 100%; transition: width 0.3s; min-width: 1px; }
+  .share-legend { display: flex; gap: 1rem; margin-top: 0.3rem; flex-wrap: wrap; }
+  .share-item { font-size: 0.75rem; color: var(--fg); display: flex; align-items: center; gap: 0.3rem; }
+  .share-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   .footer { margin-top: 1.5rem; font-size: 0.8rem; color: var(--muted); text-align: center; }
 </style>
 </head>
@@ -315,6 +335,33 @@ ${summaryCard("OpenCode", "var(--green)", oc)}
 ${summaryCard("ZCode", "var(--accent)", zc)}
 ${summaryCard("Claude Code", "var(--yellow)", cc)}
 ${summaryCard("Codex", "var(--accent)", cx)}
+</div>
+
+<div class="share-section" id="context-share">
+  <div class="share-title">context share (tokens)</div>
+  <div class="share-bar" id="share-bar">
+    ${
+      ctxTotal > 0
+        ? ctxTokens
+            .map((c) => {
+              const w = Math.round((c.tokens / ctxTotal) * 100);
+              return w > 0
+                ? `<div class="share-seg" style="width:${w}%;background:${c.color}" title="${c.name}: ${fmtTokens(c.tokens)}"></div>`
+                : "";
+            })
+            .join("")
+        : '<div class="share-seg" style="width:100%;background:var(--border)"></div>'
+    }
+  </div>
+  <div class="share-legend" id="share-legend">
+    ${ctxTokens
+      .map((c) => {
+        const pctStr =
+          ctxTotal > 0 ? ((c.tokens / ctxTotal) * 100).toFixed(1) : "0.0";
+        return `<span class="share-item"><span class="share-dot" style="background:${c.color}"></span>${c.name} ${pctStr}%</span>`;
+      })
+      .join("")}
+  </div>
 </div>
 
 ${clientTable("t-opencode", "OpenCode", "var(--green)", opencode)}
@@ -422,6 +469,34 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
       + metricItem("Cost", fmtCost(m.totalCost), "", "", true);
   }
 
+  var COLORS = { opencode: "var(--green)", zcode: "var(--accent)", claude_code: "var(--yellow)", codex: "var(--accent)" };
+  var LABELS = { opencode: "OpenCode", zcode: "ZCode", claude_code: "Claude Code", codex: "Codex" };
+
+  function ctxTokens(d) {
+    if (!d || d.session_count === 0) return 0;
+    return d.total_tokens_input + d.total_tokens_output;
+  }
+
+  function updateShareBar(data) {
+    var clients = ["opencode", "zcode", "claude_code", "codex"];
+    var entries = clients.map(function(k) { return { key: k, tokens: ctxTokens(data[k]) }; });
+    var total = entries.reduce(function(s, e) { return s + e.tokens; }, 0);
+    var bar = document.getElementById("share-bar");
+    var legend = document.getElementById("share-legend");
+    if (!bar || !legend) return;
+    var barHtml = "";
+    var legendHtml = "";
+    entries.forEach(function(e) {
+      var w = total > 0 ? Math.round((e.tokens / total) * 100) : 0;
+      if (w > 0) barHtml += '<div class="share-seg" style="width:' + w + '%;background:' + COLORS[e.key] + '" title="' + LABELS[e.key] + ': ' + fmt(e.tokens) + '"></div>';
+      var p = total > 0 ? ((e.tokens / total) * 100).toFixed(1) : "0.0";
+      legendHtml += '<span class="share-item"><span class="share-dot" style="background:' + COLORS[e.key] + '"></span>' + LABELS[e.key] + ' ' + p + '%</span>';
+    });
+    if (!barHtml) barHtml = '<div class="share-seg" style="width:100%;background:var(--border)"></div>';
+    bar.innerHTML = barHtml;
+    legend.innerHTML = legendHtml;
+  }
+
   function buildTable(data) {
     var models = data ? data.by_model.slice().sort(function(a,b) { return (b.tokens_input + b.tokens_output + b.tokens_reasoning + b.tokens_cache_read + b.tokens_cache_write) - (a.tokens_input + a.tokens_output + a.tokens_reasoning + a.tokens_cache_read + a.tokens_cache_write); }) : [];
     var html = "";
@@ -491,6 +566,7 @@ ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
       updateCard("zcode", data.zcode);
       updateCard("claude_code", data.claude_code);
       updateCard("codex", data.codex);
+      updateShareBar(data);
       document.getElementById("last-updated").textContent = new Date().toISOString();
     }).catch(function() {
       document.getElementById("status-dot").className = "status off";
