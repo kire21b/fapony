@@ -357,9 +357,18 @@ See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter ex
 
 ## MCP Tools: code-review-graph
 
-**This project has a knowledge graph. Start with the code-review-graph
-MCP tools to narrow scope, then read the source.** The graph is cheaper than scanning files and
-gives you structural context (callers, dependents, test coverage) that file search cannot.
+**This project has a knowledge graph. When the code-review-graph MCP tools are available in your
+client, start with them to narrow scope, then read the source.** The graph is cheaper than
+scanning files and gives you structural context (callers, dependents, test coverage) that file
+search cannot.
+
+**Check first — the tools are not always wired here.** The graph itself is always current: a
+pre-commit hook (`.git/hooks/pre-commit`, installed by code-review-graph) runs
+`code-review-graph update` on every commit. The *MCP server* is a per-client registration, and
+in Claude Code it is currently registered for other projects, not this one — so the tool names
+below may simply not exist in your session. If they don't, the `code-review-graph` CLI is on
+PATH, and reading the source directly is always a valid fallback. An absent tool is not a
+reason to stop; it is a reason to skip the graph step.
 
 ### When to use graph tools FIRST
 
@@ -394,7 +403,7 @@ gives you structural context (callers, dependents, test coverage) that file sear
 
 ### Workflow
 
-1. The graph auto-updates on file changes (via hooks).
+1. The graph updates on every commit (pre-commit hook), not on every file write — a graph read mid-edit reflects the last commit, not your unstaged changes.
 2. Use `detect_changes_tool` for code review.
 3. Use `get_affected_flows_tool` to understand impact.
 4. Use `query_graph_tool` pattern="tests_for" to check coverage.
