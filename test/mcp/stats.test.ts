@@ -78,7 +78,8 @@ export function testStatsToolTextMode(): void {
     assert.equal(result.isError, undefined);
     const text = result.content[0].text;
     // raw text, not a JSON envelope
-    assert.ok(text.startsWith("runs: 1"), "text mode is raw CLI text");
+    assert.ok(text.includes("runs: 1"), "text mode is raw CLI text");
+    assert.ok(text.includes("scope:"), "text mode includes scope line");
     assert.ok(text.includes("pass rate:"));
     assert.ok(text.includes("by grade:"));
     assert.ok(text.includes("pass-good"));
@@ -110,18 +111,19 @@ export function testStatsTextMatchesCli(): void {
       addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
       setStatus(db, runId, "passed");
 
-      // Capture CLI output
+      // Capture CLI output (--all to match MCP's default of all-projects)
       const origLog = console.log;
       const captured: string[] = [];
       console.log = (...a: unknown[]) => {
         captured.push(a.join(" "));
       };
       try {
-        cmdStats([]);
+        cmdStats(["--all"]);
       } finally {
         console.log = origLog;
       }
       const cliText = captured.join("\n");
+      // MCP without worktree → all projects, same as CLI --all.
       const mcpText = toolFaponyStats({}).content[0].text;
 
       // SPEC-verdict-stats: "text เดียวกับ fapony stats — ใช้ formatter ตัวเดียวกัน"
