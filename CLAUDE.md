@@ -216,6 +216,7 @@ events(
 | token ของ Claude Code ดูน้อยผิดปกติ (`4.2k in / 1.1M out`) | **cache คือ input เกือบทั้งหมด** — `input_tokens` เปล่า ๆ ไม่ใช่ input จริง ทุก reader ต้องบวก cache read + cache write ด้วย (`sumInput()` ใน [findModel.ts](src/session/findModel.ts) เป็นตัวเดียวที่ทุก client ใช้) · สัญญาณว่า accounting พัง: coding agent ที่ input < output เป็นไปไม่ได้ · หมายเหตุ: catch-all รอบ query ของ session reader กลืน schema mismatch เป็น `null` เงียบ ๆ — เพิ่มคอลัมน์ใน SQL แล้ว fixture เก่าไม่มี = ไม่ error แต่ค่าหาย |
 | token ต่อ model บวมผิดส่วน | token เป็นค่า **ราย session** แต่ gate เป็นราย round — 58 gate มาจาก 35 session (session เดียวคุมได้ถึง 5 gate) บวกตรง ๆ = คูณไม่เท่ากันในแต่ละ model = อันดับผิด · `GateWindow.sessionId` มีไว้ dedupe, `addSessionTokens()` ใน [stats/data.ts](src/stats/data.ts) charge session ละครั้งต่อ bucket |
 | เทสต์ที่เทียบ output สองครั้งแล้วแดงสุ่ม | ไม่ใช่ flake ลอย ๆ — passive reader อ่าน session log **ที่ agent กำลังเขียนอยู่ระหว่างเทสต์รัน** เลขขยับระหว่างสอง render · pin `FAPONY_OPENCODE_DB` / `FAPONY_ZCODE_DB` / `FAPONY_CLAUDE_PROJECTS_DIR` / `FAPONY_CODEX_SESSIONS_DIR` ไปที่ path ที่ไม่มีจริง ให้ usage ว่างทั้งคู่ |
+| PR ใหม่ขึ้น *"This branch has conflicts"* ทั้งที่ไม่มีใครแก้ชนกัน | รอบก่อน `dev` ถูก **squash merge** — squash เขียน commit ใหม่ commit เดิมบน dev เลยไม่เป็นบรรพบุรุษของ `main` git เห็นเป็น "สองฝั่งแก้บรรทัดเดียวกัน" ทั้งที่เป็นงานชิ้นเดียวกัน · `dev` เป็น branch ถาวร (มี worktree ปักอยู่) จึงต้องใช้ `--merge` ไม่ใช่ `--squash` · ถ้า squash ไปแล้ว ต้อง `git reset --hard origin/main` ที่ dev ทันทีหลัง merge ทุกครั้ง ไม่ใช่ทางเลือก ([skill/git-ship](skill/git-ship/SKILL.md)) · พิสูจน์ว่า conflict ปลอมก่อนแก้: `git diff <merge commit บน main> <จุดที่ตัด PR ไป>` ว่าง = ไม่มีอะไรบน main ให้เอามา แล้วปิดด้วย `git merge -s ours origin/main` (ยืนยัน tree hash ก่อน/หลังเท่ากัน) |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -236,9 +237,11 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 ## Rules for AI Agents
 
 1. **ห้ามสร้าง abstraction ที่มี implementation เดียว** — ไม่ scaffold เผื่ออนาคต
-2. **ห้าม git push เอง** — กฎจาก vela opencode.json · **ยกเว้นตอนผู้ใช้สั่งเปิด PR** เพราะ
-   `gh pr create` ต้องมี branch บน remote ก่อน push ได้เฉพาะ branch ที่ทำงานอยู่ ไม่ใช่ `main`
-   และไม่มี `--force` · จบงานเฉย ๆ ไม่ใช่เหตุผลให้ push
+2. **push ได้เฉพาะ branch ที่ทำงานอยู่ — ห้ามแตะ `main` ห้าม `--force`/`--force-with-lease`**
+   เดิมห้าม push ทุกกรณี (ยกมาจาก vela opencode.json) ยกเลิกแล้วเพราะมันบล็อก `gh pr create`
+   ซึ่งต้องมี branch บน remote ก่อน — กฎที่ต้องปลดล็อกทุกครั้งไม่ได้กันอะไร แค่สอนให้ข้าม ·
+   สิ่งที่ทำลายได้จริงคือ force-push กับการเขียนทับ default branch ไม่ใช่ push เอง ·
+   **merge เข้า `main` ยังเป็นของเจ้าของตัดสิน** agent เปิด PR ได้ กด merge เองไม่ได้
 3. **Commit แยก concern** — one commit per feature/area
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
