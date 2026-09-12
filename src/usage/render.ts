@@ -361,7 +361,7 @@ ${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
 ${clientTable("t-codex", "Codex", "var(--accent)", codex)}
 
 <div class="footer">
-  Tokens are approximate (byte proxy). Cost is estimate from static pricing, never a real charge.
+  Tokens and cost come from each client's own session log — ZCode, Claude Code and Codex record no cost, so theirs reads $0.
   <br>
   Run <code>fapony usage-scan</code> to refresh data.
 </div>

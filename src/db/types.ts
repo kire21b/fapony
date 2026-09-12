@@ -28,11 +28,6 @@ export interface Event {
 
 export interface Config {
   worktrees: Record<string, string>;
-  // Model attribution per role (read by cost.ts). No cmd/timeout — nothing
-  // spawns agents anymore; the CLI loop was removed in Wave 2.
-  roles?: {
-    [name: string]: { model?: string };
-  };
   review: {
     maxRounds: number;
   };
@@ -42,9 +37,6 @@ export interface Config {
     add: string[];
     kickoff?: string[];
   } | null;
-  // Optional static pricing per role (USD per 1k tokens, input/output split).
-  // Omit or null = byte measurement stays on, USD estimate stays off.
-  pricing?: Record<string, { inputPer1k: number; outputPer1k: number }> | null;
   // opt-in only — omit or leave null to keep everything local. See TELEMETRY.md
   // for the exact payload shape (KPI numbers + event kind/timestamp, no
   // plan/commit/gate-note content, ever).

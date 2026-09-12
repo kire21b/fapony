@@ -66,8 +66,8 @@ export interface SetupAnswers {
 
 /** Pure config builder — the config-write path of cmdSetup, minus prompting.
  *  No executor/gate/auto-loop keys — nothing spawns agents anymore, the CLI
- *  loop was removed in Wave 2. Model attribution (`roles.<name>.model`) and
- *  pricing are advanced/optional, left for the user to hand-edit — see
+ *  loop was removed in Wave 2. Remaining advanced/optional keys are left for
+ *  the user to hand-edit — see
  *  fapony.config.example.json. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   const config: Record<string, unknown> = {

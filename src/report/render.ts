@@ -5,7 +5,6 @@ import { esc } from "../web/html.js";
 import {
   fmtMinutes,
   fmtRate,
-  fmtUsd,
   insufficientData,
   latestRunFreshness,
   MIN_SAMPLE_SIZE,
@@ -17,7 +16,7 @@ export function renderReportHtml(
   generated_at: string,
   ownerName?: string,
 ): string {
-  const { runs, gates, total_cost_usd } = statsToRender(stats);
+  const { runs, gates } = statsToRender(stats);
 
   const models = [...new Set(stats.byModel.map((m) => m.model))];
   const grades = [...new Set(stats.byGrade.map((g) => g.grade))];
@@ -84,7 +83,6 @@ ${insufficientData(stats.runs.total, "runs")}
   <div class="stat"><div class="value ${stats.runs.stallRate <= 0.1 ? "pass" : "fail"}">${fmtRate(stats.runs.stallRate)}</div><div class="label">stall rate</div></div>
   <div class="stat"><div class="value">${stats.runs.avgRounds.toFixed(1)}</div><div class="label">avg rounds</div></div>
   <div class="stat"><div class="value">${fmtMinutes(stats.runs.avgMinutes)}</div><div class="label">avg time</div></div>
-  <div class="stat"><div class="value">${total_cost_usd > 0 ? fmtUsd(total_cost_usd) : "—"}</div><div class="label">total cost</div></div>
 </div>
 
 <div class="filters">
@@ -96,7 +94,7 @@ ${insufficientData(stats.runs.total, "runs")}
 <h2>By Model <span class="sample">(n=${gates})</span></h2>
 ${insufficientData(gates, "gates")}
 <table id="t-model">
-  <thead><tr><th>Client</th><th>Provider</th><th>Model</th><th>Agent</th><th>Gates</th><th>Avg Quality</th><th>Avg Cost</th></tr></thead>
+  <thead><tr><th>Client</th><th>Provider</th><th>Model</th><th>Agent</th><th>Gates</th><th>Avg Quality</th></tr></thead>
   <tbody>
 ${stats.byModel
   .map(
@@ -107,7 +105,6 @@ ${stats.byModel
       <td>${esc(m.agent)}</td>
       <td>${m.gateCount}</td>
       <td>${m.avgQuality.toFixed(1)} <span class="sample">/ 5</span></td>
-      <td>${fmtUsd(m.avgCostUSD)}</td>
     </tr>`,
   )
   .join("\n")}
@@ -161,7 +158,6 @@ ${stats.byWorktree
   <ul>
     <li><strong>Pass rate:</strong> passed / (passed + stopped + stalled) — terminal runs only, running/awaiting_review excluded.</li>
     <li><strong>Quality score:</strong> pass-excellent=5, pass-good=4, pass-adequate=3, pass=3 (legacy), uncertain=1, fail=0 — the same canonical mapping <code>fapony stats</code> uses.</li>
-    <li><strong>Cost:</strong> bytes are a proxy for tokens, USD is an estimate from static pricing — never a real charge. Totals count each spawn once, per-round windows never overlap.</li>
     <li><strong>Sample size:</strong> data with fewer than ${MIN_SAMPLE_SIZE} samples is flagged as insufficient for comparison.</li>
     <li><strong>Freshness:</strong> based on the most recent run creation timestamp.</li>
     <li><strong>Worktree names:</strong> paths are redacted to basenames; two different paths sharing a basename merge into one row.</li>
@@ -201,11 +197,9 @@ ${stats.byWorktree
 function statsToRender(stats: StatsData): {
   runs: number;
   gates: number;
-  total_cost_usd: number;
 } {
   return {
     runs: stats.runs.total,
     gates: stats.byModel.reduce((s, m) => s + m.gateCount, 0),
-    total_cost_usd: stats.cost.usd_estimate ?? 0,
   };
 }

@@ -96,7 +96,6 @@ function makeReport(
     verdict: null,
     duration_ms: null,
     rounds: 1,
-    cost: { spawns: 0, bytes_in: 0, bytes_out: 0, usd_estimate: null },
     meta: {
       generated_at: "2026-09-08T12:00:00Z",
       source: "fapony_mcp",
@@ -169,16 +168,6 @@ export function testRenderReportTextWithHandoffChecks(): void {
   assert.ok(text.includes("✗ claimed_matches_commits"));
   assert.ok(text.includes("Review handoff conformance failures"));
   console.log("  ✓ renderReportText with handoff checks");
-}
-
-export function testRenderReportTextWithCost(): void {
-  const report = makeReport({
-    cost: { spawns: 2, bytes_in: 5000, bytes_out: 3000, usd_estimate: 0.045 },
-  });
-  const text = renderReportText(report);
-  assert.ok(text.includes("5000 bytes in / 3000 bytes out over 2 spawns"));
-  assert.ok(text.includes("~$0.0450 est."));
-  console.log("  ✓ renderReportText with cost");
 }
 
 export function testRenderReportTextGitError(): void {

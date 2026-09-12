@@ -5,16 +5,14 @@ import assert from "node:assert";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beginSpawn, endSpawn } from "../src/cost.js";
 import {
   addEvent,
-  type Config,
   incrementRound,
   newRun,
   setStatus,
 } from "../src/db/index.js";
 import { countPendingPlans, getStatsData } from "../src/stats.js";
-import { baseConfig, withTmpDb } from "./helpers.js";
+import { withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
   withTmpDb(() => {
@@ -27,132 +25,32 @@ export function testStatsEmptyDb(): void {
   console.log("  ✓ getStatsData returns empty for no runs");
 }
 
-export function testStatsNoPricingValueIsNull(): void {
-  withTmpDb((db) => {
-    const config = baseConfig();
-    const runId = newRun(db, "wt1", null, null, "abc");
-
-    // Spawn executor with no pricing
-    const spawnId = beginSpawn(db, runId, config, "executor", "prompt text");
-    endSpawn(db, spawnId, config, "executor", "output text");
-
-    // Route + gate
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-
-    const data = getStatsData();
-    assert.equal(data.runs.total, 1);
-    assert.equal(data.byModel.length, 1);
-    assert.equal(data.byModel[0].avgCostUSD, null, "no pricing → costUSD null");
-    assert.equal(data.byModel[0].avgValue, null, "no pricing → value null");
-    assert.equal(data.byGrade.length, 1);
-    assert.equal(data.byGrade[0].avgCostUSD, null);
-  });
-  console.log("  ✓ getStatsData: no pricing → null costUSD/value");
-}
-
-export function testStatsZeroCostValueIsNull(): void {
-  withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 1, outputPer1k: 1 } },
-    };
-    const runId = newRun(db, "wt1", null, null, "abc");
-
-    // Spawn with zero bytes (cost = 0)
-    const spawnId = beginSpawn(db, runId, config, "executor", "");
-    endSpawn(db, spawnId, config, "executor", "");
-
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-
-    const data = getStatsData();
-    // costUSD might be 0 or null depending on estimateUsd, but valueScore must be null
-    assert.equal(data.byModel[0].avgValue, null, "zero cost → value null");
-  });
-  console.log("  ✓ getStatsData: zero cost → valueScore null");
-}
-
 export function testStatsMultiRoundSeparateGates(): void {
   withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
     const runId = newRun(db, "wt1", null, null, "abc");
 
-    // Round 1: spawn → route → gate(fail)
-    const s1 = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
-    endSpawn(db, s1, config, "executor", "b".repeat(4000));
-    addEvent(db, runId, "route", {});
+    // Round 1: spawn(model-a) → gate(fail). Round 2: spawn(model-b) → gate(pass).
+    // Round 3: gate with no spawn in its window → model unknown, still counted.
+    addEvent(db, runId, "spawn", { role: "executor", model: "model-a" });
     addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
-
-    // Round 2: spawn → route → gate(pass)
-    const s2 = beginSpawn(db, runId, config, "executor", "c".repeat(8000));
-    endSpawn(db, s2, config, "executor", "d".repeat(8000));
-    addEvent(db, runId, "route", {});
+    addEvent(db, runId, "spawn", { role: "executor", model: "model-b" });
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 1 });
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 2 });
     setStatus(db, runId, "passed");
 
     const data = getStatsData();
-    // 2 gates, each with its own cost
     assert.equal(data.byGrade.length, 2, "2 different grades");
-    const failGrade = data.byGrade.find((g) => g.grade === "fail");
-    const passGrade = data.byGrade.find((g) => g.grade === "pass-good");
-    assert(failGrade && passGrade);
-    // Exact per-round USD: 4000B in + 4000B out = 1000+1000 tok @ $4/1k = $8;
-    // round 2 is double: $16. Cumulative (WRONG) would show $24 for gate 2.
-    assert.equal(failGrade.avgCostUSD, 8, "gate 1 cost = round 1 spawns only");
     assert.equal(
-      passGrade.avgCostUSD,
-      16,
-      "gate 2 cost = round 2 spawns only, not cumulative",
+      data.byGrade.find((g) => g.grade === "pass-good")?.count,
+      2,
+      "gate with an empty spawn window is still counted",
     );
-    // Both gates share the "—"-model bucket with gateCount 2
-    assert.equal(data.byModel.length, 1);
-    assert.equal(data.byModel[0].model, "—");
-    assert.equal(data.byModel[0].client, "—");
-    assert.equal(data.byModel[0].provider, "—");
-    assert.equal(data.byModel[0].agent, "—");
-    assert.equal(data.byModel[0].gateCount, 2);
-    // avgQuality over fail(0) + pass-good(4) = 2
-    assert.equal(data.byModel[0].avgQuality, 2);
+    // Each gate sees only its own round's spawn — never the cumulative set.
+    const models = data.byModel.map((m) => m.model).sort();
+    assert.deepEqual(models, ["model-a", "model-b", "—"]);
+    for (const m of data.byModel) assert.equal(m.gateCount, 1);
   });
-  console.log("  ✓ getStatsData: multi-round gates counted separately");
-}
-
-export function testStatsGateWithoutSpawnsInWindow(): void {
-  withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
-    const runId = newRun(db, "wt1", null, null, "abc");
-
-    // spawn → gate(pass-good) → gate(fail) with NO spawn between the gates
-    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
-    endSpawn(db, s, config, "executor", "b".repeat(4000));
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-
-    const data = getStatsData();
-    const fail = data.byGrade.find((g) => g.grade === "fail");
-    const passGood = data.byGrade.find((g) => g.grade === "pass-good");
-    assert(fail && passGood);
-    // All spawn cost belongs to gate 1's window; gate 2 has none.
-    assert.equal(passGood.avgCostUSD, 8, "gate 1 owns the spawn cost");
-    assert.equal(fail.avgCostUSD, null, "gate 2 window empty → null, not 0");
-    assert.equal(fail.count, 1, "gate 2 still counted in byGrade");
-    // valueScore: gate 1 = 4/8 = 0.5; gate 2 null → avg over non-null only
-    assert.equal(data.byModel[0].avgValue, 0.5);
-  });
-  console.log(
-    "  ✓ getStatsData: gate with empty spawn window → null cost, still counted",
-  );
+  console.log("  ✓ getStatsData: per-round gate windows never overlap");
 }
 
 export function testStatsLegacyPassMergedWithPassAdequate(): void {
@@ -210,18 +108,11 @@ export function testStatsByWorktree(): void {
 
 export function testStatsModelFromExecutorSpawn(): void {
   withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      roles: { executor: { model: "mimo-v2" } },
-    };
     const runId = newRun(db, "wt1", null, null, "abc");
 
-    // Executor spawn with specific model
-    const s1 = beginSpawn(db, runId, config, "executor", "prompt");
-    endSpawn(db, s1, config, "executor", "output");
-    // Gate spawn (different role)
-    const s2 = beginSpawn(db, runId, config, "gate", "gate prompt");
-    endSpawn(db, s2, config, "gate", "gate output");
+    addEvent(db, runId, "spawn", { role: "executor", model: "mimo-v2" });
+    // Gate spawn (different role) — must not win attribution
+    addEvent(db, runId, "spawn", { role: "gate", model: "other-model" });
 
     addEvent(db, runId, "route", {});
     addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
@@ -385,16 +276,10 @@ export function testStatsByModelGroupsByClientProviderAgent(): void {
 
 export function testStatsSpawnModelWinsOverSessionId(): void {
   withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      roles: { executor: { model: "mimo-v2" } },
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
     const runId = newRun(db, "wt1", null, null, "abc");
 
     // Executor spawn with model — gate also has session_id pointing elsewhere
-    const s1 = beginSpawn(db, runId, config, "executor", "prompt");
-    endSpawn(db, s1, config, "executor", "output");
+    addEvent(db, runId, "spawn", { role: "executor", model: "mimo-v2" });
 
     addEvent(db, runId, "route", {});
     addEvent(db, runId, "gate", {
@@ -449,129 +334,6 @@ export function testStatsSpawnModelWinsOverSessionId(): void {
     }
   });
   console.log("  ✓ getStatsData: spawn model wins over session_id fallback");
-}
-
-function setRunMinutes(
-  db: ReturnType<typeof import("../src/db/index.js").openDb>,
-  runId: number,
-  minutes: number,
-): void {
-  db.prepare(
-    `UPDATE runs SET created_at = '2026-09-09 10:00:00', updated_at = datetime('2026-09-09 10:00:00', ?) WHERE id = ?`,
-  ).run(`+${minutes} minutes`, runId);
-}
-
-export function testStatsEfficiencyUsd(): void {
-  withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
-    const runId = newRun(db, "wt1", null, null, "abc");
-    // 4000B in + 4000B out = $8; quality pass-good = 4; 10 minutes
-    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
-    endSpawn(db, s, config, "executor", "b".repeat(4000));
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-    setRunMinutes(db, runId, 10);
-
-    const data = getStatsData();
-    const eff = data.efficiency.find((e) => e.runId === runId)!;
-    assert(eff, "efficiency entry per run");
-    assert.equal(eff.grade, "pass-good");
-    assert.equal(eff.quality, 4);
-    assert.equal(eff.costUSD, 8);
-    assert.equal(eff.basis, "usd");
-    assert.equal(eff.es, 4 / (8 * 10), "ES = quality/(cost×minutes)");
-    assert.equal(eff.cpq, 8 / 4, "CPQ = cost/quality");
-  });
-  console.log("  ✓ getStatsData: efficiency ES/CPQ from USD cost");
-}
-
-export function testStatsEfficiencyBytesProxy(): void {
-  withTmpDb((db) => {
-    const config = baseConfig(); // no pricing → bytes proxy
-    const runId = newRun(db, "wt1", null, null, "abc");
-    const s = beginSpawn(db, runId, config, "executor", "a".repeat(100));
-    endSpawn(db, s, config, "executor", "b".repeat(100));
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-    setRunMinutes(db, runId, 10);
-
-    const data = getStatsData();
-    const eff = data.efficiency.find((e) => e.runId === runId)!;
-    assert.equal(eff.basis, "bytes-proxy");
-    assert.equal(eff.costUSD, null);
-    assert.equal(eff.bytes, 200);
-    assert.equal(eff.es, 4 / (200 * 10));
-    assert.equal(eff.cpq, 200 / 4);
-  });
-  console.log("  ✓ getStatsData: efficiency falls back to bytes proxy");
-}
-
-export function testStatsEfficiencyFailIsInfinite(): void {
-  withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
-    const runId = newRun(db, "wt1", null, null, "abc");
-    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
-    endSpawn(db, s, config, "executor", "b".repeat(4000));
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-    setRunMinutes(db, runId, 10);
-
-    const data = getStatsData();
-    const eff = data.efficiency.find((e) => e.runId === runId)!;
-    assert.equal(eff.quality, 0);
-    assert.equal(eff.es, 0);
-    assert.equal(eff.cpq, null, "fail → censored cpq, not infinite");
-  });
-  console.log("  ✓ getStatsData: fail grade → ES 0, CPQ Infinity");
-}
-
-export function testStatsEfficiencyNoGateIsNull(): void {
-  withTmpDb((db) => {
-    const runId = newRun(db, "wt1", null, null, "abc");
-    setStatus(db, runId, "passed");
-    setRunMinutes(db, runId, 10);
-
-    const data = getStatsData();
-    const eff = data.efficiency.find((e) => e.runId === runId)!;
-    assert.equal(eff.grade, null);
-    assert.equal(eff.quality, null);
-    assert.equal(eff.es, null);
-    assert.equal(eff.cpq, null);
-  });
-  console.log("  ✓ getStatsData: run without gate → null efficiency");
-}
-
-export function testStatsEfficiencyJsonFailCensored(): void {
-  withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
-    const runId = newRun(db, "wt1", null, null, "abc");
-    const s = beginSpawn(db, runId, config, "executor", "a".repeat(4000));
-    endSpawn(db, s, config, "executor", "b".repeat(4000));
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "fail", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-    setRunMinutes(db, runId, 10);
-
-    const data = getStatsData();
-    const eff = data.efficiency.find((e) => e.runId === runId)!;
-    assert.equal(eff.cpq, null);
-
-    const serialized = JSON.parse(JSON.stringify(eff));
-    assert.equal(serialized.cpq, null, "JSON must not expose Infinity/NaN");
-  });
-  console.log("  ✓ getStatsData: efficiency JSON round-trip censors fail CPQ");
 }
 
 // --- Cross-run knowledge (PLAN-project-health-context §2) ---

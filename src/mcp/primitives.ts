@@ -166,14 +166,6 @@ export interface VerificationReport {
   duration_ms: number | null;
   /** Number of rounds executed. */
   rounds: number;
-  /** Cost/usage from spawn events. */
-  cost: {
-    spawns: number;
-    bytes_in: number;
-    bytes_out: number;
-    /** USD estimate, or null when pricing unset — never 0-as-fake. */
-    usd_estimate: number | null;
-  };
   /** Report metadata. */
   meta: {
     /** ISO-8601 timestamp of report generation. */
@@ -199,10 +191,6 @@ function fmtDuration(ms: number | null): string {
   if (ms === null) return "—";
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60_000).toFixed(1)}m`;
-}
-
-function fmtUsd(usd: number | null): string {
-  return usd !== null ? `~$${usd.toFixed(4)} est.` : "—";
 }
 
 function statusIcon(s: EvidenceStatus): string {
@@ -306,17 +294,6 @@ export function renderReportText(report: VerificationReport): string {
   lines.push(
     `duration: ${fmtDuration(report.duration_ms)}  rounds: ${report.rounds}`,
   );
-
-  // --- Cost ---
-  lines.push("");
-  lines.push("--- cost (bytes proxy, USD est. only) ---");
-  if (report.cost.spawns === 0) {
-    lines.push("unavailable (no spawn events — external MCP caller)");
-  } else {
-    lines.push(
-      `${report.cost.bytes_in} bytes in / ${report.cost.bytes_out} bytes out over ${report.cost.spawns} spawn${report.cost.spawns === 1 ? "" : "s"} (${fmtUsd(report.cost.usd_estimate)})`,
-    );
-  }
 
   // --- Next action ---
   lines.push("");

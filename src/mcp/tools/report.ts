@@ -5,7 +5,6 @@
 // Calls existing primitives — no duplicate parser/conformance logic.
 
 import { blastRadiusForWorktree } from "../../analyze.js";
-import { sumSpawnCost } from "../../cost.js";
 import { getEvents, getRun, openDb } from "../../db/index.js";
 import { loadConfig } from "../../db/load.js";
 import { parseGateEventData } from "../../parse.js";
@@ -252,23 +251,6 @@ export function toolVerificationReport(
     }
   }
 
-  // --- Cost ---
-  let cost: VerificationReport["cost"] = {
-    spawns: 0,
-    bytes_in: 0,
-    bytes_out: 0,
-    usd_estimate: null,
-  };
-  if (resolvedRunId) {
-    const db = openDb();
-    try {
-      const events = getEvents(db, resolvedRunId);
-      cost = sumSpawnCost(events);
-    } finally {
-      db.close();
-    }
-  }
-
   // No standalone logging: a report is a read, not a unit of work. A
   // worktree-only call (no run_id) leaves runs/events untouched — opening a
   // row here left orphan runs stuck at running forever and inflated
@@ -286,7 +268,6 @@ export function toolVerificationReport(
     verdict,
     duration_ms,
     rounds,
-    cost,
     meta: {
       generated_at: new Date().toISOString(),
       source: "fapony_mcp",

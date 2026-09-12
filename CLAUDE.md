@@ -18,7 +18,7 @@ Measurement + verification layer for coding agents, shipped as an MCP server (`f
 ```
 fapony/
   fapony.ts           # CLI dispatch — init|init-mem|install|mcp|report|report-web|usage-scan|usage-web|analyze|setup|stats|telemetry|test|update
-  fapony.config.json  # runtime config (worktrees, roles, review.maxRounds, memory, pricing) — optional, gitignored
+  fapony.config.json  # runtime config (worktrees, review.maxRounds, memory, paths, safety) — optional, gitignored
   skill/                        # <name>/SKILL.md — symlinked into clients by `fapony install`
                                 # each SKILL.md is self-contained — the symlink ships only
                                 # skill/<name>/, so a link out of that dir is dead on install
@@ -37,8 +37,7 @@ fapony/
       types.ts        # Config / Row types
       defaults.ts     # DEFAULT_* constants (safety deny list, …)
       index.ts        # re-export
-    cost.ts           # beginSpawn/endSpawn — role/model/bytes_in/out/usd_estimate ต่อ spawn event
-    gates.ts          # per-round gate enrichment — pairs gate events with spawn events in their round window
+    gates.ts          # per-round gate enrichment — model attribution from spawn events in each round window
     parse.ts          # parseGateVerdict() + qualityScore()
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
@@ -57,7 +56,7 @@ fapony/
     math.ts            # minutesBetween(), avg() — shared pure numeric helpers
     init.ts            # fapony init — scaffold .fapony/{plan,spec,.memory,evidence.json}
     init-mem.ts        # init-mem command (legacy, superseded by init)
-    stats/                # fapony stats — KPI + cost total across runs
+    stats/                # fapony stats — KPI across runs
       data.ts             # getStatsData() + StatsData type + computeEfficiency() + reason_code/plan/escalation/best-passing queries
       format.ts           # formatStatsText() — CLI + MCP text mode
       cli.ts              # cmdStats()
@@ -75,7 +74,7 @@ fapony/
       render.ts           # renderUsageHtml() — HTML with summary cards + per-client tables
       format.ts           # fmtTokens(), fmtCost(), fmtDelta(), shortModel() — re-exports esc() from web/
       index.ts            # barrel re-export
-    telemetry.ts        # opt-in payload (runs/events/cost allowlist เท่านั้น)
+    telemetry.ts        # opt-in payload (runs/events allowlist เท่านั้น)
     setup.ts            # fapony setup — interactive wizard: config + scaffold ในขั้นเดียว
     install.ts          # barrel — re-exports src/install/ (fapony install --platform …)
     install/            # one file per client + shared pieces
@@ -99,7 +98,7 @@ fapony/
         verdict.ts         # verdict_submit — 6-grade verdict storage
         stats.ts           # fapony_stats — KPI query
         usage.ts           # fapony_usage — passive OpenCode session usage
-        report.ts          # verification_report — facts + checks + evidence + verdict + cost, one call
+        report.ts          # verification_report — facts + checks + evidence + verdict, one call
         plans.ts           # plan_list — pending plan files joined with run history
         context.ts         # project_health_context — known patterns by files[]
     test.ts               # self-check ตัวเอง (thin wrapper → test/index.ts)
@@ -145,7 +144,6 @@ events(
 ```json
 {
   "worktrees": { "<key>": "<absolute-path>" },
-  "roles": { "<role-name>": { "model": "claude-sonnet-5" } },
   "review": { "maxRounds": 2 },
   "memory": {
     "claim": ["bun", ".fapony/.memory/mem.ts", "claim", "{id}"],
@@ -153,7 +151,6 @@ events(
     "add":   ["bun", ".fapony/.memory/mem.ts", "add", "{kind}", "{text}"],
     "kickoff": ["bun", ".fapony/.memory/mem.ts", "kickoff"]
   },
-  "pricing": { "<role>": { "inputPer1k": 3.0, "outputPer1k": 15.0 } },
   "telemetry": { "enabled": false, "endpoint": "https://your-server/ingest" },
   "paths": { "stateDir": "~/.config/fapony", "planDir": ".fapony/plan", "specDir": ".fapony/spec", "memoryEntry": ".fapony/.memory/mem.ts" },
   "safety": { "deny": ["reset\\s+--hard", "clean\\s+-[a-z]*f", "checkout\\s+--\\s", "git\\s+stash"] },
@@ -161,9 +158,7 @@ events(
 }
 ```
 
-- `roles.<name>.model` — model attribution only, for cost/KPI breakdowns. Nothing spawns agents; there's no `cmd`/`timeout` to configure anymore.
 - `review.maxRounds` — round cap read by the gate/stats logic (see Key Design Decisions #2 below) — the only surviving field of the old `review` block.
-- `pricing` — optional, per-role USD per 1k tokens. Every spawn logs `role`/`model` + byte in/out into the `spawn` event regardless; `pricing` (or its absence/`null`) only toggles whether a labeled `usd_estimate` is attached — bytes are a declared proxy, not real token counts, USD is never a real charge (see [TELEMETRY.md](TELEMETRY.md), `src/stats.ts`, `src/telemetry.ts`)
 - `telemetry` — opt-in only (omit or `null` = off). ดู [TELEMETRY.md](TELEMETRY.md) ว่าส่งฟิลด์อะไรบ้าง (runs + event kind/timestamp เท่านั้น ไม่มี plan/commit/gate-note content)
 - `memory: null` = ปิดทั้งชั้น (แต่ถ้า `.fapony/.memory/mem.ts` มีจริง → default-wiring ใช้ claim/close/add อัตโนมัติ)
 - `usageWeb` — optional, `{ port, hostname }` for `fapony usage-web` defaults. `null` or omit = use defaults (port 8080, localhost). Run `fapony usage-scan` to populate data before opening the web view.
@@ -217,6 +212,7 @@ events(
 | `usage-web` ไม่มี cache | แสดงข้อความให้รัน `fapony usage-scan` ก่อน — ไม่ scan เองเด็ดขาด (done criteria #5) |
 | gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
 | ผู้ใช้คนอื่นต้องแปะกฎ 7/8 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7/8 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
+| cost/efficiency ใน `stats`/`report`/telemetry ว่างเปล่าตลอด | **ลบทิ้งแล้ว** — declared cost ทั้งสาย (spawn event + `pricing` + ES/CPQ + avgValue) derive จาก `beginSpawn`/`endSpawn` ที่ถูกลบไปพร้อม execute→review loop (ดู History) ไม่มี writer เหลืออยู่เลย ตัวเลขจึงเป็น `—` ตลอดกาล · cost ที่เหลือมีเส้นเดียว: passive session log ของ client เอง (`fapony_usage`, `usage-web`) — OpenCode บันทึก cost จริง, ZCode/Claude Code/Codex บันทึก 0 |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -350,7 +346,7 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
 | `fapony_stats` | Query KPIs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N failure/plan slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
-| `verification_report` | Full verification report: facts + checks + evidence + verdict + cost |
+| `verification_report` | Full verification report: facts + checks + evidence + verdict, duration, rounds |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |
 
 See [docs/mcp-handcheck.md](docs/mcp-handcheck.md) for full protocol, adapter examples, and safety rules.

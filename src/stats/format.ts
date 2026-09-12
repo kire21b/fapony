@@ -6,10 +6,6 @@ function fmtRate(r: number): string {
   return `${(r * 100).toFixed(0)}%`;
 }
 
-function fmtNullable(n: number | null, digits = 2): string {
-  return n !== null ? n.toFixed(digits) : "—";
-}
-
 export function formatStatsText(data: StatsData): string {
   if (data.runs.total === 0) return "no runs yet";
 
@@ -27,16 +23,6 @@ export function formatStatsText(data: StatsData): string {
     `avg rounds to pass: ${data.runs.avgRounds.toFixed(1)}  avg time to pass: ${data.runs.avgMinutes.toFixed(0)}m`,
   );
 
-  if (data.cost.spawns > 0) {
-    const usd =
-      data.cost.usd_estimate !== null
-        ? ` (~$${data.cost.usd_estimate.toFixed(4)} est.)`
-        : "";
-    lines.push(
-      `cost: ${data.cost.bytes_in} bytes in / ${data.cost.bytes_out} bytes out over ${data.cost.spawns} spawns${usd}`,
-    );
-  }
-
   lines.push(
     `avg exec time (spawn→route): ${data.stages.exec.avg.toFixed(1)}m over ${data.stages.exec.count} rounds`,
   );
@@ -47,14 +33,14 @@ export function formatStatsText(data: StatsData): string {
   if (data.byModel.length > 0) {
     lines.push("\nby model:");
     lines.push(
-      "  client | provider | model | agent | gates | fails | failRate | avgQuality | avgCostUSD | avgValue",
+      "  client | provider | model | agent | gates | fails | failRate | avgQuality",
     );
     lines.push(
-      "  -------|----------|-------|-------|-------|-------|----------|------------|------------|--------",
+      "  -------|----------|-------|-------|-------|-------|----------|-----------",
     );
     for (const m of data.byModel) {
       lines.push(
-        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtNullable(m.avgCostUSD).padStart(10)} | ${fmtNullable(m.avgValue).padStart(8)}`,
+        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)}`,
       );
     }
     const a = data.modelAttribution;
@@ -67,12 +53,10 @@ export function formatStatsText(data: StatsData): string {
 
   if (data.byGrade.length > 0) {
     lines.push("\nby grade:");
-    lines.push("  grade | count | avgCostUSD");
-    lines.push("  ------|-------|-----------");
+    lines.push("  grade | count");
+    lines.push("  ------|------");
     for (const g of data.byGrade) {
-      lines.push(
-        `  ${g.grade.padEnd(14)} | ${String(g.count).padStart(5)} | ${fmtNullable(g.avgCostUSD).padStart(10)}`,
-      );
+      lines.push(`  ${g.grade.padEnd(14)} | ${String(g.count).padStart(5)}`);
     }
   }
 
@@ -125,28 +109,6 @@ export function formatStatsText(data: StatsData): string {
     lines.push("\nplans passed at round 1 (reuse this shape):");
     for (const b of data.bestPassing.slice(0, 3)) {
       lines.push(`  ${b.plan} (${b.worktree})`);
-    }
-  }
-
-  const effShown = data.efficiency.filter((e) => e.quality !== null);
-  if (effShown.length > 0) {
-    lines.push(
-      "\nderived: efficiency (ES/CPQ per run — activity signal, not quality)",
-    );
-    lines.push("  run | grade | ES | CPQ | basis");
-    lines.push("  ----|-------|----|-----|------");
-    for (const e of effShown) {
-      const es =
-        e.es !== null && Number.isFinite(e.es) ? e.es.toExponential(2) : "—";
-      const cpq =
-        e.cpq !== null
-          ? e.basis === "usd"
-            ? `$${e.cpq.toFixed(4)}`
-            : `${Math.round(e.cpq)}B`
-          : "—";
-      lines.push(
-        `  ${String(e.runId).padStart(3)} | ${(e.grade ?? "?").padEnd(14)} | ${es.padStart(9)} | ${cpq.padStart(9)} | ${e.basis}`,
-      );
     }
   }
 

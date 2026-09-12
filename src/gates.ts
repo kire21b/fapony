@@ -1,17 +1,14 @@
 // src/gates.ts — shared per-round gate enrichment (single implementation)
 //
 // Pairs each gate event with the spawn events in its own round window and
-// derives model + cost + canonical quality. Used by stats, telemetry, and
+// derives model + canonical quality. Used by stats, telemetry, and
 // report-html — never reimplement this pairing elsewhere.
 //
-// Window rule (read-time join): per gate, cost/model come only from
-// kind='spawn' events in (prevGateId, gateId) of the same run — per-round,
-// never cumulative. Events arrive sorted (run_id, id), so one bucketing pass
-// plus a forward spawn pointer over the disjoint windows is O(events) total.
-//
-// §0 rule: add-only — never remove or rename exported symbols.
+// Window rule (read-time join): per gate, model comes only from kind='spawn'
+// events in (prevGateId, gateId) of the same run — per-round, never
+// cumulative. Events arrive sorted (run_id, id), so one bucketing pass plus a
+// forward spawn pointer over the disjoint windows is O(events) total.
 
-import { sumSpawnCost } from "./cost.js";
 import type { Event } from "./db/index.js";
 import { qualityScore, VERDICT_GRADES, type VerdictGrade } from "./parse.js";
 import {
@@ -36,8 +33,6 @@ export interface GateWindow {
   client: SessionClient | null;
   /** Subagent name, ZCode only (null otherwise, or when spawn-based). */
   agent: string | null;
-  /** USD estimate for the window's spawns, or null when unpriced/empty. */
-  costUSD: number | null;
   /** Round number from the gate event data (defaults to 1). */
   round: number;
   /**
@@ -108,8 +103,6 @@ export function enrichGateWindows(
       }
       const d = parseEventData(g.data);
       const verdict = typeof d.verdict === "string" ? d.verdict : "";
-      const costUSD = window.length ? sumSpawnCost(window).usd_estimate : null;
-
       let model: string | null = null;
       for (const s of window) {
         const sd = parseEventData(s.data);
@@ -167,7 +160,6 @@ export function enrichGateWindows(
         verdict,
         quality,
         model,
-        costUSD,
         round,
         provider,
         client,

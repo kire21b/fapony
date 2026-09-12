@@ -11,15 +11,12 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beginSpawn, endSpawn } from "../../src/cost.js";
-import type { Config } from "../../src/db/index.js";
 import {
   addEvent,
   newRun,
   type openDb,
   setStatus,
 } from "../../src/db/index.js";
-import { baseConfig } from "../helpers.js";
 
 export function createEmptyOpencodeDb(): { dir: string; dbPath: string } {
   const dir = mkdtempSync(join(tmpdir(), "fapony-telemetry-opencode-"));
@@ -49,14 +46,6 @@ export function withEmptyOpencodeDb(fn: () => void): void {
   }
 }
 
-export function pricedConfig(model: string): Config {
-  return {
-    ...baseConfig(),
-    roles: { executor: { model } },
-    pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-  };
-}
-
 export function setRunWindow(
   db: ReturnType<typeof openDb>,
   runId: number,
@@ -71,19 +60,16 @@ export function setRunWindow(
   );
 }
 
-export function makePricedRun(
+export function makeRun(
   db: ReturnType<typeof openDb>,
   worktree: string,
   model: string,
-  bytesEachWay: number,
   verdict: string,
   created: string,
   updated: string,
 ): number {
-  const config = pricedConfig(model);
   const run = newRun(db, worktree, null, null, "abc");
-  const s = beginSpawn(db, run, config, "executor", "a".repeat(bytesEachWay));
-  endSpawn(db, s, config, "executor", "b".repeat(bytesEachWay));
+  addEvent(db, run, "spawn", { role: "executor", model });
   addEvent(db, run, "gate", { verdict, note: "", round: 0 });
   setStatus(db, run, "passed");
   setRunWindow(db, run, created, updated);

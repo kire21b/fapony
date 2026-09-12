@@ -6,10 +6,6 @@ export function fmtRate(r: number): string {
   return `${(r * 100).toFixed(0)}%`;
 }
 
-export function fmtUsd(usd: number | null): string {
-  return usd !== null ? `~$${usd.toFixed(4)} est.` : "—";
-}
-
 export function fmtMinutes(m: number): string {
   if (m < 1) return "<1m";
   return `${m.toFixed(0)}m`;

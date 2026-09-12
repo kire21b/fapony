@@ -18,7 +18,6 @@ export const DEFAULT_CONFIG: Config = {
   },
   memory: null,
   telemetry: null,
-  pricing: null,
   paths: null,
   safety: null,
 };
