@@ -24,6 +24,13 @@ function fmtRate(r: number): string {
   return `${(r * 100).toFixed(0)}%`;
 }
 
+function fmtTokens(n: number | null): string {
+  if (n === null || n === 0) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function formatStatsText(data: StatsData): string {
   if (data.runs.total === 0) return "no runs yet";
 
@@ -51,20 +58,51 @@ export function formatStatsText(data: StatsData): string {
   if (data.byModel.length > 0) {
     lines.push("\nby model:");
     lines.push(
-      "  client | provider | model | agent | gates | fails | failRate | avgQuality",
+      "  client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
     );
     lines.push(
-      "  -------|----------|-------|-------|-------|-------|----------|-----------",
+      "  -------|----------|-------|-------|-------|-------|----------|------------|----------------",
     );
     for (const m of data.byModel) {
       lines.push(
-        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)}`,
+        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(m.tokensInput).padStart(7)} in / ${fmtTokens(m.tokensOutput).padStart(7)} out`,
       );
     }
     const a = data.modelAttribution;
     if (a.inferred > 0 || a.none > 0) {
       lines.push(
         `  attribution: ${a.declared} declared, ${a.inferred} inferred from the live session, ${a.none} unknown`,
+      );
+    }
+  }
+
+  if (data.byPlanMode.length > 0) {
+    lines.push("\nplanned vs dove-in:");
+    lines.push(
+      "  mode     | model | gates | fails | failRate | avgQuality | tokens/session",
+    );
+    lines.push(
+      "  ----------|-------|-------|-------|----------|------------|----------------",
+    );
+    for (const r of data.byPlanMode) {
+      const mode = r.hasPlan ? "planned" : "no-plan";
+      lines.push(
+        `  ${mode.padEnd(9)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+      );
+    }
+  }
+
+  if (data.byRegime.length > 0) {
+    lines.push("\nby regime:");
+    lines.push(
+      "  regime | model | gates | fails | failRate | avgQuality | tokens/session",
+    );
+    lines.push(
+      "  --------|-------|-------|-------|----------|------------|----------------",
+    );
+    for (const r of data.byRegime) {
+      lines.push(
+        `  ${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
       );
     }
   }

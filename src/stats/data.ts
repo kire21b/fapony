@@ -7,7 +7,7 @@ import { type Event, openDb, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
-import { REASON_CODES } from "../mcp/types.js";
+import { REASON_CODES, REGIME_CODES } from "../mcp/types.js";
 import {
   isPassFamily,
   qualityScore,
@@ -55,6 +55,10 @@ interface EnrichedGate {
   agent: string | null;
   /** How `model` was resolved — "inferred" is a guess, not a declaration. */
   modelSource: "spawn" | "session_id" | "inferred" | null;
+  /** Total input tokens for the session (null when unknown or spawn-based). */
+  tokensInput: number | null;
+  /** Total output tokens for the session (null when unknown or spawn-based). */
+  tokensOutput: number | null;
 }
 
 /**
@@ -74,6 +78,8 @@ function enrichGates(
     client: w.client,
     agent: w.agent,
     modelSource: w.modelSource,
+    tokensInput: w.tokensInput,
+    tokensOutput: w.tokensOutput,
   }));
 }
 
@@ -516,6 +522,10 @@ export interface StatsData {
     /** fails / gateCount — the per-model question nothing else can answer. */
     failRate: number;
     avgQuality: number;
+    /** Total input tokens across sessions attributed to this model (null when none recorded). */
+    tokensInput: number | null;
+    /** Total output tokens across sessions attributed to this model (null when none recorded). */
+    tokensOutput: number | null;
   }>;
   /** How many gates got their model by inference vs. a declared session_id. */
   modelAttribution: { inferred: number; declared: number; none: number };
@@ -539,6 +549,28 @@ export interface StatsData {
   recentVerdictNotes: RecentVerdictNote[];
   /** Per-file gate/fail counts (risk heatmap), worst first. */
   byFile: FileRisk[];
+  /** planned vs dove-in split: plan != null → planned, plan == null → no-plan. */
+  byPlanMode: Array<{
+    hasPlan: boolean;
+    model: string;
+    gates: number;
+    fails: number;
+    failRate: number;
+    avgQuality: number;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  }>;
+  /** regime × model split (old gates with no regime sit in the "—" row). */
+  byRegime: Array<{
+    regime: string;
+    model: string;
+    gates: number;
+    fails: number;
+    failRate: number;
+    avgQuality: number;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  }>;
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -638,6 +670,8 @@ export function getStatsData(): StatsData {
         gateCount: number;
         fails: number;
         qualities: number[];
+        tokensInput: number;
+        tokensOutput: number;
       }
     > = {};
     for (const g of enriched) {
@@ -654,11 +688,15 @@ export function getStatsData(): StatsData {
         gateCount: 0,
         fails: 0,
         qualities: [],
+        tokensInput: 0,
+        tokensOutput: 0,
       });
       bucket.gateCount++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
+      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
@@ -670,6 +708,8 @@ export function getStatsData(): StatsData {
         fails: b.fails,
         failRate: b.gateCount ? b.fails / b.gateCount : 0,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
 
@@ -706,6 +746,116 @@ export function getStatsData(): StatsData {
         pending: countPendingPlans(worktree),
       }))
       .sort((a, b) => b.runs - a.runs);
+
+    // --- byPlanMode: planned (has plan) vs dove-in (no plan) × model ---
+    const runPlanMap = new Map(runs.map((r) => [r.id, r.plan]));
+    const planModeMap: Record<
+      string,
+      {
+        hasPlan: boolean;
+        model: string;
+        gates: number;
+        fails: number;
+        qualities: number[];
+        tokensInput: number;
+        tokensOutput: number;
+      }
+    > = {};
+    for (const g of enriched) {
+      const hasPlan = runPlanMap.get(g.runId) !== null;
+      const model = g.model ?? "—";
+      const key = `${hasPlan}\0${model}`;
+      const bucket = (planModeMap[key] ??= {
+        hasPlan,
+        model,
+        gates: 0,
+        fails: 0,
+        qualities: [],
+        tokensInput: 0,
+        tokensOutput: 0,
+      });
+      bucket.gates++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      const grade = g.verdict as VerdictGrade;
+      if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
+      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+    }
+    const byPlanMode = Object.values(planModeMap)
+      .map((b) => ({
+        hasPlan: b.hasPlan,
+        model: b.model,
+        gates: b.gates,
+        fails: b.fails,
+        failRate: b.gates ? b.fails / b.gates : 0,
+        avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
+      }))
+      .sort((a, b) => b.gates - a.gates);
+
+    // --- byRegime: regime × model (old gates with no regime → "—" row) ---
+    // Pre-compute regime per run from gate events (first valid regime wins).
+    const regimeByRun = new Map<number, string>();
+    for (const e of events) {
+      if (e.kind !== "gate" || !e.data) continue;
+      if (regimeByRun.has(e.run_id)) continue;
+      try {
+        const d = JSON.parse(e.data) as { regime?: unknown };
+        if (
+          typeof d.regime === "string" &&
+          (REGIME_CODES as readonly string[]).includes(d.regime)
+        ) {
+          regimeByRun.set(e.run_id, d.regime);
+        }
+      } catch {
+        // unparseable — skip
+      }
+    }
+    const regimeMap: Record<
+      string,
+      {
+        regime: string;
+        model: string;
+        gates: number;
+        fails: number;
+        qualities: number[];
+        tokensInput: number;
+        tokensOutput: number;
+      }
+    > = {};
+    for (const g of enriched) {
+      const regime = regimeByRun.get(g.runId) ?? "—";
+      const model = g.model ?? "—";
+      const key = `${regime}\0${model}`;
+      const bucket = (regimeMap[key] ??= {
+        regime,
+        model,
+        gates: 0,
+        fails: 0,
+        qualities: [],
+        tokensInput: 0,
+        tokensOutput: 0,
+      });
+      bucket.gates++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      const grade = g.verdict as VerdictGrade;
+      if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
+      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+    }
+    const byRegime = Object.values(regimeMap)
+      .map((b) => ({
+        regime: b.regime,
+        model: b.model,
+        gates: b.gates,
+        fails: b.fails,
+        failRate: b.gates ? b.fails / b.gates : 0,
+        avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
+      }))
+      .sort((a, b) => b.gates - a.gates);
 
     const usage = readPassiveUsage();
     const zcodeUsage = readZcodeUsage();
@@ -745,6 +895,8 @@ export function getStatsData(): StatsData {
       // throw away the very notes a file-scoped query is looking for.
       recentVerdictNotes: getRecentVerdictNotes(runs, events, 50),
       byFile: getFileRisk(runs, events),
+      byPlanMode,
+      byRegime,
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:
