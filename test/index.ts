@@ -130,6 +130,7 @@ import {
   testHandoffCheckWithoutFacts,
 } from "./mcp/check.test.js";
 import {
+  testHandoffCollectAheadBehind,
   testHandoffCollectAutoDetectRange,
   testHandoffCollectExplicitRange,
   testHandoffCollectGitError,
@@ -546,6 +547,7 @@ export async function cmdTest(): Promise<void> {
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();
   testHandoffCollectReturnsFiles();
+  testHandoffCollectAheadBehind();
   testHandoffCollectValidRepo();
   testHandoffCollectGitError();
   testHandoffCheckMissingBlock();

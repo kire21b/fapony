@@ -136,3 +136,30 @@ export function testHandoffCollectReturnsFiles(): void {
   });
   console.log("  ✓ handoff_collect returns files[] for blast radius");
 }
+
+export function testHandoffCollectAheadBehind(): void {
+  withTempRepo((dir) => {
+    // Pin a fake origin/main at the first commit, then diverge by one commit.
+    const base = execSync("git rev-parse HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
+    execSync(`git update-ref refs/remotes/origin/main ${base}`, {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    writeFileSync(join(dir, "b.txt"), "new content\n");
+    execSync("git add .", { cwd: dir, stdio: "ignore" });
+    execSync("git commit -m 'add b.txt'", { cwd: dir, stdio: "ignore" });
+
+    const data = parseToolResult(toolHandoffCollect({ worktree: dir })) as {
+      facts: { ahead_behind: { ahead: number; behind: number; ref: string } };
+    };
+    assert.deepEqual(data.facts.ahead_behind, {
+      ahead: 1,
+      behind: 0,
+      ref: "origin/main",
+    });
+  });
+  console.log("  ✓ handoff_collect reports ahead/behind vs origin/main");
+}
