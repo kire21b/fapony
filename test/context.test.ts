@@ -15,6 +15,7 @@ import { withTmpDb } from "./helpers.js";
 
 function statsFixture(): StatsData {
   return {
+    scope: null,
     runs: {
       total: 23,
       byStatus: { passed: 20, stopped: 3 },

@@ -502,6 +502,8 @@ export function getBestPassing(runs: Run[], events: Event[]): BestPassing[] {
 }
 
 export interface StatsData {
+  /** Worktree these numbers describe; null = every project in the db. */
+  scope: string | null;
   runs: {
     total: number;
     byStatus: Record<string, number>;
@@ -607,13 +609,31 @@ function addSessionTokens(
   if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
 }
 
-export function getStatsData(): StatsData {
+/**
+ * KPIs across runs, scoped to one worktree unless `worktree` is omitted.
+ *
+ * Scoping happens here, at the source, rather than per table: every downstream
+ * number (pass rate, by-model, regime, plan mode) then agrees on which runs it
+ * is describing. Mixing projects silently is the failure mode worth designing
+ * against — a TS/React app and a Bun CLI are different work, and an average
+ * over both answers a question nobody asked while looking like it answered
+ * "in this project". Callers pass the scope; `null` worktree means all of them
+ * and is reported as such (see `scope` on the returned object).
+ */
+export function getStatsData(worktree?: string): StatsData {
   const db = openDb();
   try {
-    const runs = db.prepare("SELECT * FROM runs ORDER BY id").all() as Run[];
-    const events = db
-      .prepare("SELECT * FROM events ORDER BY run_id, id")
-      .all() as Event[];
+    const runs = (
+      worktree
+        ? db
+            .prepare("SELECT * FROM runs WHERE worktree = ? ORDER BY id")
+            .all(worktree)
+        : db.prepare("SELECT * FROM runs ORDER BY id").all()
+    ) as Run[];
+    const runIds = new Set(runs.map((r) => r.id));
+    const events = (
+      db.prepare("SELECT * FROM events ORDER BY run_id, id").all() as Event[]
+    ).filter((e) => !worktree || runIds.has(e.run_id));
 
     // --- Runs summary ---
     const byStatus: Record<string, number> = {};
@@ -898,6 +918,7 @@ export function getStatsData(): StatsData {
       : "";
 
     return {
+      scope: worktree ?? null,
       runs: {
         total: runs.length,
         byStatus,
