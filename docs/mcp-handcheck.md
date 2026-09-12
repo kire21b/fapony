@@ -115,12 +115,18 @@ arguments — see [README](../README.md#the-8-tools) for what each one answers:
 - `fix` — debugging an existing defect
 - `review` — reviewing someone else's work or diff
 - `plan` — producing a plan or spec, not code
+- `inquiry` — asking questions without editing files
+- `test` — writing or editing tests as primary work
 
 **Reason codes:**
 - `missing_test` — claims test pass but no new test covers the change
 - `scope_mismatch` — diff exceeds agreed plan
 - `unsafe_command` — dangerous command detected
 - `spec_gap` — spec doesn't cover edge case found
+- `timeout` — agent ran too long and had to be cut
+- `blocked` — stuck on external dependency/env, not the task itself
+- `incomplete` — ended with work still unfinished
+- `none` — clean pass, nothing to report (use this instead of `other` for clean passes)
 - `other` — requires `note` field
 
 ## Example: Claude Code Adapter

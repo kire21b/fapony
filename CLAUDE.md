@@ -4,7 +4,7 @@
 
 Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 8 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
-**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + token ครบสามในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
+**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × regime × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
@@ -277,7 +277,7 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 ส่วนทีมต้องมี shared ledger (จะเป็น hosted หรือให้เขา build server เอง ค่อยว่ากัน) และทีมที่ต้องการมัน
 คือบริษัทที่จ่ายไหว — เขียนไว้เฉย ๆ อย่าเผลอสร้าง infra รอล่วงหน้า (ละเมิดกฎข้อ 1)
 
-**แกนที่ลึกได้และไม่มีใครแตะ:** `model × regime × quality` — "ในโปรเจกต์นี้ งานแบบไหนควรจ่ายให้ model ไหน"
+**แกนที่ลึกได้และไม่มีใครแตะ:** `model × project × regime × quality` — "ในโปรเจกต์นี้ งานแบบไหนควรจ่ายให้ model ไหน"
 ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · session log มี token แต่ไม่มีเกรด ·
 benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ · เคยเล็ง `failure-shape` แทน `regime` แล้วพลาด เพราะ base rate
 ของความล้มเหลวจริงต่ำเกินไป (ดูกฎ 8)
