@@ -7,7 +7,7 @@ import { newRun } from "../../src/db/index.js";
 import { buildPayload } from "../../src/telemetry.js";
 import {
   createEmptyOpencodeDb,
-  makePricedRun,
+  makeRun,
   withEmptyOpencodeDb,
   withTempConfig,
   withTmpDb,
@@ -84,11 +84,10 @@ export function testTelemetryDerivedToolCountsScopedToWorktrees(): void {
 export function testTelemetryDerivedExcludedFromContentCheck(): void {
   withEmptyOpencodeDb(() => {
     withTmpDb((db) => {
-      makePricedRun(
+      makeRun(
         db,
         "/Users/test/project",
         "m1",
-        4000,
         "pass-good",
         "2026-09-09 10:00:00",
         "2026-09-09 10:10:00",

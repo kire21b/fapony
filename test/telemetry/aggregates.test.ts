@@ -1,29 +1,18 @@
 // test/telemetry/aggregates.test.ts — telemetry aggregates from real runs
 
 import assert from "node:assert";
-import { beginSpawn, endSpawn } from "../../src/cost.js";
-import type { Config } from "../../src/db/index.js";
 import { addEvent, newRun, setStatus } from "../../src/db/index.js";
 import { buildPayload } from "../../src/telemetry.js";
-import { baseConfig, withTmpDb } from "./helpers.js";
+import { withTmpDb } from "./helpers.js";
 
 export function testTelemetryAggregatesFromRuns(): void {
   withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      roles: { executor: { model: "mimo-v2" } },
-    };
-
     // Create 2 runs: one passed, one stalled
     const run1 = newRun(db, "/Users/test/project", null, null, "abc123");
     const run2 = newRun(db, "/Users/test/project", null, null, "def456");
 
-    // Add spawn events with cost (model comes from config roles)
-    const spawnId1 = beginSpawn(db, run1, config, "executor", "hello prompt");
-    endSpawn(db, spawnId1, config, "executor", "output result");
-
-    const spawnId2 = beginSpawn(db, run2, config, "executor", "hello prompt 2");
-    endSpawn(db, spawnId2, config, "executor", "output 2");
+    addEvent(db, run1, "spawn", { role: "executor", model: "mimo-v2" });
+    addEvent(db, run2, "spawn", { role: "executor", model: "mimo-v2" });
 
     // Add gate events
     addEvent(db, run1, "gate", {
@@ -48,10 +37,6 @@ export function testTelemetryAggregatesFromRuns(): void {
     assert.equal(payload.machine.by_status.stalled, 1);
     assert.equal(payload.machine.pass_rate, 0.5);
     assert.equal(payload.machine.stall_rate, 0.5);
-    assert.equal(payload.machine.cost.spawns, 2);
-    assert.ok(payload.machine.cost.bytes_in > 0);
-    assert.ok(payload.machine.cost.bytes_out > 0);
-
     // By model
     assert.ok(payload.machine.by_model.length > 0);
     const mimo = payload.machine.by_model.find((m) => m.model === "mimo-v2");
@@ -96,34 +81,25 @@ export function testTelemetryWorktreeRedacted(): void {
   console.log("  ✓ telemetry redacts worktree paths to basename");
 }
 
-export function testTelemetryPerRoundCostMultiRound(): void {
+export function testTelemetryPerRoundModelMultiRound(): void {
   // Regression: gate windows must be per-round (disjoint), never cumulative.
-  // Two $8 rounds must average to $8 — not avg(8, 8+8) = $12.
+  // Each gate sees only its own round's spawn.
   withTmpDb((db) => {
-    const config: Config = {
-      ...baseConfig(),
-      roles: { executor: { model: "m" } },
-      pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-    };
     const run = newRun(db, "/Users/test/project", null, null, "abc");
-    const s1 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
-    endSpawn(db, s1, config, "executor", "b".repeat(4000));
+    addEvent(db, run, "spawn", { role: "executor", model: "m1" });
     addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 1 });
-    const s2 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
-    endSpawn(db, s2, config, "executor", "b".repeat(4000));
+    addEvent(db, run, "spawn", { role: "executor", model: "m2" });
     addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 2 });
     setStatus(db, run, "passed");
 
     const payload = buildPayload();
-    assert.equal(payload.machine.cost.usd_estimate, 16);
-    const m = payload.machine.by_model.find((x) => x.model === "m");
-    assert.ok(m, "model m found");
-    assert.equal(m.gate_count, 2);
-    assert.equal(m.avg_cost_usd, 8);
-    assert.equal(m.avg_quality, 4);
+    const m1 = payload.machine.by_model.find((x) => x.model === "m1");
+    const m2 = payload.machine.by_model.find((x) => x.model === "m2");
+    assert.ok(m1 && m2, "both round models attributed separately");
+    assert.equal(m1.gate_count, 1);
+    assert.equal(m2.gate_count, 1);
+    assert.equal(m1.avg_quality, 4);
   });
 
-  console.log(
-    "  ✓ telemetry per-round (not cumulative) cost on multi-round runs",
-  );
+  console.log("  ✓ telemetry per-round (not cumulative) model attribution");
 }

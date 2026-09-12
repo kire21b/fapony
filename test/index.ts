@@ -32,14 +32,6 @@ import {
   testContextToolEndToEnd,
 } from "./context.test.js";
 import {
-  testCostAttributionAndBytes,
-  testCostBeginEndRoundTrip,
-  testCostHandoffAndFormat,
-  testCostPricingNullKeepsBytes,
-  testCostTelemetryAllowlist,
-  testCostUsdEstimate,
-} from "./cost.test.js";
-import {
   testDbLifecycle,
   testLegacyDbStampedWithoutDataLoss,
   testMigrateDbRejectsNewerSchema,
@@ -179,7 +171,6 @@ import {
   testEvidenceStatusesAreLocked,
   testRenderReportTextGitError,
   testRenderReportTextMinimal,
-  testRenderReportTextWithCost,
   testRenderReportTextWithFailingEvidence,
   testRenderReportTextWithHandoffChecks,
   testRenderReportTextWithPassedVerdict,
@@ -196,7 +187,6 @@ import {
   testVerificationReportWorktreeOnlyCreatesNoRun,
 } from "./mcp/report.test.js";
 import {
-  testStatsEfficiencyTextFailCensored,
   testStatsTextMatchesCli,
   testStatsToolByGradeSeparation,
   testStatsToolEmptyDb,
@@ -255,7 +245,6 @@ import {
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
-  testReportHtmlTotalCostCountsEachSpawnOnce,
 } from "./report-html.test.js";
 import { testAssertSafe } from "./safety.test.js";
 import {
@@ -300,40 +289,25 @@ import {
   testStatsByFileRisk,
   testStatsByModelGroupsByClientProviderAgent,
   testStatsByWorktree,
-  testStatsEfficiencyBytesProxy,
-  testStatsEfficiencyFailIsInfinite,
-  testStatsEfficiencyJsonFailCensored,
-  testStatsEfficiencyNoGateIsNull,
-  testStatsEfficiencyUsd,
   testStatsEmptyDb,
   testStatsEscalatedRuns,
-  testStatsGateWithoutSpawnsInWindow,
   testStatsLegacyPassMergedWithPassAdequate,
   testStatsModelFromExecutorSpawn,
   testStatsModelFromSessionIdWhenNoSpawn,
   testStatsMultiRoundSeparateGates,
-  testStatsNoPricingValueIsNull,
   testStatsPassRateFromVerdicts,
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsUsageByModelIdentity,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
-  testStatsZeroCostValueIsNull,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
 import {
   testTelemetryAggregatesFromRuns,
-  testTelemetryPerRoundCostMultiRound,
+  testTelemetryPerRoundModelMultiRound,
   testTelemetryWorktreeRedacted,
 } from "./telemetry/aggregates.test.js";
-import {
-  testTelemetryDerivedAbsentWhenEmpty,
-  testTelemetryDerivedAttributesLatestGateModel,
-  testTelemetryDerivedFailDragsEsExcludesCpq,
-  testTelemetryDerivedMeanOfPerRunScores,
-  testTelemetryDerivedShape,
-  testTelemetryDerivedSkipsBytesProxyRuns,
-} from "./telemetry/derived-scores.test.js";
 import {
   testTelemetryDerivedExcludedFromContentCheck,
   testTelemetryDerivedToolCountsScopedToWorktrees,
@@ -467,12 +441,6 @@ export async function cmdTest(): Promise<void> {
   testConfigUnknownKeysRideAlong();
   testCustomSafetyDeny();
   testTemplateArgsReplaceAll();
-  testCostAttributionAndBytes();
-  testCostUsdEstimate();
-  testCostPricingNullKeepsBytes();
-  testCostBeginEndRoundTrip();
-  testCostHandoffAndFormat();
-  testCostTelemetryAllowlist();
   testBuildSetupConfigNoMemory();
   testBuildSetupConfigWithMemory();
   testValidateWorktreePath();
@@ -571,7 +539,6 @@ export async function cmdTest(): Promise<void> {
   testStatsToolGroupByPlan();
   testStatsToolGroupByPlanWorktreeScoped();
   testStatsToolGroupByInvalid();
-  testStatsEfficiencyTextFailCensored();
   testUsageDefaultRegression();
   testUsageDetailJson();
   testUsageDetailText();
@@ -627,7 +594,6 @@ export async function cmdTest(): Promise<void> {
   testRenderReportTextWithPassedVerdict();
   testRenderReportTextWithFailingEvidence();
   testRenderReportTextWithHandoffChecks();
-  testRenderReportTextWithCost();
   testRenderReportTextGitError();
   // Evidence collector tests
   testReadEvidenceConfigMissing();
@@ -656,13 +622,11 @@ export async function cmdTest(): Promise<void> {
   testStatsEmptyDb();
   testStatsVerdictNotesNotCappedAtDisplayLimit();
   testCountPendingPlans();
-  testStatsNoPricingValueIsNull();
-  testStatsZeroCostValueIsNull();
   testStatsMultiRoundSeparateGates();
-  testStatsGateWithoutSpawnsInWindow();
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
   testStatsReasonCodeBreakdown();
+  testStatsUsageByModelIdentity();
   testStatsEscalatedRuns();
   testStatsPlanBreakdown();
   testFindSessionAt();
@@ -674,11 +638,6 @@ export async function cmdTest(): Promise<void> {
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();
   testStatsSpawnModelWinsOverSessionId();
-  testStatsEfficiencyUsd();
-  testStatsEfficiencyBytesProxy();
-  testStatsEfficiencyFailIsInfinite();
-  testStatsEfficiencyJsonFailCensored();
-  testStatsEfficiencyNoGateIsNull();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
   testSessionDetailSkipsUnknownType();
@@ -708,17 +667,10 @@ export async function cmdTest(): Promise<void> {
   testTelemetryWorktreeRedacted();
   testTelemetrySelfReportedFromConfig();
   testTelemetrySentAtIso();
-  testTelemetryPerRoundCostMultiRound();
+  testTelemetryPerRoundModelMultiRound();
   testTelemetrySelfReportedRoundTrip();
-  testTelemetryDerivedAbsentWhenEmpty();
-  testTelemetryDerivedShape();
-  testTelemetryDerivedMeanOfPerRunScores();
-  testTelemetryDerivedSkipsBytesProxyRuns();
-  testTelemetryDerivedFailDragsEsExcludesCpq();
-  testTelemetryDerivedAttributesLatestGateModel();
   testTelemetryDerivedToolCountsScopedToWorktrees();
   testTelemetryDerivedExcludedFromContentCheck();
-  testReportHtmlTotalCostCountsEachSpawnOnce();
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
   testReportHtmlByModelHasAttributionColumns();

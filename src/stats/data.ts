@@ -1,9 +1,8 @@
-// src/stats/data.ts — StatsData shape + getStatsData() + computeEfficiency()
+// src/stats/data.ts — StatsData shape + getStatsData()
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { sumSpawnCost } from "../cost.js";
 import { type Event, openDb, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
@@ -45,137 +44,37 @@ function stageMinutes(events: Event[]): { exec: number[]; review: number[] } {
   return { exec, review };
 }
 
-// --- Per-gate enrichment: costUSD + model + valueScore (read-time join) ---
+// --- Per-gate enrichment: model attribution (read-time join) ---
 
 interface EnrichedGate {
   runId: number;
   verdict: string;
-  costUSD: number | null;
   model: string | null;
   provider: string | null;
   client: string | null;
   agent: string | null;
-  valueScore: number | null;
   /** How `model` was resolved — "inferred" is a guess, not a declaration. */
   modelSource: "spawn" | "session_id" | "inferred" | null;
 }
 
 /**
- * Read-time join (SPEC-verdict-stats): per gate, cost/model come only from
+ * Read-time join (SPEC-verdict-stats): per gate, model comes only from
  * kind='spawn' events in (prevGateId, gateId) of the same run — per-round,
- * never cumulative. Delegates windowing to enrichGateWindows (src/gates.ts)
- * and adds the value score on top.
+ * never cumulative. Windowing lives in enrichGateWindows (src/gates.ts).
  */
 function enrichGates(
   events: Event[],
   worktreeByRun?: Map<number, string>,
 ): EnrichedGate[] {
-  return enrichGateWindows(events, worktreeByRun).map((w) => {
-    let valueScore: number | null = null;
-    if (w.costUSD !== null && w.costUSD > 0 && w.quality !== null) {
-      valueScore = w.quality / w.costUSD;
-    }
-    return {
-      runId: w.runId,
-      verdict: w.verdict,
-      costUSD: w.costUSD,
-      model: w.model,
-      provider: w.provider,
-      client: w.client,
-      agent: w.agent,
-      modelSource: w.modelSource,
-      valueScore,
-    };
-  });
-}
-
-// --- Derived efficiency (PLAN-usage-depth §3): ES + CPQ per fapony run ---
-//
-// derived: quality comes from the run's LATEST gate verdict (read-time,
-// never written), cost from sumSpawnCost over that run's spawns, minutes
-// from created_at→updated_at. When no spawn was USD-priced (pricing:null or
-// unpriced), bytes_in+bytes_out is used as proxy — basis flags which one.
-// Label rule: text output prefixes this section with "derived:".
-
-export interface RunEfficiency {
-  runId: number;
-  grade: string | null;
-  /** Canonical quality via qualityScore(), or null when no/unknown grade. */
-  quality: number | null;
-  costUSD: number | null;
-  bytes: number;
-  minutes: number;
-  /** quality / (cost × minutes). 0 for fail-with-cost, null when undefined. */
-  es: number | null;
-  /**
-   * cost / quality. fail (quality=0) → null (censored, not infinite —
-   * JSON-safe, distinct from "undefined/no data" when grade is present).
-   * Null when undefined.
-   */
-  cpq: number | null;
-  basis: "usd" | "bytes-proxy";
-}
-
-function lastGateVerdict(events: Event[]): string | null {
-  let last: string | null = null;
-  for (const e of events) {
-    if (e.kind !== "gate" || !e.data) continue;
-    try {
-      const d = JSON.parse(e.data) as { verdict?: unknown };
-      if (typeof d.verdict === "string" && VERDICT_GRADES.has(d.verdict)) {
-        last = d.verdict;
-      }
-    } catch {
-      // unparseable gate data — not a valid verdict, keep scanning
-    }
-  }
-  return last;
-}
-
-/**
- * Per-run efficiency — the single implementation. Telemetry reuses this
- * (groups per-run results by model) so ES/CPQ semantics never drift between
- * `fapony stats` and the telemetry payload. Never reimplement per-run
- * quality/cost/minutes pairing elsewhere.
- */
-export function computeEfficiency(
-  runs: Run[],
-  eventsByRun: Record<number, Event[]>,
-): RunEfficiency[] {
-  const out: RunEfficiency[] = [];
-  for (const r of runs) {
-    const es = eventsByRun[r.id] ?? [];
-    const grade = lastGateVerdict(es);
-    const quality = grade !== null ? qualityScore(grade as VerdictGrade) : null;
-    const cost = sumSpawnCost(es);
-    const minutes = minutesBetween(r.created_at, r.updated_at);
-    const bytes = cost.bytes_in + cost.bytes_out;
-
-    const useUsd = cost.usd_estimate !== null && cost.usd_estimate > 0;
-    const basis: "usd" | "bytes-proxy" = useUsd ? "usd" : "bytes-proxy";
-    const denom = useUsd ? (cost.usd_estimate as number) : bytes;
-
-    let eScore: number | null = null;
-    let cpq: number | null = null;
-    if (quality !== null && minutes > 0 && denom > 0) {
-      eScore = quality / (denom * minutes);
-      // fail (quality=0) → censored cpq: cannot divide meaningfully.
-      cpq = quality > 0 ? denom / quality : null;
-    }
-
-    out.push({
-      runId: r.id,
-      grade,
-      quality,
-      costUSD: cost.usd_estimate,
-      bytes,
-      minutes,
-      es: eScore,
-      cpq,
-      basis,
-    });
-  }
-  return out.sort((a, b) => a.runId - b.runId);
+  return enrichGateWindows(events, worktreeByRun).map((w) => ({
+    runId: w.runId,
+    verdict: w.verdict,
+    model: w.model,
+    provider: w.provider,
+    client: w.client,
+    agent: w.agent,
+    modelSource: w.modelSource,
+  }));
 }
 
 /**
@@ -602,12 +501,6 @@ export interface StatsData {
     avgRounds: number;
     avgMinutes: number;
   };
-  cost: {
-    spawns: number;
-    bytes_in: number;
-    bytes_out: number;
-    usd_estimate: number | null;
-  };
   stages: {
     exec: { avg: number; count: number };
     review: { avg: number; count: number };
@@ -623,15 +516,12 @@ export interface StatsData {
     /** fails / gateCount — the per-model question nothing else can answer. */
     failRate: number;
     avgQuality: number;
-    avgCostUSD: number | null;
-    avgValue: number | null;
   }>;
   /** How many gates got their model by inference vs. a declared session_id. */
   modelAttribution: { inferred: number; declared: number; none: number };
   byGrade: Array<{
     grade: string;
     count: number;
-    avgCostUSD: number | null;
   }>;
   byWorktree: Array<{
     worktree: string;
@@ -641,8 +531,6 @@ export interface StatsData {
     /** Un-shipped plan files in that repo's planDir, or null when uncountable. */
     pending: number | null;
   }>;
-  /** Derived ES/CPQ per run (PLAN-usage-depth §3) — additive, always present. */
-  efficiency: RunEfficiency[];
   /** Cross-run knowledge (PLAN-project-health-context §2) — additive, always present. */
   byReasonCode: ReasonCodeCount[];
   byPlan: PlanBreakdown[];
@@ -719,9 +607,6 @@ export function getStatsData(): StatsData {
         ) / passed.length
       : 0;
 
-    // --- Cost total (bytes always, USD only when pricing set). ---
-    const cost = sumSpawnCost(events);
-
     // --- Stages ---
     const eventsByRun: Record<number, Event[]> = {};
     for (const e of events) (eventsByRun[e.run_id] ??= []).push(e);
@@ -753,8 +638,6 @@ export function getStatsData(): StatsData {
         gateCount: number;
         fails: number;
         qualities: number[];
-        costs: number[];
-        values: number[];
       }
     > = {};
     for (const g of enriched) {
@@ -771,15 +654,11 @@ export function getStatsData(): StatsData {
         gateCount: 0,
         fails: 0,
         qualities: [],
-        costs: [],
-        values: [],
       });
       bucket.gateCount++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      if (g.costUSD !== null) bucket.costs.push(g.costUSD);
-      if (g.valueScore !== null) bucket.values.push(g.valueScore);
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
@@ -791,8 +670,6 @@ export function getStatsData(): StatsData {
         fails: b.fails,
         failRate: b.gateCount ? b.fails / b.gateCount : 0,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
-        avgCostUSD: b.costs.length ? avg(b.costs) : null,
-        avgValue: b.values.length ? avg(b.values) : null,
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
 
@@ -803,19 +680,13 @@ export function getStatsData(): StatsData {
       else modelAttribution.declared++;
     }
 
-    const gradeMap: Record<string, { count: number; costs: number[] }> = {};
+    const gradeMap: Record<string, number> = {};
     for (const g of enriched) {
       const gr = g.verdict || "(unknown)";
-      const bucket = (gradeMap[gr] ??= { count: 0, costs: [] });
-      bucket.count++;
-      if (g.costUSD !== null) bucket.costs.push(g.costUSD);
+      gradeMap[gr] = (gradeMap[gr] ?? 0) + 1;
     }
     const byGrade = Object.entries(gradeMap)
-      .map(([grade, b]) => ({
-        grade,
-        count: b.count,
-        avgCostUSD: b.costs.length ? avg(b.costs) : null,
-      }))
+      .map(([grade, count]) => ({ grade, count }))
       .sort((a, b) => b.count - a.count);
 
     const wtMap: Record<
@@ -841,8 +712,6 @@ export function getStatsData(): StatsData {
     const claudeCodeUsage = readClaudeCodeUsage();
     const codexUsage = readCodexUsage();
 
-    const efficiency = computeEfficiency(runs, eventsByRun);
-
     const maxRounds = resolveMaxRounds();
 
     // Latest run creation timestamp (for freshness display in reports)
@@ -859,7 +728,6 @@ export function getStatsData(): StatsData {
         avgRounds,
         avgMinutes,
       },
-      cost,
       stages: {
         exec: { avg: avg(execAll), count: execAll.length },
         review: { avg: avg(reviewAll), count: reviewAll.length },
@@ -868,7 +736,6 @@ export function getStatsData(): StatsData {
       modelAttribution,
       byGrade,
       byWorktree,
-      efficiency,
       byReasonCode: getReasonCodeBreakdown(runs, events),
       byPlan: getPlanBreakdown(runs, maxRounds),
       escalatedRuns: getEscalatedRuns(runs, maxRounds),

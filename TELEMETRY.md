@@ -24,19 +24,16 @@ never content.
 | `stall_rate` | number | stalled / terminal |
 | `avg_rounds` | number | Avg rounds for passed runs |
 | `avg_minutes` | number | Avg wall-clock time for passed runs |
-| `cost` | `{spawns, bytes_in, bytes_out, usd_estimate}` | Cost aggregates (bytes = token proxy, USD = estimate) |
-| `by_model` | `[{model, gate_count, avg_quality, avg_cost_usd}]` | Per-executor-model breakdown |
+| `by_model` | `[{model, gate_count, avg_quality}]` | Per-executor-model breakdown |
 | `by_grade` | `[{grade, count}]` | Per-verdict-grade breakdown |
 | `by_worktree` | `[{worktree, runs, passed, stalled}]` | Per-worktree (paths redacted to basename) |
-| `derived` | `{tool_call_counts, efficiency_scores, cost_per_quality}`? | v3: activity signals + run efficiency (absent when empty) |
+| `derived` | `{tool_call_counts}`? | Activity signals (absent when empty) |
 
-**`derived` sub-fields (v3):**
+**`derived` sub-fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `tool_call_counts` | `{grep: 3400, edit: 2100, ...}` | Tool-call counts from OpenCode sessions **scoped to this DB's fapony worktrees** (run worktree keys resolved via `config.worktrees`; unresolvable keys contribute nothing — never global). Activity signal, not quality |
-| `efficiency_scores` | `{model: 0.213}` | Per-model **mean of per-run ES** (same `computeEfficiency` as `fapony stats`, **USD-priced runs only**). Fail runs count as ES 0 — higher = more cost-effective |
-| `cost_per_quality` | `{model: 0.0113}` | Per-model **mean of per-run CPQ** (**USD-priced runs only**, fail runs excluded — their CPQ is undefined, not infinite). Lower = cheaper quality |
 
 Scope and basis rules:
 
@@ -44,12 +41,9 @@ Scope and basis rules:
   resolved fapony worktree — sessions from unrelated projects are never read.
   Only tool **names** + counts leave the machine; tool input/output is never
   selected.
-- ES/CPQ aggregates are **USD-only**: unpriced (bytes-proxy) runs are excluded
-  from the means because dollars and byte counts are different units and must
-  never be averaged together. With no priced runs, both maps are empty.
-- A run's efficiency is attributed to its **latest gate window's model** (the
-  window whose verdict produced the quality score), matching stats windowing —
-  not the run's first spawn.
+- No cost field leaves the machine at all: the declared-cost line (spawn
+  events, static pricing, ES/CPQ) was removed in schema v4 — nothing wrote
+  spawn events any more, so every one of those numbers was empty.
 
 ### `self_reported` (advisory, user-set in config)
 

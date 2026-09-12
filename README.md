@@ -63,12 +63,15 @@ Stated up front, because the gap between these two things is where most tooling 
 git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
+#    note: `bun link` claims the global `fapony` bin by package name, not path — running it
+#    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
 # 2. Wire it into your MCP client
 fapony install --platform opencode        # adds mcp.fapony to your opencode config
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
 fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
 fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+#    zcode/codex need their config to exist first — open the app once if you never have
 #    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
 #    skill of the same name is reported, never overwritten
 # …or add it manually to any MCP client (e.g. Claude Desktop):
@@ -277,11 +280,9 @@ fapony test                              # self-check
 `fapony.config.json` lives in the fapony checkout and is gitignored (it's per-machine). Copy [fapony.config.example.json](fapony.config.example.json) for a complete working reference; every section is optional with sane defaults. Key fields:
 
 - `worktrees` — name → absolute path mapping
-- `roles.<name>.model` — model attribution per role, used for cost/KPI breakdowns (optional, no effect on behavior)
 - `review.maxRounds` — round cap enforced by the gate
 - `memory` — shell commands for claim/close/add/kickoff, or `null` to default-wire when `.fapony/.memory/mem.ts` exists
 - `paths` (`planDir`/`specDir`/`memoryEntry`/`stateDir`) / `safety` — directory layout and the dangerous-command deny-list
-- `pricing` — optional per-role USD/1k-token rates; every spawn logs role/model + byte in/out regardless, `pricing` only adds a labeled `usd_estimate` (see [TELEMETRY.md](TELEMETRY.md))
 - `usageWeb` — optional `{ port, hostname }` for `fapony usage-web` server defaults. Run `fapony usage-scan` first to populate the cache.
 
 Env overrides: `FAPONY_CONFIG` (config file), `FAPONY_STATE_DIR` (state DB location; default `~/.config/fapony/`). Full schema, design decisions, and edge cases are documented in [CLAUDE.md](CLAUDE.md) — this README intentionally doesn't duplicate them.

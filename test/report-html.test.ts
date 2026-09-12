@@ -1,5 +1,4 @@
 import assert from "node:assert";
-import { beginSpawn, endSpawn } from "../src/cost.js";
 import {
   addEvent,
   type Config,
@@ -11,7 +10,7 @@ import {
 import { renderReportHtml } from "../src/report/index.js";
 import { getStatsData } from "../src/stats/index.js";
 
-function baseConfig(): Config {
+function _baseConfig(): Config {
   return loadConfig("/nonexistent-path/fapony.config.json");
 }
 
@@ -29,34 +28,12 @@ function withTestDb(fn: (db: ReturnType<typeof openDb>) => void): void {
 }
 
 function seedTwoRounds(db: ReturnType<typeof openDb>): void {
-  const config: Config = {
-    ...baseConfig(),
-    roles: { executor: { model: "m" } },
-    pricing: { executor: { inputPer1k: 4, outputPer1k: 4 } },
-  };
   const run = newRun(db, "/Users/test/project", null, null, "abc");
-  const s1 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
-  endSpawn(db, s1, config, "executor", "b".repeat(4000));
+  addEvent(db, run, "spawn", { role: "executor", model: "m" });
   addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 1 });
-  const s2 = beginSpawn(db, run, config, "executor", "a".repeat(4000));
-  endSpawn(db, s2, config, "executor", "b".repeat(4000));
+  addEvent(db, run, "spawn", { role: "executor", model: "m" });
   addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 2 });
   setStatus(db, run, "passed");
-}
-
-export function testReportHtmlTotalCostCountsEachSpawnOnce(): void {
-  // Two $8 rounds → total $16, not the per-gate window sum 8+(8+8) = $24.
-  withTestDb((db) => {
-    seedTwoRounds(db);
-    const stats = getStatsData();
-    const html = renderReportHtml(stats, new Date().toISOString());
-    assert.ok(
-      html.includes("~$16.0000 est."),
-      "total cost rendered once per spawn",
-    );
-  });
-
-  console.log("  ✓ report-html total cost counts each spawn once");
 }
 
 export function testReportHtmlCanonicalQuality(): void {

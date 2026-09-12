@@ -28,7 +28,7 @@ arguments — see [README](../README.md#the-8-tools) for what each one answers:
 
 | Tool | In one line |
 |------|-------------|
-| `verification_report` | The three above plus evidence and cost, in one call — what most agents should use |
+| `verification_report` | The three above plus evidence, in one call — what most agents should use |
 | `plan_list` | Pending plan files joined with their run history |
 | `project_health_context` | Recurring fail reasons and past verdict notes, as a text block |
 | `fapony_stats` | Cross-run KPIs (by model, grade, reason code, plan, file) |

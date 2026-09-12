@@ -3,7 +3,6 @@
 export { cmdStats } from "./cli.js";
 export {
   type BestPassing,
-  computeEfficiency,
   countPendingPlans,
   type EscalatedRun,
   getBestPassing,
@@ -17,7 +16,6 @@ export {
   type PlanLastVerdict,
   type ReasonCodeCount,
   type RecentVerdictNote,
-  type RunEfficiency,
   resolveMaxRounds,
   type StatsData,
 } from "./data.js";

@@ -173,7 +173,7 @@ export const TOOLS = [
   {
     name: "fapony_stats",
     description:
-      "Query accumulated run statistics: pass/stall rates, cost, quality scores, " +
+      "Query accumulated run statistics: pass/stall rates, quality scores, " +
       "breakdown by model/grade/worktree. Returns StatsData shape. " +
       "With group_by='reason_code'|'plan'|'file', returns top-N rows for that " +
       "grouping (recurring failure signatures / per-plan totals / per-file " +
@@ -247,7 +247,7 @@ export const TOOLS = [
     name: "verification_report",
     description:
       "Generate a complete verification report: git facts, handoff conformance, " +
-      "evidence (test/typecheck/lint), verdict, duration, rounds, and cost. " +
+      "evidence (test/typecheck/lint), verdict, duration, and rounds. " +
       "Call once after working to get a full picture. " +
       "Supports text (human-readable) and JSON (machine-readable) formats.",
     inputSchema: {

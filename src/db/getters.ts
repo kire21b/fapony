@@ -5,7 +5,7 @@ import {
   DEFAULT_SAFETY_DENY,
   DEFAULT_SPEC_DIR,
 } from "./defaults.js";
-import type { Config, RolePricing } from "./types.js";
+import type { Config } from "./types.js";
 
 export function safetyDeny(config?: Config): string[] {
   return config?.safety?.deny ?? DEFAULT_SAFETY_DENY;
@@ -25,21 +25,4 @@ export function memoryEntry(config?: Config): string {
 
 export function evidenceFile(config?: Config): string {
   return config?.paths?.evidenceFile ?? DEFAULT_EVIDENCE_FILE;
-}
-
-/** Model attribution for a role: roles.<name>.model or "" when unset. */
-export function roleModel(config: Config, role: string): string {
-  return config.roles?.[role]?.model ?? "";
-}
-
-/**
- * Static pricing for a role, or null when unconfigured.
- * pricing:null (or missing role) disables USD only — byte measurement stays on.
- */
-export function pricingFor(config: Config, role: string): RolePricing | null {
-  const p = config.pricing?.[role];
-  if (!p) return null;
-  if (typeof p.inputPer1k !== "number" || typeof p.outputPer1k !== "number")
-    return null;
-  return { inputPer1k: p.inputPer1k, outputPer1k: p.outputPer1k };
 }

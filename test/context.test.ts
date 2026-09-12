@@ -23,7 +23,6 @@ function statsFixture(): StatsData {
       avgRounds: 1.2,
       avgMinutes: 30,
     },
-    cost: { spawns: 0, bytes_in: 0, bytes_out: 0, usd_estimate: null },
     stages: {
       exec: { avg: 0, count: 0 },
       review: { avg: 0, count: 0 },
@@ -33,7 +32,6 @@ function statsFixture(): StatsData {
     byWorktree: [
       { worktree: "wt1", runs: 23, passed: 20, stalled: 0, pending: null },
     ],
-    efficiency: [],
     byReasonCode: [
       { worktree: "wt1", reason: "scope_mismatch", count: 7 },
       { worktree: "wt1", reason: "missing_test", count: 4 },

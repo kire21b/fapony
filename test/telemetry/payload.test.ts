@@ -7,7 +7,7 @@ import { withTmpDb } from "./helpers.js";
 export function testTelemetrySchemaVersion(): void {
   const payload = buildPayload();
   assert.equal(payload.schema_version, TELEMETRY_SCHEMA_VERSION);
-  assert.equal(payload.schema_version, 3);
+  assert.equal(payload.schema_version, 4);
 
   console.log("  ✓ telemetry schema version is 3");
 }
@@ -31,15 +31,9 @@ export function testTelemetryPayloadShape(): void {
   assert.equal(typeof m.stall_rate, "number");
   assert.equal(typeof m.avg_rounds, "number");
   assert.equal(typeof m.avg_minutes, "number");
-  assert.equal(typeof m.cost, "object");
   assert(Array.isArray(m.by_model));
   assert(Array.isArray(m.by_grade));
   assert(Array.isArray(m.by_worktree));
-
-  // Cost shape
-  assert.equal(typeof m.cost.spawns, "number");
-  assert.equal(typeof m.cost.bytes_in, "number");
-  assert.equal(typeof m.cost.bytes_out, "number");
 
   console.log("  ✓ telemetry payload shape (aggregate, no raw rows)");
 }
@@ -68,7 +62,6 @@ export function testTelemetryEmptyDb(): void {
     assert.equal(payload.machine.stall_rate, 0);
     assert.equal(payload.machine.avg_rounds, 0);
     assert.equal(payload.machine.avg_minutes, 0);
-    assert.equal(payload.machine.cost.spawns, 0);
     assert.deepEqual(payload.machine.by_model, []);
     assert.deepEqual(payload.machine.by_grade, []);
     assert.deepEqual(payload.machine.by_worktree, []);
