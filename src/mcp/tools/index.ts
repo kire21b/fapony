@@ -105,13 +105,13 @@ export const TOOLS = [
   {
     name: "verdict_submit",
     description:
-      "Record a verdict with reason code into the event log. " +
-      "WHEN: a first attempt was wrong and the cause was not where the " +
-      "symptom was (or the work needed rework) — submit 'fail' the moment " +
-      "you realize it, then a pass-family verdict once the fix is verified. " +
-      "Skip it for work that went right the first time: only 3 notes are " +
-      "surfaced to future sessions, so a lone pass evicts ones that teach " +
-      "something. Never leave a run open — one stuck at running/fixing " +
+      "Grade a finished unit of work. " +
+      "WHEN: every unit that ends, including work that went right the first " +
+      "time — this is a grade on the work, not a confession, and a model's " +
+      "record is only worth the number of graded units behind it. " +
+      "If a first attempt was wrong, submit 'fail' the moment you realize it, " +
+      "then a pass-family verdict once the fix is verified. " +
+      "Never leave a run open — one stuck at running/fixing " +
       "absorbs later unrelated verdicts for that worktree. " +
       "Without run_id, binds to the latest still-open run for the same " +
       "worktree+plan (round keeps counting toward review.maxRounds); " +
