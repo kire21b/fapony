@@ -55,6 +55,8 @@ interface EnrichedGate {
   agent: string | null;
   /** How `model` was resolved — "inferred" is a guess, not a declaration. */
   modelSource: "spawn" | "session_id" | "inferred" | null;
+  /** Session the token totals belong to — dedupe key, never summed per gate. */
+  sessionId: string | null;
   /** Total input tokens for the session (null when unknown or spawn-based). */
   tokensInput: number | null;
   /** Total output tokens for the session (null when unknown or spawn-based). */
@@ -78,6 +80,7 @@ function enrichGates(
     client: w.client,
     agent: w.agent,
     modelSource: w.modelSource,
+    sessionId: w.sessionId,
     tokensInput: w.tokensInput,
     tokensOutput: w.tokensOutput,
   }));
@@ -582,6 +585,28 @@ export interface StatsData {
   latestRunAt: string;
 }
 
+/**
+ * Charge a session's token totals to a bucket exactly once.
+ *
+ * Tokens are a per-session total, and one session routinely produces several
+ * gates (measured here: 35 sessions behind 58 gates, up to 5 gates in one).
+ * Summing per gate would multiply that session's tokens by its gate count —
+ * unevenly across models, so the ranking itself would be wrong.
+ */
+function addSessionTokens(
+  bucket: { seen: Set<string>; tokensInput: number; tokensOutput: number },
+  g: {
+    sessionId: string | null;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  },
+): void {
+  if (!g.sessionId || bucket.seen.has(g.sessionId)) return;
+  bucket.seen.add(g.sessionId);
+  if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
+  if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+}
+
 export function getStatsData(): StatsData {
   const db = openDb();
   try {
@@ -670,6 +695,7 @@ export function getStatsData(): StatsData {
         gateCount: number;
         fails: number;
         qualities: number[];
+        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
@@ -688,6 +714,7 @@ export function getStatsData(): StatsData {
         gateCount: 0,
         fails: 0,
         qualities: [],
+        seen: new Set<string>(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -695,8 +722,7 @@ export function getStatsData(): StatsData {
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
-      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+      addSessionTokens(bucket, g);
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
@@ -757,12 +783,13 @@ export function getStatsData(): StatsData {
         gates: number;
         fails: number;
         qualities: number[];
+        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
     > = {};
     for (const g of enriched) {
-      const hasPlan = runPlanMap.get(g.runId) !== null;
+      const hasPlan = (runPlanMap.get(g.runId) ?? null) !== null;
       const model = g.model ?? "—";
       const key = `${hasPlan}\0${model}`;
       const bucket = (planModeMap[key] ??= {
@@ -771,6 +798,7 @@ export function getStatsData(): StatsData {
         gates: 0,
         fails: 0,
         qualities: [],
+        seen: new Set<string>(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -778,8 +806,7 @@ export function getStatsData(): StatsData {
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
-      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+      addSessionTokens(bucket, g);
     }
     const byPlanMode = Object.values(planModeMap)
       .map((b) => ({
@@ -820,6 +847,7 @@ export function getStatsData(): StatsData {
         gates: number;
         fails: number;
         qualities: number[];
+        seen: Set<string>;
         tokensInput: number;
         tokensOutput: number;
       }
@@ -834,6 +862,7 @@ export function getStatsData(): StatsData {
         gates: 0,
         fails: 0,
         qualities: [],
+        seen: new Set<string>(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -841,8 +870,7 @@ export function getStatsData(): StatsData {
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
-      if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
-      if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+      addSessionTokens(bucket, g);
     }
     const byRegime = Object.values(regimeMap)
       .map((b) => ({

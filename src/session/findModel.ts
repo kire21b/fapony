@@ -27,6 +27,26 @@ export interface SessionModel {
   tokensOutput: number | null;
 }
 
+/**
+ * Input tokens as the clients themselves account for them: fresh input plus
+ * cache read plus cache write. Cache is not a footnote — in a Claude Code
+ * session it is nearly all of the input, so counting `input_tokens` alone
+ * reported 4.2k in / 1.1M out for Sonnet, and made one client look ~1000x
+ * cheaper than another on the very comparison these numbers exist for.
+ * Null only when the client recorded nothing at all (never zero-as-measured).
+ */
+function sumInput(...parts: (number | null | undefined)[]): number | null {
+  let total = 0;
+  let sawNumber = false;
+  for (const p of parts) {
+    if (typeof p === "number") {
+      total += p;
+      sawNumber = true;
+    }
+  }
+  return sawNumber ? total : null;
+}
+
 /** Single unknown-value sentinel — never "" or "(unknown)" (see task). */
 const UNKNOWN = "—";
 
@@ -58,18 +78,25 @@ function findInOpenCode(sessionId: string): SessionModel | null {
 
     const row = db
       .prepare(
-        `SELECT model, tokens_input, tokens_output FROM session WHERE id = ?`,
+        `SELECT model, tokens_input, tokens_output,
+                tokens_cache_read, tokens_cache_write
+         FROM session WHERE id = ?`,
       )
       .get(sessionId) as {
       model: string;
       tokens_input: number | null;
       tokens_output: number | null;
+      tokens_cache_read: number | null;
+      tokens_cache_write: number | null;
     } | null;
 
     if (!row) return null;
 
-    const tokensInput =
-      typeof row.tokens_input === "number" ? row.tokens_input : null;
+    const tokensInput = sumInput(
+      row.tokens_input,
+      row.tokens_cache_read,
+      row.tokens_cache_write,
+    );
     const tokensOutput =
       typeof row.tokens_output === "number" ? row.tokens_output : null;
 
@@ -130,7 +157,9 @@ function findInZcode(sessionId: string): SessionModel | null {
       .prepare(
         `SELECT model_id AS model, provider_id AS provider, agent,
                 SUM(input_tokens) AS tokens_input,
-                SUM(output_tokens) AS tokens_output
+                SUM(output_tokens) AS tokens_output,
+                SUM(cache_read_input_tokens) AS tokens_cache_read,
+                SUM(cache_creation_input_tokens) AS tokens_cache_write
          FROM model_usage
          WHERE session_id = ?
          GROUP BY model_id, provider_id, agent
@@ -143,6 +172,8 @@ function findInZcode(sessionId: string): SessionModel | null {
       agent: string | null;
       tokens_input: number | null;
       tokens_output: number | null;
+      tokens_cache_read: number | null;
+      tokens_cache_write: number | null;
     } | null;
 
     if (!row) return null;
@@ -151,8 +182,11 @@ function findInZcode(sessionId: string): SessionModel | null {
       provider: row.provider || UNKNOWN,
       client: "zcode",
       agent: row.agent ?? null,
-      tokensInput:
-        typeof row.tokens_input === "number" ? row.tokens_input : null,
+      tokensInput: sumInput(
+        row.tokens_input,
+        row.tokens_cache_read,
+        row.tokens_cache_write,
+      ),
       tokensOutput:
         typeof row.tokens_output === "number" ? row.tokens_output : null,
     };
@@ -190,7 +224,12 @@ function findInClaudeCode(sessionId: string): SessionModel | null {
       const parsed = JSON.parse(line) as {
         message?: {
           model?: string;
-          usage?: { input_tokens?: number; output_tokens?: number };
+          usage?: {
+            input_tokens?: number;
+            output_tokens?: number;
+            cache_read_input_tokens?: number;
+            cache_creation_input_tokens?: number;
+          };
         };
       };
       const m = parsed.message?.model;
@@ -200,8 +239,10 @@ function findInClaudeCode(sessionId: string): SessionModel | null {
       }
       const usage = parsed.message?.usage;
       if (usage) {
-        if (typeof usage.input_tokens === "number")
-          totalInput += usage.input_tokens;
+        totalInput +=
+          (usage.input_tokens ?? 0) +
+          (usage.cache_read_input_tokens ?? 0) +
+          (usage.cache_creation_input_tokens ?? 0);
         if (typeof usage.output_tokens === "number")
           totalOutput += usage.output_tokens;
       }
@@ -267,7 +308,12 @@ function findInCodex(sessionId: string): SessionModel | null {
           model?: string;
           model_provider?: string;
           base_instructions?: { provenance?: { model?: string } };
-          usage?: { input_tokens?: number; output_tokens?: number };
+          usage?: {
+            input_tokens?: number;
+            output_tokens?: number;
+            cached_input_tokens?: number;
+            cache_write_input_tokens?: number;
+          };
         };
       };
       if (parsed.type === "session_meta" && parsed.payload) {
@@ -276,7 +322,11 @@ function findInCodex(sessionId: string): SessionModel | null {
           parsed.payload.base_instructions?.provenance?.model;
         if (model) {
           const prev = counts.get(model);
-          const inp = parsed.payload.usage?.input_tokens ?? 0;
+          const u = parsed.payload.usage;
+          const inp =
+            (u?.input_tokens ?? 0) +
+            (u?.cached_input_tokens ?? 0) +
+            (u?.cache_write_input_tokens ?? 0);
           const out = parsed.payload.usage?.output_tokens ?? 0;
           counts.set(model, {
             n: (prev?.n ?? 0) + 1,

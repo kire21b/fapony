@@ -306,6 +306,7 @@ import {
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsTokensCountSessionOnce,
   testStatsTokensInByModel,
   testStatsUsageByModelIdentity,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
@@ -654,6 +655,7 @@ export async function cmdTest(): Promise<void> {
   testStatsByPlanModeSplit();
   testStatsByRegimeSplit();
   testStatsTokensInByModel();
+  testStatsTokensCountSessionOnce();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
   testSessionDetailSkipsUnknownType();

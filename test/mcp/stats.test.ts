@@ -88,33 +88,54 @@ export function testStatsToolTextMode(): void {
 
 export function testStatsTextMatchesCli(): void {
   withTempDb(() => {
-    const db = openDb();
-    const runId = newRun(db, "wt1", null, null, "abc");
-    addEvent(db, runId, "spawn", { role: "executor", model: "m" });
-    addEvent(db, runId, "route", {});
-    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
-    setStatus(db, runId, "passed");
-
-    // Capture CLI output
-    const origLog = console.log;
-    const captured: string[] = [];
-    console.log = (...a: unknown[]) => {
-      captured.push(a.join(" "));
-    };
+    // Both renders must see the SAME usage numbers. Passive readers scan live
+    // session logs, which a running agent is writing to *while this test runs*,
+    // so an unpinned comparison drifts between the two calls and fails at
+    // random. Point every client reader at a path that does not exist: the
+    // usage section is then empty for both, and the test measures what it
+    // claims to — one formatter, two entry points.
+    const envKeys = [
+      "FAPONY_OPENCODE_DB",
+      "FAPONY_ZCODE_DB",
+      "FAPONY_CLAUDE_PROJECTS_DIR",
+      "FAPONY_CODEX_SESSIONS_DIR",
+    ];
+    const saved = envKeys.map((k) => [k, process.env[k]] as const);
+    for (const k of envKeys) process.env[k] = "/nonexistent/fapony-test";
     try {
-      cmdStats([]);
-    } finally {
-      console.log = origLog;
-    }
-    const cliText = captured.join("\n");
-    const mcpText = toolFaponyStats({}).content[0].text;
+      const db = openDb();
+      const runId = newRun(db, "wt1", null, null, "abc");
+      addEvent(db, runId, "spawn", { role: "executor", model: "m" });
+      addEvent(db, runId, "route", {});
+      addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+      setStatus(db, runId, "passed");
 
-    // SPEC-verdict-stats: "text เดียวกับ fapony stats — ใช้ formatter ตัวเดียวกัน"
-    assert.equal(
-      mcpText,
-      cliText,
-      "MCP text mode must equal CLI output byte-for-byte",
-    );
+      // Capture CLI output
+      const origLog = console.log;
+      const captured: string[] = [];
+      console.log = (...a: unknown[]) => {
+        captured.push(a.join(" "));
+      };
+      try {
+        cmdStats([]);
+      } finally {
+        console.log = origLog;
+      }
+      const cliText = captured.join("\n");
+      const mcpText = toolFaponyStats({}).content[0].text;
+
+      // SPEC-verdict-stats: "text เดียวกับ fapony stats — ใช้ formatter ตัวเดียวกัน"
+      assert.equal(
+        mcpText,
+        cliText,
+        "MCP text mode must equal CLI output byte-for-byte",
+      );
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
   console.log("  ✓ fapony_stats text mode === fapony stats CLI output");
 }

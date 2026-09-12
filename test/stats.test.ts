@@ -153,7 +153,7 @@ export function testStatsModelFromSessionIdWhenNoSpawn(): void {
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
     ocdb.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
     ocdb.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
@@ -221,6 +221,8 @@ export function testStatsByModelGroupsByClientProviderAgent(): void {
         id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
         provider_id TEXT, agent TEXT,
         input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0,
+        cache_creation_input_tokens INTEGER DEFAULT 0,
         computed_total_tokens INTEGER NOT NULL DEFAULT 0
       )`,
     );
@@ -241,7 +243,7 @@ export function testStatsByModelGroupsByClientProviderAgent(): void {
     const ocPath = join(dir, "opencode.db");
     const ocdb = new Database(ocPath);
     ocdb.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0)`,
     );
     ocdb
       .prepare(`INSERT INTO session (id, project_id, model) VALUES (?, ?, ?)`)
@@ -305,7 +307,7 @@ export function testStatsSpawnModelWinsOverSessionId(): void {
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
     ocdb.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
     ocdb.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
@@ -767,7 +769,7 @@ export function testStatsTokensInByModel(): void {
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
     ocdb.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
     ocdb.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
@@ -796,4 +798,73 @@ export function testStatsTokensInByModel(): void {
     }
   });
   console.log("  ✓ getStatsData: tokens carried through to byModel");
+}
+
+export function testStatsTokensCountSessionOnce(): void {
+  withTmpDb((db) => {
+    // Two gates, one session — the shape that is normal, not rare: 15 of the
+    // 35 sessions behind this project's own gates carry more than one.
+    const runId = newRun(db, "wt1", null, null, "abc");
+    for (const reason of ["missing_test", "spec_gap"]) {
+      addEvent(db, runId, "gate", {
+        verdict: "pass-good",
+        note: "",
+        round: 0,
+        session_id: "sess-shared",
+        reason_code: reason,
+        source: "mcp",
+      });
+    }
+    setStatus(db, runId, "passed");
+
+    const dir = mkdtempSync(join(tmpdir(), "fapony-stats-dedupe-"));
+    const dbPath = join(dir, "opencode.db");
+    const ocdb = new Database(dbPath);
+    ocdb.run(
+      `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
+    );
+    ocdb.run(
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+    );
+    ocdb.run(
+      `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
+    );
+    ocdb
+      .prepare(`INSERT INTO project (id, worktree) VALUES (?, ?)`)
+      .run("p1", "/tmp/wt1");
+    ocdb
+      .prepare(
+        `INSERT INTO session (id, project_id, model, time_created, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "sess-shared",
+        "p1",
+        "claude-sonnet-5",
+        1000,
+        50000,
+        12000,
+        7000,
+        3000,
+      );
+    ocdb.close();
+
+    const prev = process.env.FAPONY_OPENCODE_DB;
+    try {
+      process.env.FAPONY_OPENCODE_DB = dbPath;
+      const data = getStatsData();
+      assert.equal(data.byModel[0].gateCount, 2);
+      // Charged once, and cache counts as input (50000 + 7000 + 3000).
+      assert.equal(data.byModel[0].tokensInput, 60000);
+      assert.equal(data.byModel[0].tokensOutput, 12000);
+      assert.equal(data.byPlanMode[0].tokensInput, 60000);
+      assert.equal(data.byRegime[0].tokensInput, 60000);
+    } finally {
+      if (prev === undefined) delete process.env.FAPONY_OPENCODE_DB;
+      else process.env.FAPONY_OPENCODE_DB = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  console.log(
+    "  ✓ getStatsData: a session's tokens are charged once, cache included",
+  );
 }
