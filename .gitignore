@@ -5,7 +5,9 @@ wt-*/
 *-TEMP.md
 
 # Personal machine config — see fapony.config.example.json
+.fapony/
 fapony.config.json
+scripts
 
 # Added by code-review-graph
 .code-review-graph/
@@ -26,4 +28,3 @@ fapony.config.json
 .cursorrules
 .windsurfrules
 opencode.jsonc
-.fapony/
