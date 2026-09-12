@@ -63,12 +63,15 @@ Stated up front, because the gap between these two things is where most tooling 
 git clone https://github.com/kire21b/fapony.git && cd fapony
 bun install
 bun link            # puts `fapony` on your PATH; or run via `bun fapony.ts`
+#    note: `bun link` claims the global `fapony` bin by package name, not path — running it
+#    from a second checkout silently repoints the command there. Re-run it in the one you want.
 
 # 2. Wire it into your MCP client
 fapony install --platform opencode        # adds mcp.fapony to your opencode config
 fapony install --platform claude          # adds fapony to Claude Code (user scope, via `claude mcp add`)
 fapony install --platform zcode           # adds fapony to ZCode (user scope, edits ~/.zcode/cli/config.json)
 fapony install --platform codex           # adds fapony to Codex (edits ~/.codex/config.toml)
+#    zcode/codex need their config to exist first — open the app once if you never have
 #    claude/opencode also symlink skill/<name>/ into ~/.claude/skills — an existing
 #    skill of the same name is reported, never overwritten
 # …or add it manually to any MCP client (e.g. Claude Desktop):
