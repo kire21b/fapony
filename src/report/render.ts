@@ -72,7 +72,7 @@ export function renderReportHtml(
   ${owner ? `<span class="owner">${owner}</span>` : ""}
 </div>
 <div class="meta">
-  Generated: ${generated_at} · Latest data: ${latestRunFreshness(stats.latestRunAt)} · Schema v2
+  Generated: ${generated_at} · Latest data: ${latestRunFreshness(stats.latestRunAt)} · Schema v2 · Scope: ${stats.scope ? esc(stats.scope) : `all projects (${stats.byWorktree.length})`}
 </div>
 
 <h2>Summary</h2>

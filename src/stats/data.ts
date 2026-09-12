@@ -517,6 +517,7 @@ export interface StatsData {
     review: { avg: number; count: number };
   };
   byModel: Array<{
+    worktree: string;
     client: string;
     provider: string;
     model: string;
@@ -556,6 +557,7 @@ export interface StatsData {
   byFile: FileRisk[];
   /** planned vs dove-in split: plan != null → planned, plan == null → no-plan. */
   byPlanMode: Array<{
+    worktree: string;
     hasPlan: boolean;
     model: string;
     gates: number;
@@ -567,6 +569,7 @@ export interface StatsData {
   }>;
   /** regime × model split (old gates with no regime sit in the "—" row). */
   byRegime: Array<{
+    worktree: string;
     regime: string;
     model: string;
     gates: number;
@@ -697,17 +700,16 @@ export function getStatsData(worktree?: string): StatsData {
     }
 
     // --- Gate enrichment ---
-    const enriched = enrichGates(
-      events,
-      new Map(runs.map((r) => [r.id, r.worktree])),
-    );
+    const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+    const enriched = enrichGates(events, wtByRun);
 
-    // Group by client+provider+model+agent — the same model name on two
+    // Group by worktree+client+provider+model+agent — the same model name on two
     // providers is two different things. Unknown dimension → "—" (never ""
     // or "(unknown)").
     const modelMap: Record<
       string,
       {
+        worktree: string;
         client: string;
         provider: string;
         model: string;
@@ -721,12 +723,14 @@ export function getStatsData(worktree?: string): StatsData {
       }
     > = {};
     for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
       const client = g.client ?? "—";
       const provider = g.provider ?? "—";
       const model = g.model ?? "—";
       const agent = g.agent ?? "—";
-      const key = [client, provider, model, agent].join("\0");
+      const key = [wt, client, provider, model, agent].join("\0");
       const bucket = (modelMap[key] ??= {
+        worktree: wt,
         client,
         provider,
         model,
@@ -734,7 +738,7 @@ export function getStatsData(worktree?: string): StatsData {
         gateCount: 0,
         fails: 0,
         qualities: [],
-        seen: new Set<string>(),
+        seen: new Set(),
         tokensInput: 0,
         tokensOutput: 0,
       });
@@ -746,6 +750,7 @@ export function getStatsData(worktree?: string): StatsData {
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
+        worktree: b.worktree,
         client: b.client,
         provider: b.provider,
         model: b.model,
@@ -798,6 +803,7 @@ export function getStatsData(worktree?: string): StatsData {
     const planModeMap: Record<
       string,
       {
+        worktree: string;
         hasPlan: boolean;
         model: string;
         gates: number;
@@ -809,10 +815,12 @@ export function getStatsData(worktree?: string): StatsData {
       }
     > = {};
     for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
       const hasPlan = (runPlanMap.get(g.runId) ?? null) !== null;
       const model = g.model ?? "—";
-      const key = `${hasPlan}\0${model}`;
+      const key = `${wt}\0${hasPlan}\0${model}`;
       const bucket = (planModeMap[key] ??= {
+        worktree: wt,
         hasPlan,
         model,
         gates: 0,
@@ -830,6 +838,7 @@ export function getStatsData(worktree?: string): StatsData {
     }
     const byPlanMode = Object.values(planModeMap)
       .map((b) => ({
+        worktree: b.worktree,
         hasPlan: b.hasPlan,
         model: b.model,
         gates: b.gates,
@@ -862,6 +871,7 @@ export function getStatsData(worktree?: string): StatsData {
     const regimeMap: Record<
       string,
       {
+        worktree: string;
         regime: string;
         model: string;
         gates: number;
@@ -873,10 +883,12 @@ export function getStatsData(worktree?: string): StatsData {
       }
     > = {};
     for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
       const regime = regimeByRun.get(g.runId) ?? "—";
       const model = g.model ?? "—";
-      const key = `${regime}\0${model}`;
+      const key = `${wt}\0${regime}\0${model}`;
       const bucket = (regimeMap[key] ??= {
+        worktree: wt,
         regime,
         model,
         gates: 0,
@@ -894,6 +906,7 @@ export function getStatsData(worktree?: string): StatsData {
     }
     const byRegime = Object.values(regimeMap)
       .map((b) => ({
+        worktree: b.worktree,
         regime: b.regime,
         model: b.model,
         gates: b.gates,

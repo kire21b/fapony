@@ -31,10 +31,22 @@ function fmtTokens(n: number | null): string {
   return String(n);
 }
 
+/** Shorten a worktree path to its basename for table display. */
+function shortWt(wt: string): string {
+  const parts = wt.replace(/\/$/, "").split("/");
+  return parts[parts.length - 1] || wt;
+}
+
 export function formatStatsText(data: StatsData): string {
   if (data.runs.total === 0) return "no runs yet";
 
   const lines: string[] = [];
+
+  if (data.scope) {
+    lines.push(`scope: ${data.scope}`);
+  } else {
+    lines.push(`scope: all projects (${data.byWorktree.length})`);
+  }
 
   lines.push(
     `runs: ${data.runs.total}  (${Object.entries(data.runs.byStatus)
@@ -56,16 +68,29 @@ export function formatStatsText(data: StatsData): string {
   );
 
   if (data.byModel.length > 0) {
+    const showWt = !data.scope;
     lines.push("\nby model:");
-    lines.push(
-      "  client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
-    );
-    lines.push(
-      "  -------|----------|-------|-------|-------|-------|----------|------------|----------------",
-    );
-    for (const m of data.byModel) {
+    if (showWt) {
       lines.push(
-        `  ${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(m.tokensInput).padStart(7)} in / ${fmtTokens(m.tokensOutput).padStart(7)} out`,
+        "  project | client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  ---------|--------|----------|-------|-------|-------|-------|----------|------------|----------------",
+      );
+    } else {
+      lines.push(
+        "  client | provider | model | agent | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  -------|----------|-------|-------|-------|-------|----------|------------|----------------",
+      );
+    }
+    for (const m of data.byModel) {
+      const wt = showWt
+        ? `${shortWt(m.worktree).padEnd(9)} | `
+        : "";
+      lines.push(
+        `  ${wt}${m.client.padEnd(6)} | ${m.provider.padEnd(8)} | ${m.model.padEnd(5)} | ${m.agent.padEnd(5)} | ${String(m.gateCount).padStart(5)} | ${String(m.fails).padStart(5)} | ${fmtRate(m.failRate).padStart(8)} | ${m.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(m.tokensInput).padStart(7)} in / ${fmtTokens(m.tokensOutput).padStart(7)} out`,
       );
     }
     const a = data.modelAttribution;
@@ -77,32 +102,58 @@ export function formatStatsText(data: StatsData): string {
   }
 
   if (data.byPlanMode.length > 0) {
+    const showWt = !data.scope;
     lines.push("\nplanned vs dove-in:");
-    lines.push(
-      "  mode     | model | gates | fails | failRate | avgQuality | tokens/session",
-    );
-    lines.push(
-      "  ----------|-------|-------|-------|----------|------------|----------------",
-    );
+    if (showWt) {
+      lines.push(
+        "  project | mode     | model | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  ---------|----------|-------|-------|-------|----------|------------|----------------",
+      );
+    } else {
+      lines.push(
+        "  mode     | model | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  ----------|-------|-------|-------|----------|------------|----------------",
+      );
+    }
     for (const r of data.byPlanMode) {
       const mode = r.hasPlan ? "planned" : "no-plan";
+      const wt = showWt
+        ? `${shortWt(r.worktree).padEnd(9)} | `
+        : "";
       lines.push(
-        `  ${mode.padEnd(9)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+        `  ${wt}${mode.padEnd(9)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
       );
     }
   }
 
   if (data.byRegime.length > 0) {
+    const showWt = !data.scope;
     lines.push("\nby regime:");
-    lines.push(
-      "  regime | model | gates | fails | failRate | avgQuality | tokens/session",
-    );
-    lines.push(
-      "  --------|-------|-------|-------|----------|------------|----------------",
-    );
-    for (const r of data.byRegime) {
+    if (showWt) {
       lines.push(
-        `  ${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
+        "  project | regime | model | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  ---------|--------|-------|-------|-------|----------|------------|----------------",
+      );
+    } else {
+      lines.push(
+        "  regime | model | gates | fails | failRate | avgQuality | tokens/session",
+      );
+      lines.push(
+        "  --------|-------|-------|-------|----------|------------|----------------",
+      );
+    }
+    for (const r of data.byRegime) {
+      const wt = showWt
+        ? `${shortWt(r.worktree).padEnd(9)} | `
+        : "";
+      lines.push(
+        `  ${wt}${r.regime.padEnd(7)} | ${r.model.padEnd(5)} | ${String(r.gates).padStart(5)} | ${String(r.fails).padStart(5)} | ${fmtRate(r.failRate).padStart(8)} | ${r.avgQuality.toFixed(1).padStart(10)} | ${fmtTokens(r.tokensInput).padStart(7)} in / ${fmtTokens(r.tokensOutput).padStart(7)} out`,
       );
     }
   }

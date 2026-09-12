@@ -132,14 +132,16 @@ export const TOOLS = [
         reason_code: {
           type: "string",
           enum: [...REASON_CODES],
-          description: "Standardized failure reason code",
+          description:
+            "Standardized failure reason code. Use 'none' for clean passes (not 'other').",
         },
         regime: {
           type: "string",
           enum: [...REGIME_CODES],
           description:
             "Task shape: code=new feature/refactor, fix=debugging an existing defect, " +
-            "review=reviewing someone else's work/diff, plan=producing a plan or spec",
+            "review=reviewing someone else's work/diff, plan=producing a plan or spec, " +
+            "inquiry=asking questions without editing files, test=writing or editing tests as primary work",
         },
         note: {
           type: "string",
