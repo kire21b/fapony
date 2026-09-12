@@ -191,9 +191,11 @@ export function readDetailFromDb(
   since?: number,
   until?: number,
 ): UsageDetail {
-  const needsProject = worktreeCol.startsWith("pr.");
-  const join = joinClause(needsProject);
+  const join = joinClause(worktreeCol.startsWith("pr."));
   const filter = buildWhereClause(worktreeCol, worktree, since, until);
+  // Only OpenCode keeps a model on the session row to backfill from; it used to
+  // be inferred from the `pr.` worktree column, which no longer identifies it.
+  const canBackfillModel = modelCol === "s.model";
 
   const toolRows = db
     .prepare(
@@ -255,7 +257,7 @@ export function readDetailFromDb(
   let fallbackModelLookup:
     | Array<{ sid: string; model: string | null }>
     | undefined;
-  if (needsProject) {
+  if (canBackfillModel) {
     const toolSids = [...new Set(perSessionTools.map((r) => r.sid))];
     const stepSids = new Set(perSessionSteps.map((r) => r.sid));
     const missingModel = toolSids.filter((sid) => !stepSids.has(sid));

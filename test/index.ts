@@ -274,6 +274,7 @@ import {
   testSessionDetailMatchesRawSql,
   testSessionDetailSkipsUnknownType,
   testSessionDetailStepTokensNotSummed,
+  testSessionWorktreeScopeUsesSessionDirectory,
 } from "./session.test.js";
 import {
   testBuildSetupConfigNoMemory,
@@ -661,6 +662,7 @@ export async function cmdTest(): Promise<void> {
   testStatsTokensCountSessionOnce();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
+  testSessionWorktreeScopeUsesSessionDirectory();
   testSessionDetailSkipsUnknownType();
   testSessionDetailStepTokensNotSummed();
   testSessionDetailMatchesRawSql();
