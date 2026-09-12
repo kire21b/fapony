@@ -329,3 +329,11 @@ export function testRenderHtmlNoPollInterval(): void {
   assert.ok(!html.includes("polling"), "no 'polling' text in HTML");
   console.log("  ✓ renderUsageHtml → no poll interval references");
 }
+
+export function testRenderHtmlShareSection(): void {
+  const html = renderGlobal(sampleData);
+  assert.ok(html.includes("context share (tokens)"), "share title present");
+  assert.ok(html.includes("share-bar"), "share bar present");
+  assert.ok(html.includes("share-legend"), "share legend present");
+  console.log("  ✓ renderUsageHtml → context share section present");
+}

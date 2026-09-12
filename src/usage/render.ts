@@ -247,6 +247,53 @@ type ClientData = {
   codex: PassiveUsageResult | null;
 };
 
+/** Context-share bar: proportion of input+output tokens per client. */
+function shareSection(
+  oc: SummaryMetrics,
+  zc: SummaryMetrics,
+  cc: SummaryMetrics,
+  cx: SummaryMetrics,
+): string {
+  const ctxTokens = [
+    { name: "OpenCode", color: "var(--green)", tokens: oc.input + oc.output },
+    { name: "ZCode", color: "var(--accent)", tokens: zc.input + zc.output },
+    {
+      name: "Claude Code",
+      color: "var(--yellow)",
+      tokens: cc.input + cc.output,
+    },
+    { name: "Codex", color: "var(--accent)", tokens: cx.input + cx.output },
+  ];
+  const ctxTotal = ctxTokens.reduce((s, c) => s + c.tokens, 0);
+
+  return `<div class="share-section">
+  <div class="share-title">context share (tokens)</div>
+  <div class="share-bar">
+    ${
+      ctxTotal > 0
+        ? ctxTokens
+            .map((c) => {
+              const w = Math.round((c.tokens / ctxTotal) * 100);
+              return w > 0
+                ? `<div class="share-seg" style="width:${w}%;background:${c.color}" title="${c.name}: ${fmtTokens(c.tokens)}"></div>`
+                : "";
+            })
+            .join("")
+        : '<div class="share-seg" style="width:100%;background:var(--border)"></div>'
+    }
+  </div>
+  <div class="share-legend">
+    ${ctxTokens
+      .map((c) => {
+        const pctStr =
+          ctxTotal > 0 ? ((c.tokens / ctxTotal) * 100).toFixed(1) : "0.0";
+        return `<span class="share-item"><span class="share-dot" style="background:${c.color}"></span>${c.name} ${pctStr}%</span>`;
+      })
+      .join("")}
+  </div>
+</div>`;
+}
+
 export function renderUsageHtml(
   projectData: Map<string, ClientData>,
   scannedAt: string,
@@ -283,6 +330,8 @@ ${summaryCard("ZCode", "var(--accent)", pZc)}
 ${summaryCard("Claude Code", "var(--yellow)", pCc)}
 ${summaryCard("Codex", "var(--accent)", pCx)}
 </div>
+
+${shareSection(pOc, pZc, pCc, pCx)}
 
 ${clientTable(`t-oc-${label}`, "OpenCode", "var(--green)", data.opencode)}
 ${clientTable(`t-zc-${label}`, "ZCode", "var(--accent)", data.zcode)}

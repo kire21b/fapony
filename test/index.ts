@@ -382,6 +382,7 @@ import {
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlNoPollInterval,
+  testRenderHtmlShareSection,
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
   testRenderHtmlTokenValues,
@@ -729,5 +730,6 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlCostWide();
   testRenderHtmlFreshnessBar();
   testRenderHtmlNoPollInterval();
+  testRenderHtmlShareSection();
   console.log("\nall tests passed ✓");
 }
