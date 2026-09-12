@@ -37,7 +37,7 @@ fapony/
       types.ts        # Config / Row types
       defaults.ts     # DEFAULT_* constants (safety deny list, …)
       index.ts        # re-export
-    gates.ts          # per-round gate enrichment — model attribution from spawn events in each round window
+    gates.ts          # per-round gate enrichment — model + session tokens per gate; carries `sessionId` so callers can dedupe
     parse.ts          # parseGateVerdict() + qualityScore()
     memory.ts         # shell adapter + resolveMemoryConfig + DEFAULT_MEMORY
     safety.ts         # assertSafe() deny-list (checked before any config-sourced shell cmd runs)
@@ -213,6 +213,9 @@ events(
 | gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
 | ผู้ใช้คนอื่นต้องแปะกฎ 7 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
 | cost/efficiency ใน `stats`/`report`/telemetry ว่างเปล่าตลอด | **ลบทิ้งแล้ว** — declared cost ทั้งสาย (spawn event + `pricing` + ES/CPQ + avgValue) derive จาก `beginSpawn`/`endSpawn` ที่ถูกลบไปพร้อม execute→review loop (ดู History) ไม่มี writer เหลืออยู่เลย ตัวเลขจึงเป็น `—` ตลอดกาล · cost ที่เหลือมีเส้นเดียว: passive session log ของ client เอง (`fapony_usage`, `usage-web`) — OpenCode บันทึก cost จริง, ZCode/Claude Code/Codex บันทึก 0 |
+| token ของ Claude Code ดูน้อยผิดปกติ (`4.2k in / 1.1M out`) | **cache คือ input เกือบทั้งหมด** — `input_tokens` เปล่า ๆ ไม่ใช่ input จริง ทุก reader ต้องบวก cache read + cache write ด้วย (`sumInput()` ใน [findModel.ts](src/session/findModel.ts) เป็นตัวเดียวที่ทุก client ใช้) · สัญญาณว่า accounting พัง: coding agent ที่ input < output เป็นไปไม่ได้ · หมายเหตุ: catch-all รอบ query ของ session reader กลืน schema mismatch เป็น `null` เงียบ ๆ — เพิ่มคอลัมน์ใน SQL แล้ว fixture เก่าไม่มี = ไม่ error แต่ค่าหาย |
+| token ต่อ model บวมผิดส่วน | token เป็นค่า **ราย session** แต่ gate เป็นราย round — 58 gate มาจาก 35 session (session เดียวคุมได้ถึง 5 gate) บวกตรง ๆ = คูณไม่เท่ากันในแต่ละ model = อันดับผิด · `GateWindow.sessionId` มีไว้ dedupe, `addSessionTokens()` ใน [stats/data.ts](src/stats/data.ts) charge session ละครั้งต่อ bucket |
+| เทสต์ที่เทียบ output สองครั้งแล้วแดงสุ่ม | ไม่ใช่ flake ลอย ๆ — passive reader อ่าน session log **ที่ agent กำลังเขียนอยู่ระหว่างเทสต์รัน** เลขขยับระหว่างสอง render · pin `FAPONY_OPENCODE_DB` / `FAPONY_ZCODE_DB` / `FAPONY_CLAUDE_PROJECTS_DIR` / `FAPONY_CODEX_SESSIONS_DIR` ไปที่ path ที่ไม่มีจริง ให้ usage ว่างทั้งคู่ |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
 ---
@@ -239,7 +242,9 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
 6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
 7. **ให้เกรดทุกหน่วยงานที่จบ = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — มันคือ *เกรดของงาน*
-   ไม่ใช่คำสารภาพ ฉะนั้นงานที่ผ่านตั้งแต่รอบแรกก็ต้องบันทึก (เดิมกฎบอกไม่ต้อง — กลับด้านแล้ว
+   ไม่ใช่คำสารภาพ · **`regime` บังคับ** (`code | fix | review | plan`) ไม่ส่ง = call ถูก reject
+   ตั้งใจให้ required เพราะ fill rate จริงในเครื่องนี้: required+enum (`reason_code`) = 50/50,
+   optional (`files[]`) = 0 — **optional คือสิ่งที่ฆ่า fill rate ไม่ใช่การเพิ่ม field** ฉะนั้นงานที่ผ่านตั้งแต่รอบแรกก็ต้องบันทึก (เดิมกฎบอกไม่ต้อง — กลับด้านแล้ว
    เพราะค่าที่ใช้จริงย้ายจาก "ไฟล์นี้เคยพัง" ไปเป็น "model ไหนทำงานแบบไหนได้ดี" ซึ่ง n ต่อ model
    คือทุกอย่าง) · **1 run = 1 หน่วยงานที่วัดได้ ไม่ใช่ 1 plan** — bug ที่ไม่มี plan ก็เป็น run ได้
    (`plan` เป็น nullable ตั้งแต่ schema แรก และ null/not-null คือ A/B "ลุยเลย vs วางแผน" ที่ใช้จริง)
@@ -272,12 +277,16 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 ส่วนทีมต้องมี shared ledger (จะเป็น hosted หรือให้เขา build server เอง ค่อยว่ากัน) และทีมที่ต้องการมัน
 คือบริษัทที่จ่ายไหว — เขียนไว้เฉย ๆ อย่าเผลอสร้าง infra รอล่วงหน้า (ละเมิดกฎข้อ 1)
 
-**แกนที่ลึกได้และไม่มีใครแตะ:** `model × project × failure-shape` — "ในโปรเจกต์นี้ model ไหนพลาดเรื่องไหน"
-ต้องมี verdict + model + files ครบสามในที่เดียวถึงจะถามได้ · session log ไม่มี verdict · code graph ไม่มีผลลัพธ์
-ความลึกต้องมาจาก **derive ตอนอ่าน** ไม่ใช่ field ใหม่ให้ agent กรอก (ทุก field ที่เพิ่ม ลด fill rate — พิสูจน์มาแล้ว
-ด้วย `files[]`: optional + คำอธิบาย passive = 0/17)
+**แกนที่ลึกได้และไม่มีใครแตะ:** `model × regime × quality` — "ในโปรเจกต์นี้ งานแบบไหนควรจ่ายให้ model ไหน"
+ต้องมี verdict + model + regime + token ครบสี่ในที่เดียวถึงจะถามได้ · session log มี token แต่ไม่มีเกรด ·
+benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ · เคยเล็ง `failure-shape` แทน `regime` แล้วพลาด เพราะ base rate
+ของความล้มเหลวจริงต่ำเกินไป (ดูกฎ 8)
 
----
+**เรื่อง field ใหม่ — เคยสรุปผิด:** เดิมเขียนว่า "ทุก field ที่เพิ่ม ลด fill rate" ข้อมูลในเครื่องนี้บอกว่าไม่ใช่ —
+`reason_code` (required + enum + reject) ได้ 50/50 ส่วน `files[]` (optional + คำอธิบาย passive) ได้ 0
+**สิ่งที่ฆ่า fill rate คือ optional ไม่ใช่การเพิ่ม field** ฉะนั้นถ้าจะเพิ่มอะไรจริง ๆ ต้อง required + enum สั้น +
+reject เมื่อไม่ส่ง — และยังต้องผ่านกฎข้อ 1 ว่าจำเป็นจริงก่อนอยู่ดี (`regime` ผ่านเพราะ derive ตอนอ่านไม่ได้
+ส่วน token/plan-mode ไม่ต้องเพิ่ม field เลยเพราะ derive ได้)
 
 ## Positioning — กฎกันโดนถล่มตอนโปรโมท
 
@@ -343,8 +352,8 @@ fapony ships an MCP server (`fapony mcp`) — stdio JSON-RPC, zero runtime depen
 | `plan_list` | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
 | `handoff_collect` | Get machine facts from git (diff stat, commits, branch) |
 | `handoff_check` | Verify handoff conformance against facts |
-| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) |
-| `fapony_stats` | Query KPIs: by-model, by-grade, by-value; `group_by: reason_code\|plan` for top-N failure/plan slices |
+| `verdict_submit` | Store a 6-grade verdict (pass-excellent → uncertain) + required `regime` (`code\|fix\|review\|plan`) — the task-shape axis |
+| `fapony_stats` | Query KPIs: by-model (gates/fails/quality/tokens), by-grade, **planned vs dove-in** (`runs.plan` null/not-null), **regime × model**; `group_by: reason_code\|plan` for top-N slices |
 | `fapony_usage` | Query passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `verification_report` | Full verification report: facts + checks + evidence + verdict, duration, rounds |
 | `project_health_context` | Known-patterns block keyed by `files[]` — recurring fail reasons, escalations, round-1-pass shapes. Pre-edit reflex for any task; `plan-with-pony` is one caller, not the only one |

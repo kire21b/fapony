@@ -130,7 +130,9 @@ naming what you walked, so the reader can judge the coverage — not a tour of i
 ## After: record the verdict (fapony)
 
 Call `verdict_submit` once, after the report is shown. Don't block the report on it, and don't
-let it change the report's content.
+let it change the report's content. Pass `regime="review"` — it is required, and a review is what
+this was; the grade is on the work you reviewed, and it is what puts this run in the
+`regime × model` table.
 
 | Report verdict | `verdict` |
 |---|---|
@@ -188,7 +190,7 @@ pre.  project_health_context(worktree="/Users/you/Project/fapony/wt-fapony")
         → "missing_test (4×), spec_gap (2×)"
 1-4.  scope holds; walked the new gate branch; ran the evidence command — it exits 0
       without running the suite (CONFIRMED: `bun test` with no test dir exits 0)
-post. verdict_submit(verdict="pass-adequate", reason_code="other",
+post. verdict_submit(verdict="pass-adequate", reason_code="other", regime="review",
         note="evidence entry `bun test` exits 0 while running zero tests — real entry is `bun run test`",
         worktree="/Users/you/Project/fapony/wt-fapony",
         plan=".fapony/plan/PLAN-verdict-notes.md")
