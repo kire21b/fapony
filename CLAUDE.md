@@ -236,7 +236,9 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 ## Rules for AI Agents
 
 1. **ห้ามสร้าง abstraction ที่มี implementation เดียว** — ไม่ scaffold เผื่ออนาคต
-2. **ห้าม git push** — กฎจาก vela opencode.json
+2. **ห้าม git push เอง** — กฎจาก vela opencode.json · **ยกเว้นตอนผู้ใช้สั่งเปิด PR** เพราะ
+   `gh pr create` ต้องมี branch บน remote ก่อน push ได้เฉพาะ branch ที่ทำงานอยู่ ไม่ใช่ `main`
+   และไม่มี `--force` · จบงานเฉย ๆ ไม่ใช่เหตุผลให้ push
 3. **Commit แยก concern** — one commit per feature/area
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
