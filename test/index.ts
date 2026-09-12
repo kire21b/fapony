@@ -299,6 +299,7 @@ import {
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsUsageByModelIdentity,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
 } from "./stats.test.js";
 // Telemetry tests (split into test/telemetry/)
@@ -625,6 +626,7 @@ export async function cmdTest(): Promise<void> {
   testStatsLegacyPassMergedWithPassAdequate();
   testStatsByWorktree();
   testStatsReasonCodeBreakdown();
+  testStatsUsageByModelIdentity();
   testStatsEscalatedRuns();
   testStatsPlanBreakdown();
   testFindSessionAt();

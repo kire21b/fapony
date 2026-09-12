@@ -1,6 +1,24 @@
 // src/stats/format.ts — formatStatsText() for CLI + MCP text mode
 
+import type { ModelBreakdown } from "../session/index.js";
 import type { StatsData } from "./data.js";
+
+/**
+ * One "by model" line. provider is part of the identity, not decoration:
+ * OpenCode records the same id under different providers (mimo-v2.5 on
+ * opencode-go and on xiaomi are two rows), so printing the id alone renders
+ * them as one duplicated-looking model. session_count is printed because a
+ * row can legitimately be all zeros — 145 big-pickle sessions recorded no
+ * tokens at all — and without it a 0/0 line reads like a parse failure.
+ */
+function modelLine(m: ModelBreakdown, withCost: boolean): string {
+  const name = `${m.provider ? `${m.provider}/` : ""}${m.model || "(no model id)"}`;
+  const cost = withCost ? ` ($${m.cost.toFixed(4)})` : "";
+  return (
+    `    ${name}: ${m.session_count} sessions, ` +
+    `${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out${cost}`
+  );
+}
 
 function fmtRate(r: number): string {
   return `${(r * 100).toFixed(0)}%`;
@@ -119,11 +137,7 @@ export function formatStatsText(data: StatsData): string {
     );
     if (data.usage.by_model.length > 0) {
       lines.push("  by model:");
-      for (const m of data.usage.by_model) {
-        lines.push(
-          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out ($${m.cost.toFixed(4)})`,
-        );
-      }
+      for (const m of data.usage.by_model) lines.push(modelLine(m, true));
     }
   }
 
@@ -136,11 +150,7 @@ export function formatStatsText(data: StatsData): string {
     );
     if (zu.by_model.length > 0) {
       lines.push("  by model:");
-      for (const m of zu.by_model) {
-        lines.push(
-          `    ${m.model}: ${m.tokens_input} in / ${m.tokens_output} out`,
-        );
-      }
+      for (const m of zu.by_model) lines.push(modelLine(m, false));
     }
   }
 
@@ -153,11 +163,7 @@ export function formatStatsText(data: StatsData): string {
     );
     if (cc.by_model.length > 0) {
       lines.push("  by model:");
-      for (const m of cc.by_model) {
-        lines.push(
-          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out`,
-        );
-      }
+      for (const m of cc.by_model) lines.push(modelLine(m, false));
     }
   }
 
@@ -170,11 +176,7 @@ export function formatStatsText(data: StatsData): string {
     );
     if (cx.by_model.length > 0) {
       lines.push("  by model:");
-      for (const m of cx.by_model) {
-        lines.push(
-          `    ${m.model}: ${m.tokens_input.toLocaleString()} in / ${m.tokens_output.toLocaleString()} out`,
-        );
-      }
+      for (const m of cx.by_model) lines.push(modelLine(m, false));
     }
   }
 

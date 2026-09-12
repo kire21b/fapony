@@ -11,7 +11,11 @@ import {
   newRun,
   setStatus,
 } from "../src/db/index.js";
-import { countPendingPlans, getStatsData } from "../src/stats.js";
+import {
+  countPendingPlans,
+  formatStatsText,
+  getStatsData,
+} from "../src/stats.js";
 import { withTmpDb } from "./helpers.js";
 
 export function testStatsEmptyDb(): void {
@@ -578,4 +582,70 @@ export function testStatsPassRateFromVerdicts(): void {
     assert.equal(data.runs.passRate, 0.5);
   });
   console.log("  ✓ passRate counts graded runs only, by last verdict");
+}
+
+export function testStatsUsageByModelIdentity(): void {
+  // Regression: the same model id under two providers used to render as two
+  // identical-looking lines, and an all-zero row looked like a parse failure.
+  withTmpDb((db) => {
+    const runId = newRun(db, "wt1", null, null, "abc");
+    addEvent(db, runId, "gate", { verdict: "pass-good", note: "", round: 0 });
+    setStatus(db, runId, "passed");
+
+    const data = getStatsData();
+    data.usage = {
+      ...data.usage,
+      session_count: 3,
+      by_model: [
+        {
+          provider: "opencode-go",
+          model: "mimo-v2.5",
+          session_count: 1,
+          tokens_input: 10,
+          tokens_output: 2,
+          tokens_reasoning: 0,
+          tokens_cache_read: 0,
+          tokens_cache_write: 0,
+          cost: 1,
+        },
+        {
+          provider: "xiaomi",
+          model: "mimo-v2.5",
+          session_count: 1,
+          tokens_input: 0,
+          tokens_output: 0,
+          tokens_reasoning: 0,
+          tokens_cache_read: 0,
+          tokens_cache_write: 0,
+          cost: 0,
+        },
+        {
+          provider: "mimo",
+          model: "",
+          session_count: 7,
+          tokens_input: 0,
+          tokens_output: 0,
+          tokens_reasoning: 0,
+          tokens_cache_read: 0,
+          tokens_cache_write: 0,
+          cost: 0,
+        },
+      ],
+    };
+
+    const text = formatStatsText(data);
+    assert.ok(
+      text.includes("opencode-go/mimo-v2.5: 1 sessions"),
+      "provider is part of the model identity",
+    );
+    assert.ok(
+      text.includes("xiaomi/mimo-v2.5: 1 sessions"),
+      "same id on another provider is a separate, distinguishable line",
+    );
+    assert.ok(
+      text.includes("mimo/(no model id): 7 sessions"),
+      "empty model id is labelled, not blank",
+    );
+  });
+  console.log("  ✓ stats usage by-model: provider + session count in the line");
 }
