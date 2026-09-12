@@ -13,6 +13,7 @@ import {
   jsonResult,
   parseToolResult,
   REASON_CODES,
+  REGIME_CODES,
 } from "../../src/mcp/types.js";
 import { withTempRepo } from "./helpers.js";
 
@@ -40,13 +41,28 @@ export function testParseToolResult(): void {
 }
 
 export function testReasonCodesAreLocked(): void {
-  assert.equal(REASON_CODES.length, 5);
+  assert.equal(REASON_CODES.length, 9);
   assert.ok(REASON_CODES.includes("missing_test"));
   assert.ok(REASON_CODES.includes("scope_mismatch"));
   assert.ok(REASON_CODES.includes("unsafe_command"));
   assert.ok(REASON_CODES.includes("spec_gap"));
+  assert.ok(REASON_CODES.includes("timeout"));
+  assert.ok(REASON_CODES.includes("blocked"));
+  assert.ok(REASON_CODES.includes("incomplete"));
+  assert.ok(REASON_CODES.includes("none"));
   assert.ok(REASON_CODES.includes("other"));
-  console.log("  ✓ REASON_CODES has 5 values (locked)");
+  console.log("  ✓ REASON_CODES has 9 values (locked)");
+}
+
+export function testRegimeCodesAreLocked(): void {
+  assert.equal(REGIME_CODES.length, 6);
+  assert.ok(REGIME_CODES.includes("code"));
+  assert.ok(REGIME_CODES.includes("fix"));
+  assert.ok(REGIME_CODES.includes("review"));
+  assert.ok(REGIME_CODES.includes("plan"));
+  assert.ok(REGIME_CODES.includes("inquiry"));
+  assert.ok(REGIME_CODES.includes("test"));
+  console.log("  ✓ REGIME_CODES has 6 values (locked)");
 }
 
 // --- End-to-end pipeline test ---
@@ -106,6 +122,7 @@ export function testEndToEndPipeline(): void {
       const verdictResult = toolVerdictSubmit({
         verdict: "pass",
         reason_code: "missing_test",
+        regime: "code",
       });
       const verdictData = parseToolResult(verdictResult) as {
         stored: boolean;

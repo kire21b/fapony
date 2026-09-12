@@ -19,7 +19,7 @@ export function testTelemetryDerivedToolCountsScopedToWorktrees(): void {
   ocDb.run(`INSERT INTO project (id, worktree) VALUES ('p1', '/wt/proj')`);
   ocDb.run(`INSERT INTO project (id, worktree) VALUES ('p2', '/elsewhere')`);
   ocDb.run(
-    `INSERT INTO session (id, project_id, model, time_created, tokens_input, tokens_output, cost) VALUES ('s1', 'p1', 'm', 1000, 10, 5, 0.01), ('s2', 'p2', 'm', 2000, 10, 5, 0.01)`,
+    `INSERT INTO session (id, project_id, directory, model, time_created, tokens_input, tokens_output, cost) VALUES ('s1', 'p1', '/wt/proj', 'm', 1000, 10, 5, 0.01), ('s2', 'p2', '/elsewhere', 'm', 2000, 10, 5, 0.01)`,
   );
   const part = ocDb.prepare(
     `INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, 1, 1, ?)`,

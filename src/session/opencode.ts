@@ -52,8 +52,12 @@ export function readPassiveUsage(
     db = new Database(dbPath, { readonly: true });
     db.run("PRAGMA query_only = ON");
 
+    // OpenCode's `project.worktree` is the repo ROOT, so a git worktree under it
+    // (…/fapony/wt-fapony) never matches and every per-project query came back
+    // empty. `session.directory` is the actual cwd — the same value runs.worktree
+    // holds. ponytail: filter on the session row, keep the join for by-model.
     const filter = buildWhereClause(
-      "p.worktree",
+      "s.directory",
       worktree,
       since,
       until,
@@ -127,14 +131,14 @@ export function readPassiveUsage(
     if (detail) {
       result.detail = readDetailFromDb(
         db,
-        "pr.worktree",
+        "s.directory",
         "s.model",
         worktree,
         since,
         until,
       );
       try {
-        result.detail.timing = readTimingFromDb(db, "pr.worktree", {
+        result.detail.timing = readTimingFromDb(db, "s.directory", {
           worktree,
           since,
           until,

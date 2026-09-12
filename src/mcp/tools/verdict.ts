@@ -14,7 +14,9 @@ import {
   errorResult,
   jsonResult,
   REASON_CODES,
+  REGIME_CODES,
   type ReasonCode,
+  type RegimeCode,
   type ToolResult,
 } from "../types.js";
 import { resolveWorktreeArg } from "../worktree.js";
@@ -26,6 +28,7 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     run_id,
     verdict,
     reason_code,
+    regime,
     note,
     worktree,
     plan,
@@ -47,6 +50,10 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   if (reason_code === "other" && (!note || typeof note !== "string")) {
     return errorResult("reason_code 'other' requires a note");
   }
+  if (!REGIME_CODES.includes(regime as RegimeCode)) {
+    return errorResult(`regime must be one of: ${REGIME_CODES.join(", ")}`);
+  }
+  const regimeCode = regime as RegimeCode;
 
   const db = openDb();
 
@@ -118,7 +125,11 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
   // session_id lets gates.ts resolve model from client session logs when the
   // window has no spawn events (the old execute→review loop that wrote spawns
   // is gone). Optional — agents that can't expose it just omit it.
-  const patch: Record<string, unknown> = { reason_code, source: "mcp" };
+  const patch: Record<string, unknown> = {
+    reason_code,
+    regime: regimeCode,
+    source: "mcp",
+  };
   if (typeof session_id === "string" && session_id) {
     patch.session_id = session_id;
   }
@@ -129,6 +140,7 @@ export function toolVerdictSubmit(args: Record<string, unknown>): ToolResult {
     run_id: resolvedRunId,
     verdict: grade,
     reason_code,
+    regime: regimeCode,
     status: result.status,
     round: result.round,
     ...(resolvedFiles ? { files: resolvedFiles } : {}),

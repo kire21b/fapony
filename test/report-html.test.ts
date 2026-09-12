@@ -83,6 +83,35 @@ export function testReportHtmlByModelHasAttributionColumns(): void {
   console.log("  ✓ report-html By Model shows client/provider/agent");
 }
 
+export function testReportHtmlByModelProjectColumn(): void {
+  // byModel groups by worktree, so a global report lists the same model once
+  // per project — rows need a Project column, scoped reports must not repeat it.
+  withTestDb((db) => {
+    for (const wt of ["/proj/a", "/proj/b"]) {
+      const run = newRun(db, wt, null, null, "abc");
+      addEvent(db, run, "gate", { verdict: "pass-good", note: "", round: 0 });
+      setStatus(db, run, "passed");
+    }
+    const all = renderReportHtml(getStatsData(), new Date().toISOString());
+    assert.ok(
+      all.includes("<th>Project</th>"),
+      "global report has Project column",
+    );
+    assert.ok(all.includes("<td>/proj/a</td>"), "project row labeled");
+    const scoped = renderReportHtml(
+      getStatsData("/proj/a"),
+      new Date().toISOString(),
+    );
+    assert.ok(
+      !scoped.includes("<th>Project</th>"),
+      "scoped report hides Project column",
+    );
+    assert.ok(scoped.includes("Scope: /proj/a"), "scoped report labels scope");
+  });
+
+  console.log("  ✓ report-html By Model Project column follows scope");
+}
+
 export function testReportHtmlEscapesContent(): void {
   // Worktree basenames are interpolated into HTML — must not break markup.
   withTestDb((db) => {

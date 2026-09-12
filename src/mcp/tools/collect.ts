@@ -31,6 +31,24 @@ function execGitSafe(
   }
 }
 
+// ahead/behind vs the default remote branch, as of the last fetch — no network here.
+// ponytail: origin/main|master only; add upstream/`origin/HEAD` lookup if a repo names it otherwise.
+function aheadBehind(
+  worktree: string,
+): { ahead: number; behind: number; ref: string } | null {
+  for (const ref of ["origin/main", "origin/master"]) {
+    const r = execGitSafe(
+      `git rev-list --left-right --count ${ref}...HEAD`,
+      worktree,
+    );
+    if (!r.ok) continue;
+    const [behind, ahead] = r.output.split(/\s+/).map((n) => parseInt(n, 10));
+    if (Number.isNaN(behind) || Number.isNaN(ahead)) continue;
+    return { ahead, behind, ref };
+  }
+  return null;
+}
+
 // --- Tool implementation ---
 
 export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
@@ -124,6 +142,7 @@ export function toolHandoffCollect(args: Record<string, unknown>): ToolResult {
       commits,
       branch,
       files: names,
+      ahead_behind: aheadBehind(worktree),
       git_error: gitError ?? null,
     },
     checks: {

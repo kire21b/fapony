@@ -21,6 +21,22 @@ import {
 } from "../src/usage/format.js";
 import { renderUsageHtml } from "../src/usage/render.js";
 
+const NOW = new Date().toISOString();
+
+// Helper: wrap old per-client args into the new project-grouped Map signature.
+function renderGlobal(
+  oc: PassiveUsageResult,
+  zc: PassiveUsageResult | null = null,
+  cc: PassiveUsageResult | null = null,
+  cx: PassiveUsageResult | null = null,
+  scannedAt: string = NOW,
+): string {
+  const data = new Map([
+    ["__global__", { opencode: oc, zcode: zc, claude_code: cc, codex: cx }],
+  ]);
+  return renderUsageHtml(data, scannedAt);
+}
+
 // ─── fmtTokens ────────────────────────────────────────────────────────
 
 export function testFmtTokensZero(): void {
@@ -160,6 +176,32 @@ export function testCacheMetaCalculatesOldest(): void {
   console.log("  ✓ cacheMeta → oldest scanned_at + total sessions");
 }
 
+export function testCacheMetaProjectDimension(): void {
+  // Per-worktree rows are subsets of the global aggregate — totals must come
+  // from the global rows, or the header double-counts (100 → 200).
+  const global = mkEntry("opencode", 100, "2026-09-12T10:00:00Z");
+  const a = {
+    ...mkEntry("opencode", 60, "2026-09-12T10:00:00Z"),
+    worktree: "/proj/a",
+  };
+  const b = {
+    ...mkEntry("opencode", 40, "2026-09-12T10:00:00Z"),
+    worktree: "/proj/b",
+  };
+  const meta = cacheMeta([global, a, b]);
+  assert.ok(meta);
+  assert.equal(meta.total_sessions, 100);
+  // Pre-dimension caches carry no worktree field — every entry counts.
+  const legacy = cacheMeta([
+    mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
+    mkEntry("zcode", 5, "2026-09-10T10:00:00Z"),
+  ]);
+  assert.equal(legacy?.total_sessions, 15);
+  console.log(
+    "  ✓ cacheMeta → totals from global rows, legacy caches unaffected",
+  );
+}
+
 export function testWriteCacheCreatesStateDir(): void {
   const prev = process.env.FAPONY_STATE_DIR;
   const dir = join(tmpdir(), `fapony-scan-test-${Date.now()}`);
@@ -215,33 +257,31 @@ const sampleData: PassiveUsageResult = {
   ],
 };
 
-const NOW = new Date().toISOString();
-
 export function testRenderHtmlStructure(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(html.includes("<!DOCTYPE html>"), "has doctype");
   assert.ok(html.includes("OpenCode"), "has OpenCode title");
   assert.ok(html.includes("ZCode"), "has ZCode title");
   assert.ok(html.includes("Claude Code"), "has Claude Code title");
   assert.ok(html.includes("Codex"), "has Codex title");
-  assert.ok(html.includes('id="t-opencode"'), "has opencode table id");
-  assert.ok(html.includes('id="t-zcode"'), "has zcode table id");
-  assert.ok(html.includes('id="t-claude"'), "has claude table id");
-  assert.ok(html.includes('id="t-codex"'), "has codex table id");
+  assert.ok(html.includes('id="t-oc-'), "has opencode table id");
+  assert.ok(html.includes('id="t-zc-'), "has zcode table id");
+  assert.ok(html.includes('id="t-cc-'), "has claude table id");
+  assert.ok(html.includes('id="t-cx-'), "has codex table id");
   assert.ok(!html.includes("setInterval"), "no setInterval (no polling)");
   assert.ok(!html.includes("fetch("), "no fetch() calls (no polling)");
   console.log("  ✓ renderUsageHtml → correct HTML structure (no polling)");
 }
 
 export function testRenderHtmlModelNames(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(html.includes("mimo-v2.5"), "renders model name");
   assert.ok(html.includes("deepseek-v4-flash"), "renders model name");
   console.log("  ✓ renderUsageHtml → model names present");
 }
 
 export function testRenderHtmlTokenValues(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(html.includes("1K"), "renders input tokens (1000)");
   assert.ok(
     html.includes("200") || html.includes("200"),
@@ -252,14 +292,13 @@ export function testRenderHtmlTokenValues(): void {
 }
 
 export function testRenderHtmlNoData(): void {
-  const html = renderUsageHtml(EMPTY_RESULT, null, null, null, NOW);
+  const html = renderGlobal(EMPTY_RESULT);
   assert.ok(html.includes("no sessions"), "shows no sessions for empty data");
   console.log("  ✓ renderUsageHtml → handles empty data");
 }
 
 export function testRenderHtmlSummaryCards(): void {
-  const html = renderUsageHtml(sampleData, sampleData, null, null, NOW);
-  assert.ok(html.includes("summary-cards"), "has summary cards container");
+  const html = renderGlobal(sampleData, sampleData);
   assert.ok(html.includes("Cache Hit"), "has cache hit metric");
   assert.ok(html.includes("Reasoning"), "has reasoning metric");
   assert.ok(html.includes("Output"), "has output metric");
@@ -270,14 +309,14 @@ export function testRenderHtmlSummaryCards(): void {
 }
 
 export function testRenderHtmlCostWide(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(html.includes("card-metric wide"), "cost metric has wide class");
   assert.ok(html.includes("card-metric.wide"), "wide CSS rule defined");
   console.log("  ✓ renderUsageHtml → Cost metric spans 2 columns");
 }
 
 export function testRenderHtmlFreshnessBar(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(html.includes("data as of"), "freshness bar shows data timestamp");
   assert.ok(html.includes("usage-scan"), "freshness bar mentions usage-scan");
   assert.ok(html.includes("status fresh"), "freshness bar has status dot");
@@ -285,8 +324,16 @@ export function testRenderHtmlFreshnessBar(): void {
 }
 
 export function testRenderHtmlNoPollInterval(): void {
-  const html = renderUsageHtml(sampleData, null, null, null, NOW);
+  const html = renderGlobal(sampleData);
   assert.ok(!html.includes("pollInterval"), "no pollInterval in HTML");
   assert.ok(!html.includes("polling"), "no 'polling' text in HTML");
   console.log("  ✓ renderUsageHtml → no poll interval references");
+}
+
+export function testRenderHtmlShareSection(): void {
+  const html = renderGlobal(sampleData);
+  assert.ok(html.includes("context share (tokens)"), "share title present");
+  assert.ok(html.includes("share-bar"), "share bar present");
+  assert.ok(html.includes("share-legend"), "share legend present");
+  console.log("  ✓ renderUsageHtml → context share section present");
 }

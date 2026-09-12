@@ -21,7 +21,8 @@ function withOpenCodeFixture(fn: (dbPath: string) => void): void {
       `CREATE TABLE session (
         id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT,
         time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0,
-        tokens_output INTEGER DEFAULT 0, cost REAL DEFAULT 0
+        tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0,
+        tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0
       )`,
     );
     db.run(
@@ -172,6 +173,9 @@ export function testFindSessionModelZcodeRawProviderPassthrough(): void {
       `CREATE TABLE model_usage (
         id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
         provider_id TEXT, agent TEXT,
+        input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0,
+        cache_creation_input_tokens INTEGER DEFAULT 0,
         computed_total_tokens INTEGER NOT NULL DEFAULT 0
       )`,
     );
@@ -210,7 +214,7 @@ export function testFindSessionModelOpenCodePlainTextProviderUnknown(): void {
   const db = new Database(dbPath);
   try {
     db.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0)`,
     );
     db.prepare(
       `INSERT INTO session (id, project_id, model) VALUES (?, ?, ?)`,
@@ -243,6 +247,9 @@ export function testFindSessionModelZcodeMultiModel(): void {
       `CREATE TABLE model_usage (
         id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
         provider_id TEXT, agent TEXT,
+        input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0,
+        cache_creation_input_tokens INTEGER DEFAULT 0,
         computed_total_tokens INTEGER NOT NULL DEFAULT 0
       )`,
     );
@@ -284,6 +291,9 @@ export function testFindSessionModelZcodeSummedTokensWin(): void {
       `CREATE TABLE model_usage (
         id TEXT PRIMARY KEY, session_id TEXT NOT NULL, model_id TEXT NOT NULL,
         provider_id TEXT, agent TEXT,
+        input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        cache_read_input_tokens INTEGER DEFAULT 0,
+        cache_creation_input_tokens INTEGER DEFAULT 0,
         computed_total_tokens INTEGER NOT NULL DEFAULT 0
       )`,
     );

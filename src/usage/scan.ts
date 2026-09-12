@@ -2,9 +2,10 @@
 //
 // Scans session logs for all four clients, writes usage-cache.jsonl.
 // Windowed replace (30d default, all-time with --full) — never incremental.
+// Per-worktree + global aggregate — the cache now carries a worktree dimension.
 // Progress bar on TTY, plain lines on pipe/CI.
 
-import { loadConfig } from "../db/index.js";
+import { loadConfig, openDb } from "../db/index.js";
 import {
   readClaudeCodeUsage,
   readCodexUsage,
@@ -22,15 +23,14 @@ import {
 
 const DEFAULT_JSONL_LOOKBACK_DAYS = 30;
 
-interface ScanTarget {
-  key: string;
-  label: string;
-  scan: () => PassiveUsageResult;
-}
-
-function toCacheEntry(client: string, result: PassiveUsageResult): CacheEntry {
+function toCacheEntry(
+  client: string,
+  result: PassiveUsageResult,
+  worktree?: string,
+): CacheEntry {
   return {
     client,
+    worktree: worktree ?? null,
     scanned_at: new Date().toISOString(),
     session_count: result.session_count,
     total_tokens_input: result.total_tokens_input,
@@ -72,80 +72,83 @@ export function cmdUsageScan(rawArgs: string[]): void {
     process.exit(1);
   }
 
-  // Windowed replace, never incremental merge.
-  //
-  // Every scan below returns a COMPLETE window (30d default, all-time with
-  // --full) and mergeEntries() replaces the whole per-client entry — which is
-  // only correct because no scan result is ever a delta. An incremental
-  // `since = last_scanned_at` was tried and reverted: the readers aggregate
-  // tokens at client/model level with no per-session token granularity, so a
-  // delta cannot be merged back — sessions spanning the boundary double-count
-  // and untouched history is lost outright (demonstrated: 1000 + 500 tokens
-  // cached as 500). Correct incremental needs per-session ids in the readers;
-  // until then, rescan the window behind the progress bar (scan waits, view
-  // stays instant — the split this plan exists for).
-  //
-  // Units note: `since` is Unix seconds. The SQLite readers compare it
-  // against millisecond time_created (helpers.ts buildWhereClause), so the
-  // filter is a no-op there and SQLite scans are always full rescans — which
-  // replace-semantics needs. Do NOT "fix" the units or re-add incremental
-  // merging without per-session token granularity in the readers.
   const existing = readCache(config);
 
   const windowSince = full
     ? undefined
     : Date.now() / 1000 - DEFAULT_JSONL_LOOKBACK_DAYS * 86400;
 
-  const targets: ScanTarget[] = [
-    {
-      key: "opencode",
-      label: "opencode",
-      scan: () =>
-        readPassiveUsage(undefined, windowSince, undefined, {
-          detail: false,
-          full,
-        }),
-    },
-    {
-      key: "zcode",
-      label: "zcode",
-      scan: () =>
-        readZcodeUsage(undefined, windowSince, undefined, false, full),
-    },
-    {
-      key: "claude_code",
-      label: "claude-code",
-      scan: () => readClaudeCodeUsage(undefined, windowSince),
-    },
-    {
-      key: "codex",
-      label: "codex",
-      scan: () => readCodexUsage(undefined, windowSince),
-    },
+  // Collect distinct worktrees from runs table (the source of truth for projects).
+  const db = openDb();
+  let worktrees: string[];
+  try {
+    worktrees = (
+      db
+        .prepare("SELECT DISTINCT worktree FROM runs WHERE worktree != ''")
+        .all() as { worktree: string }[]
+    )
+      .map((r) => r.worktree)
+      .sort();
+  } finally {
+    db.close();
+  }
+
+  // Scan targets: per worktree + global (null = aggregate).
+  const scanTargets: Array<{ label: string; worktree?: string }> = [
+    ...worktrees.map((wt) => ({ label: wt, worktree: wt })),
+    { label: "all projects" },
   ];
+
+  const totalSteps = scanTargets.length * 4; // 4 clients per target
+  let step = 0;
 
   const entries: CacheEntry[] = [];
 
-  for (let i = 0; i < targets.length; i++) {
-    const t = targets[i];
-    const pct = Math.round(((i + 1) / targets.length) * 100);
-    const bar = `[${"█".repeat(Math.round(pct / 5))}${"░".repeat(20 - Math.round(pct / 5))}]`;
-    progress(
-      `${t.label}  ${bar}  ${i + 1}/${targets.length}  (${pct}%)`,
-      isTTY,
-    );
+  for (const target of scanTargets) {
+    const wt = target.worktree;
 
-    try {
-      const result = t.scan();
-      if (result.session_count > 0) {
-        entries.push(toCacheEntry(t.key, result));
-      }
-    } catch (err) {
-      // Skip failed readers — don't crash the whole scan.
-      if (isTTY) {
-        process.stderr.write(`\n  ⚠ ${t.label}: ${err}\n`);
-      } else {
-        process.stderr.write(`  warn: ${t.label}: ${err}\n`);
+    for (const [clientKey, label, scanFn] of [
+      [
+        "opencode",
+        "opencode",
+        () =>
+          readPassiveUsage(wt, windowSince, undefined, {
+            detail: false,
+            full,
+          }),
+      ],
+      [
+        "zcode",
+        "zcode",
+        () => readZcodeUsage(wt, windowSince, undefined, false, full),
+      ],
+      [
+        "claude_code",
+        "claude-code",
+        () => readClaudeCodeUsage(wt, windowSince),
+      ],
+      ["codex", "codex", () => readCodexUsage(wt, windowSince)],
+    ] as const) {
+      step++;
+      const pct = Math.round((step / totalSteps) * 100);
+      const bar = `[${"█".repeat(Math.round(pct / 5))}${"░".repeat(20 - Math.round(pct / 5))}]`;
+      const scopeLabel = wt ? `${target.label}/${label}` : label;
+      progress(
+        `${scopeLabel}  ${bar}  ${step}/${totalSteps}  (${pct}%)`,
+        isTTY,
+      );
+
+      try {
+        const result = scanFn();
+        if (result.session_count > 0) {
+          entries.push(toCacheEntry(clientKey, result, wt));
+        }
+      } catch (err) {
+        if (isTTY) {
+          process.stderr.write(`\n  ⚠ ${scopeLabel}: ${err}\n`);
+        } else {
+          process.stderr.write(`  warn: ${scopeLabel}: ${err}\n`);
+        }
       }
     }
   }
@@ -157,11 +160,11 @@ export function cmdUsageScan(rawArgs: string[]): void {
   const finalMeta = cacheMeta(merged);
   if (isTTY) {
     process.stderr.write(
-      `\r\x1B[Kscan done — ${finalMeta?.total_sessions ?? 0} sessions cached (${entries.length} clients updated)\n`,
+      `\r\x1B[Kscan done — ${finalMeta?.total_sessions ?? 0} sessions cached (${entries.length} entries written, ${worktrees.length} projects)\n`,
     );
   } else {
     process.stderr.write(
-      `scan done — ${finalMeta?.total_sessions ?? 0} sessions cached (${entries.length} clients updated)\n`,
+      `scan done — ${finalMeta?.total_sessions ?? 0} sessions cached (${entries.length} entries written, ${worktrees.length} projects)\n`,
     );
   }
 

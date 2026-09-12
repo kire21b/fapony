@@ -11,7 +11,11 @@ import { formatStatsText, getStatsData } from "../../stats.js";
 import { errorResult, jsonResult, type ToolResult } from "../types.js";
 
 export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
-  const data = getStatsData();
+  const worktree =
+    typeof args.worktree === "string" && args.worktree
+      ? args.worktree
+      : undefined;
+  const data = getStatsData(worktree);
 
   // group_by: top-N slice from real events (PLAN-project-health-context §2).
   // Worktree-scoped when `worktree` is given, global otherwise.
@@ -19,10 +23,6 @@ export function toolFaponyStats(args: Record<string, unknown>): ToolResult {
   if (groupBy === "reason_code" || groupBy === "plan" || groupBy === "file") {
     const top =
       typeof args.top === "number" && args.top > 0 ? Math.floor(args.top) : 10;
-    const worktree =
-      typeof args.worktree === "string" && args.worktree
-        ? args.worktree
-        : undefined;
     if (groupBy === "file") {
       const rows = (
         worktree

@@ -27,8 +27,16 @@ export function cmdReport(args: string[]): void {
 }
 
 export function cmdReportWeb(args: string[]): void {
-  const outFile = args[0];
   const config = loadConfig();
+  // Accept optional --worktree <path> to scope the report to one project.
+  const wtIdx = args.indexOf("--worktree");
+  const worktree =
+    wtIdx !== -1 && args[wtIdx + 1] ? args[wtIdx + 1] : undefined;
+  // First positional arg is still the output file (legacy).
+  const outFile =
+    wtIdx !== -1
+      ? args.filter((_a, i) => i !== wtIdx && i !== wtIdx + 1)[0]
+      : args[0];
 
   if (outFile) {
     // Rule #5: fapony never writes into a target worktree — refuse output
@@ -47,7 +55,7 @@ export function cmdReportWeb(args: string[]): void {
   const uw = config.usageWeb ?? {};
 
   const ownerName = uw.ownerName?.trim() ? uw.ownerName.trim() : undefined;
-  const stats = getStatsData();
+  const stats = getStatsData(worktree);
   const html = renderReportHtml(stats, new Date().toISOString(), ownerName);
 
   if (outFile) {

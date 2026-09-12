@@ -24,10 +24,11 @@ export {
   toolVerificationReport,
 } from "./tools/index.js";
 export { cmdMcp, dispatch } from "./transport.js";
-export type { ReasonCode, ToolResult } from "./types.js";
+export type { ReasonCode, RegimeCode, ToolResult } from "./types.js";
 export {
   errorResult,
   jsonResult,
   parseToolResult,
   REASON_CODES,
+  REGIME_CODES,
 } from "./types.js";

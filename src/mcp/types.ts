@@ -7,10 +7,27 @@ export const REASON_CODES = [
   "scope_mismatch",
   "unsafe_command",
   "spec_gap",
+  "timeout",
+  "blocked",
+  "incomplete",
+  "none",
   "other",
 ] as const;
 
 export type ReasonCode = (typeof REASON_CODES)[number];
+
+// --- RegimeCode enum (task-shape axis for model × project × regime × quality) ---
+
+export const REGIME_CODES = [
+  "code",
+  "fix",
+  "review",
+  "plan",
+  "inquiry",
+  "test",
+] as const;
+
+export type RegimeCode = (typeof REGIME_CODES)[number];
 
 // --- Tool result types ---
 

@@ -22,7 +22,7 @@ function withFixtureDb(fn: (dbPath: string) => void): void {
       `CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT NOT NULL)`,
     );
     db.run(
-      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_reasoning INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
+      `CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, directory TEXT NOT NULL DEFAULT '', model TEXT, time_created INTEGER NOT NULL, tokens_input INTEGER DEFAULT 0, tokens_output INTEGER DEFAULT 0, tokens_reasoning INTEGER DEFAULT 0, tokens_cache_read INTEGER DEFAULT 0, tokens_cache_write INTEGER DEFAULT 0, cost REAL DEFAULT 0)`,
     );
     db.run(
       `CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL)`,
@@ -34,10 +34,12 @@ function withFixtureDb(fn: (dbPath: string) => void): void {
       "/tmp/wt1",
     );
     const sess = db.prepare(
-      `INSERT INTO session (id, project_id, model, time_created, tokens_input, tokens_output, cost) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO session (id, project_id, directory, model, time_created, tokens_input, tokens_output, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    sess.run("s1", "p1", "m1", 1000, 100, 50, 0.01);
-    sess.run("s2", "p1", "m1", 2000, 200, 60, 0.02);
+    // s1 ran in a git worktree UNDER the project root — OpenCode records the
+    // root on `project`, the real cwd on `session.directory`.
+    sess.run("s1", "p1", "/tmp/wt1/wt-sub", "m1", 1000, 100, 50, 0.01);
+    sess.run("s2", "p1", "/tmp/wt1", "m1", 2000, 200, 60, 0.02);
 
     const part = db.prepare(
       `INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, 1, 1, ?)`,
@@ -122,6 +124,25 @@ export function testSessionDefaultHasNoDetail(): void {
     }),
   );
   console.log("  ✓ readPassiveUsage default has no detail (additive)");
+}
+
+export function testSessionWorktreeScopeUsesSessionDirectory(): void {
+  withFixtureDb((dbPath) =>
+    withEnvDb(dbPath, () => {
+      // project.worktree is the repo root; the run happened in a worktree under
+      // it. Filtering on the project row found nothing and every per-project
+      // usage row came back empty.
+      const sub = readPassiveUsage("/tmp/wt1/wt-sub");
+      assert.equal(sub.session_count, 1);
+      assert.equal(sub.total_tokens_input, 100);
+      const root = readPassiveUsage("/tmp/wt1");
+      assert.equal(root.session_count, 1);
+      assert.equal(root.total_tokens_input, 200);
+    }),
+  );
+  console.log(
+    "  \u2713 readPassiveUsage scopes by session.directory, not project root",
+  );
 }
 
 export function testSessionDetailBreakdown(): void {

@@ -66,26 +66,57 @@ export function cmdUsageWeb(rawArgs: string[]): void {
     process.exit(1);
   }
 
-  const byClient = new Map(entries.map((e) => [e.client, e]));
-  const data = {
-    opencode: cacheToResult(byClient.get("opencode")),
-    zcode: cacheToResult(byClient.get("zcode")),
-    claude_code: cacheToResult(byClient.get("claude_code")),
-    codex: cacheToResult(byClient.get("codex")),
-  };
+  // Group entries by worktree. Entries with worktree=null/undefined are the
+  // global aggregate (backwards-compatible with pre-project-dimension caches).
+  const byWorktree = new Map<string, CacheEntry[]>();
+  for (const e of entries) {
+    const wt = e.worktree ?? null;
+    const key = wt ?? "__global__";
+    let arr = byWorktree.get(key);
+    if (!arr) {
+      arr = [];
+      byWorktree.set(key, arr);
+    }
+    arr.push(e);
+  }
+
+  // Build per-worktree data objects + a global summary.
+  const projectData = new Map<
+    string,
+    {
+      opencode: PassiveUsageResult;
+      zcode: PassiveUsageResult | null;
+      claude_code: PassiveUsageResult | null;
+      codex: PassiveUsageResult | null;
+    }
+  >();
+
+  for (const [key, clientEntries] of byWorktree) {
+    const byClient = new Map(clientEntries.map((e) => [e.client, e]));
+    const data = {
+      opencode: cacheToResult(byClient.get("opencode")),
+      zcode:
+        byClient.get("zcode") && (byClient.get("zcode")?.session_count ?? 0) > 0
+          ? cacheToResult(byClient.get("zcode"))
+          : null,
+      claude_code:
+        byClient.get("claude_code") &&
+        (byClient.get("claude_code")?.session_count ?? 0) > 0
+          ? cacheToResult(byClient.get("claude_code"))
+          : null,
+      codex:
+        byClient.get("codex") && (byClient.get("codex")?.session_count ?? 0) > 0
+          ? cacheToResult(byClient.get("codex"))
+          : null,
+    };
+    projectData.set(key, data);
+  }
 
   const server = Bun.serve({
     hostname,
     port,
     fetch(_req) {
-      const html = renderUsageHtml(
-        data.opencode,
-        data.zcode.session_count > 0 ? data.zcode : null,
-        data.claude_code.session_count > 0 ? data.claude_code : null,
-        data.codex.session_count > 0 ? data.codex : null,
-        meta.scanned_at,
-        ownerName,
-      );
+      const html = renderUsageHtml(projectData, meta.scanned_at, ownerName);
       return new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
@@ -93,6 +124,6 @@ export function cmdUsageWeb(rawArgs: string[]): void {
   });
 
   console.log(
-    `fapony usage-web → http://${server.hostname}:${server.port}  (cache: ${meta.scanned_at}, ${meta.total_sessions} sessions)`,
+    `fapony usage-web → http://${server.hostname}:${server.port}  (cache: ${meta.scanned_at}, ${meta.total_sessions} sessions, ${byWorktree.size - (byWorktree.has("__global__") ? 1 : 0)} projects)`,
   );
 }

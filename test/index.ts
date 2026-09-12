@@ -130,6 +130,7 @@ import {
   testHandoffCheckWithoutFacts,
 } from "./mcp/check.test.js";
 import {
+  testHandoffCollectAheadBehind,
   testHandoffCollectAutoDetectRange,
   testHandoffCollectExplicitRange,
   testHandoffCollectGitError,
@@ -157,6 +158,7 @@ import {
   testJsonResult,
   testParseToolResult,
   testReasonCodesAreLocked,
+  testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
   testPlanListJoinsRunHistory,
@@ -213,10 +215,13 @@ import {
   testVerdictSubmitAllGrades,
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
+  testVerdictSubmitInvalidRegimeRejects,
   testVerdictSubmitInvalidVerdict,
+  testVerdictSubmitMissingRegimeRejects,
   testVerdictSubmitNullPlanAlwaysCreatesNew,
   testVerdictSubmitOtherRequiresNote,
   testVerdictSubmitPassedRunNotReused,
+  testVerdictSubmitRegimeStoredInGateEvent,
   testVerdictSubmitReusesOpenRunAcrossRounds,
   testVerdictSubmitRunNotFound,
   testVerdictSubmitStoresMcpSource,
@@ -242,6 +247,7 @@ import {
 } from "./parse.test.js";
 import {
   testReportHtmlByModelHasAttributionColumns,
+  testReportHtmlByModelProjectColumn,
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
@@ -268,6 +274,7 @@ import {
   testSessionDetailMatchesRawSql,
   testSessionDetailSkipsUnknownType,
   testSessionDetailStepTokensNotSummed,
+  testSessionWorktreeScopeUsesSessionDirectory,
 } from "./session.test.js";
 import {
   testBuildSetupConfigNoMemory,
@@ -288,6 +295,8 @@ import {
   testStatsBestPassing,
   testStatsByFileRisk,
   testStatsByModelGroupsByClientProviderAgent,
+  testStatsByPlanModeSplit,
+  testStatsByRegimeSplit,
   testStatsByWorktree,
   testStatsEmptyDb,
   testStatsEscalatedRuns,
@@ -299,6 +308,8 @@ import {
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsTokensCountSessionOnce,
+  testStatsTokensInByModel,
   testStatsUsageByModelIdentity,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
 } from "./stats.test.js";
@@ -356,6 +367,7 @@ import {
 import {
   testCacheMetaCalculatesOldest,
   testCacheMetaEmpty,
+  testCacheMetaProjectDimension,
   testFmtCostNull,
   testFmtCostPositive,
   testFmtCostZero,
@@ -371,6 +383,7 @@ import {
   testRenderHtmlModelNames,
   testRenderHtmlNoData,
   testRenderHtmlNoPollInterval,
+  testRenderHtmlShareSection,
   testRenderHtmlStructure,
   testRenderHtmlSummaryCards,
   testRenderHtmlTokenValues,
@@ -546,6 +559,7 @@ export async function cmdTest(): Promise<void> {
   testHandoffCollectAutoDetectRange();
   testHandoffCollectExplicitRange();
   testHandoffCollectReturnsFiles();
+  testHandoffCollectAheadBehind();
   testHandoffCollectValidRepo();
   testHandoffCollectGitError();
   testHandoffCheckMissingBlock();
@@ -571,6 +585,9 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitReusesOpenRunAcrossRounds();
   testVerdictSubmitNullPlanAlwaysCreatesNew();
   testVerdictSubmitPassedRunNotReused();
+  testVerdictSubmitMissingRegimeRejects();
+  testVerdictSubmitInvalidRegimeRejects();
+  testVerdictSubmitRegimeStoredInGateEvent();
   testPlanListRequiresWorktree();
   testPlanListMissingDir();
   testPlanListNeverAttempted();
@@ -586,6 +603,7 @@ export async function cmdTest(): Promise<void> {
   testErrorResult();
   testParseToolResult();
   testReasonCodesAreLocked();
+  testRegimeCodesAreLocked();
   // Verification primitives tests
   testEvidenceStatusesAreLocked();
   testComputeEvidenceSummaryEmpty();
@@ -638,8 +656,13 @@ export async function cmdTest(): Promise<void> {
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();
   testStatsSpawnModelWinsOverSessionId();
+  testStatsByPlanModeSplit();
+  testStatsByRegimeSplit();
+  testStatsTokensInByModel();
+  testStatsTokensCountSessionOnce();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
+  testSessionWorktreeScopeUsesSessionDirectory();
   testSessionDetailSkipsUnknownType();
   testSessionDetailStepTokensNotSummed();
   testSessionDetailMatchesRawSql();
@@ -674,6 +697,7 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
   testReportHtmlByModelHasAttributionColumns();
+  testReportHtmlByModelProjectColumn();
   testReportHtmlEscapesContent();
   // Usage-web tests
   testFmtTokensZero();
@@ -697,6 +721,7 @@ export async function cmdTest(): Promise<void> {
   testMergeEntriesDedup();
   testCacheMetaEmpty();
   testCacheMetaCalculatesOldest();
+  testCacheMetaProjectDimension();
   testWriteCacheCreatesStateDir();
   // Render tests
   testRenderHtmlStructure();
@@ -707,5 +732,6 @@ export async function cmdTest(): Promise<void> {
   testRenderHtmlCostWide();
   testRenderHtmlFreshnessBar();
   testRenderHtmlNoPollInterval();
+  testRenderHtmlShareSection();
   console.log("\nall tests passed ✓");
 }

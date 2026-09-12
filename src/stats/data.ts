@@ -7,7 +7,7 @@ import { type Event, openDb, type Run } from "../db/index.js";
 import { loadConfig } from "../db/load.js";
 import { enrichGateWindows } from "../gates.js";
 import { avg, minutesBetween } from "../math.js";
-import { REASON_CODES } from "../mcp/types.js";
+import { REASON_CODES, REGIME_CODES } from "../mcp/types.js";
 import {
   isPassFamily,
   qualityScore,
@@ -55,6 +55,12 @@ interface EnrichedGate {
   agent: string | null;
   /** How `model` was resolved — "inferred" is a guess, not a declaration. */
   modelSource: "spawn" | "session_id" | "inferred" | null;
+  /** Session the token totals belong to — dedupe key, never summed per gate. */
+  sessionId: string | null;
+  /** Total input tokens for the session (null when unknown or spawn-based). */
+  tokensInput: number | null;
+  /** Total output tokens for the session (null when unknown or spawn-based). */
+  tokensOutput: number | null;
 }
 
 /**
@@ -74,6 +80,9 @@ function enrichGates(
     client: w.client,
     agent: w.agent,
     modelSource: w.modelSource,
+    sessionId: w.sessionId,
+    tokensInput: w.tokensInput,
+    tokensOutput: w.tokensOutput,
   }));
 }
 
@@ -493,6 +502,8 @@ export function getBestPassing(runs: Run[], events: Event[]): BestPassing[] {
 }
 
 export interface StatsData {
+  /** Worktree these numbers describe; null = every project in the db. */
+  scope: string | null;
   runs: {
     total: number;
     byStatus: Record<string, number>;
@@ -506,6 +517,7 @@ export interface StatsData {
     review: { avg: number; count: number };
   };
   byModel: Array<{
+    worktree: string;
     client: string;
     provider: string;
     model: string;
@@ -516,6 +528,10 @@ export interface StatsData {
     /** fails / gateCount — the per-model question nothing else can answer. */
     failRate: number;
     avgQuality: number;
+    /** Total input tokens across sessions attributed to this model (null when none recorded). */
+    tokensInput: number | null;
+    /** Total output tokens across sessions attributed to this model (null when none recorded). */
+    tokensOutput: number | null;
   }>;
   /** How many gates got their model by inference vs. a declared session_id. */
   modelAttribution: { inferred: number; declared: number; none: number };
@@ -539,6 +555,30 @@ export interface StatsData {
   recentVerdictNotes: RecentVerdictNote[];
   /** Per-file gate/fail counts (risk heatmap), worst first. */
   byFile: FileRisk[];
+  /** planned vs dove-in split: plan != null → planned, plan == null → no-plan. */
+  byPlanMode: Array<{
+    worktree: string;
+    hasPlan: boolean;
+    model: string;
+    gates: number;
+    fails: number;
+    failRate: number;
+    avgQuality: number;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  }>;
+  /** regime × model split (old gates with no regime sit in the "—" row). */
+  byRegime: Array<{
+    worktree: string;
+    regime: string;
+    model: string;
+    gates: number;
+    fails: number;
+    failRate: number;
+    avgQuality: number;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  }>;
   usage: PassiveUsageResult;
   /** ZCode passive usage (when ~/.zcode/cli/db/db.sqlite exists). */
   zcodeUsage?: PassiveUsageResult | null;
@@ -550,13 +590,53 @@ export interface StatsData {
   latestRunAt: string;
 }
 
-export function getStatsData(): StatsData {
+/**
+ * Charge a session's token totals to a bucket exactly once.
+ *
+ * Tokens are a per-session total, and one session routinely produces several
+ * gates (measured here: 35 sessions behind 58 gates, up to 5 gates in one).
+ * Summing per gate would multiply that session's tokens by its gate count —
+ * unevenly across models, so the ranking itself would be wrong.
+ */
+function addSessionTokens(
+  bucket: { seen: Set<string>; tokensInput: number; tokensOutput: number },
+  g: {
+    sessionId: string | null;
+    tokensInput: number | null;
+    tokensOutput: number | null;
+  },
+): void {
+  if (!g.sessionId || bucket.seen.has(g.sessionId)) return;
+  bucket.seen.add(g.sessionId);
+  if (g.tokensInput !== null) bucket.tokensInput += g.tokensInput;
+  if (g.tokensOutput !== null) bucket.tokensOutput += g.tokensOutput;
+}
+
+/**
+ * KPIs across runs, scoped to one worktree unless `worktree` is omitted.
+ *
+ * Scoping happens here, at the source, rather than per table: every downstream
+ * number (pass rate, by-model, regime, plan mode) then agrees on which runs it
+ * is describing. Mixing projects silently is the failure mode worth designing
+ * against — a TS/React app and a Bun CLI are different work, and an average
+ * over both answers a question nobody asked while looking like it answered
+ * "in this project". Callers pass the scope; `null` worktree means all of them
+ * and is reported as such (see `scope` on the returned object).
+ */
+export function getStatsData(worktree?: string): StatsData {
   const db = openDb();
   try {
-    const runs = db.prepare("SELECT * FROM runs ORDER BY id").all() as Run[];
-    const events = db
-      .prepare("SELECT * FROM events ORDER BY run_id, id")
-      .all() as Event[];
+    const runs = (
+      worktree
+        ? db
+            .prepare("SELECT * FROM runs WHERE worktree = ? ORDER BY id")
+            .all(worktree)
+        : db.prepare("SELECT * FROM runs ORDER BY id").all()
+    ) as Run[];
+    const runIds = new Set(runs.map((r) => r.id));
+    const events = (
+      db.prepare("SELECT * FROM events ORDER BY run_id, id").all() as Event[]
+    ).filter((e) => !worktree || runIds.has(e.run_id));
 
     // --- Runs summary ---
     const byStatus: Record<string, number> = {};
@@ -620,17 +700,16 @@ export function getStatsData(): StatsData {
     }
 
     // --- Gate enrichment ---
-    const enriched = enrichGates(
-      events,
-      new Map(runs.map((r) => [r.id, r.worktree])),
-    );
+    const wtByRun = new Map(runs.map((r) => [r.id, r.worktree]));
+    const enriched = enrichGates(events, wtByRun);
 
-    // Group by client+provider+model+agent — the same model name on two
+    // Group by worktree+client+provider+model+agent — the same model name on two
     // providers is two different things. Unknown dimension → "—" (never ""
     // or "(unknown)").
     const modelMap: Record<
       string,
       {
+        worktree: string;
         client: string;
         provider: string;
         model: string;
@@ -638,15 +717,20 @@ export function getStatsData(): StatsData {
         gateCount: number;
         fails: number;
         qualities: number[];
+        seen: Set<string>;
+        tokensInput: number;
+        tokensOutput: number;
       }
     > = {};
     for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
       const client = g.client ?? "—";
       const provider = g.provider ?? "—";
       const model = g.model ?? "—";
       const agent = g.agent ?? "—";
-      const key = [client, provider, model, agent].join("\0");
+      const key = [wt, client, provider, model, agent].join("\0");
       const bucket = (modelMap[key] ??= {
+        worktree: wt,
         client,
         provider,
         model,
@@ -654,14 +738,19 @@ export function getStatsData(): StatsData {
         gateCount: 0,
         fails: 0,
         qualities: [],
+        seen: new Set(),
+        tokensInput: 0,
+        tokensOutput: 0,
       });
       bucket.gateCount++;
       if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
       const grade = g.verdict as VerdictGrade;
       if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      addSessionTokens(bucket, g);
     }
     const byModel = Object.values(modelMap)
       .map((b) => ({
+        worktree: b.worktree,
         client: b.client,
         provider: b.provider,
         model: b.model,
@@ -670,6 +759,8 @@ export function getStatsData(): StatsData {
         fails: b.fails,
         failRate: b.gateCount ? b.fails / b.gateCount : 0,
         avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
       }))
       .sort((a, b) => b.gateCount - a.gateCount);
 
@@ -707,6 +798,126 @@ export function getStatsData(): StatsData {
       }))
       .sort((a, b) => b.runs - a.runs);
 
+    // --- byPlanMode: planned (has plan) vs dove-in (no plan) × model ---
+    const runPlanMap = new Map(runs.map((r) => [r.id, r.plan]));
+    const planModeMap: Record<
+      string,
+      {
+        worktree: string;
+        hasPlan: boolean;
+        model: string;
+        gates: number;
+        fails: number;
+        qualities: number[];
+        seen: Set<string>;
+        tokensInput: number;
+        tokensOutput: number;
+      }
+    > = {};
+    for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
+      const hasPlan = (runPlanMap.get(g.runId) ?? null) !== null;
+      const model = g.model ?? "—";
+      const key = `${wt}\0${hasPlan}\0${model}`;
+      const bucket = (planModeMap[key] ??= {
+        worktree: wt,
+        hasPlan,
+        model,
+        gates: 0,
+        fails: 0,
+        qualities: [],
+        seen: new Set<string>(),
+        tokensInput: 0,
+        tokensOutput: 0,
+      });
+      bucket.gates++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      const grade = g.verdict as VerdictGrade;
+      if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      addSessionTokens(bucket, g);
+    }
+    const byPlanMode = Object.values(planModeMap)
+      .map((b) => ({
+        worktree: b.worktree,
+        hasPlan: b.hasPlan,
+        model: b.model,
+        gates: b.gates,
+        fails: b.fails,
+        failRate: b.gates ? b.fails / b.gates : 0,
+        avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
+      }))
+      .sort((a, b) => b.gates - a.gates);
+
+    // --- byRegime: regime × model (old gates with no regime → "—" row) ---
+    // Pre-compute regime per run from gate events (first valid regime wins).
+    const regimeByRun = new Map<number, string>();
+    for (const e of events) {
+      if (e.kind !== "gate" || !e.data) continue;
+      if (regimeByRun.has(e.run_id)) continue;
+      try {
+        const d = JSON.parse(e.data) as { regime?: unknown };
+        if (
+          typeof d.regime === "string" &&
+          (REGIME_CODES as readonly string[]).includes(d.regime)
+        ) {
+          regimeByRun.set(e.run_id, d.regime);
+        }
+      } catch {
+        // unparseable — skip
+      }
+    }
+    const regimeMap: Record<
+      string,
+      {
+        worktree: string;
+        regime: string;
+        model: string;
+        gates: number;
+        fails: number;
+        qualities: number[];
+        seen: Set<string>;
+        tokensInput: number;
+        tokensOutput: number;
+      }
+    > = {};
+    for (const g of enriched) {
+      const wt = wtByRun.get(g.runId) ?? "(unknown)";
+      const regime = regimeByRun.get(g.runId) ?? "—";
+      const model = g.model ?? "—";
+      const key = `${wt}\0${regime}\0${model}`;
+      const bucket = (regimeMap[key] ??= {
+        worktree: wt,
+        regime,
+        model,
+        gates: 0,
+        fails: 0,
+        qualities: [],
+        seen: new Set<string>(),
+        tokensInput: 0,
+        tokensOutput: 0,
+      });
+      bucket.gates++;
+      if (g.verdict && !isPassFamily(g.verdict)) bucket.fails++;
+      const grade = g.verdict as VerdictGrade;
+      if (VERDICT_GRADES.has(grade)) bucket.qualities.push(qualityScore(grade));
+      addSessionTokens(bucket, g);
+    }
+    const byRegime = Object.values(regimeMap)
+      .map((b) => ({
+        worktree: b.worktree,
+        regime: b.regime,
+        model: b.model,
+        gates: b.gates,
+        fails: b.fails,
+        failRate: b.gates ? b.fails / b.gates : 0,
+        avgQuality: b.qualities.length ? avg(b.qualities) : 0,
+        tokensInput: b.tokensInput || null,
+        tokensOutput: b.tokensOutput || null,
+      }))
+      .sort((a, b) => b.gates - a.gates);
+
     const usage = readPassiveUsage();
     const zcodeUsage = readZcodeUsage();
     const claudeCodeUsage = readClaudeCodeUsage();
@@ -720,6 +931,7 @@ export function getStatsData(): StatsData {
       : "";
 
     return {
+      scope: worktree ?? null,
       runs: {
         total: runs.length,
         byStatus,
@@ -745,6 +957,8 @@ export function getStatsData(): StatsData {
       // throw away the very notes a file-scoped query is looking for.
       recentVerdictNotes: getRecentVerdictNotes(runs, events, 50),
       byFile: getFileRisk(runs, events),
+      byPlanMode,
+      byRegime,
       usage,
       zcodeUsage: zcodeUsage.session_count > 0 ? zcodeUsage : null,
       claudeCodeUsage:

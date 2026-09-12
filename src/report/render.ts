@@ -72,7 +72,7 @@ export function renderReportHtml(
   ${owner ? `<span class="owner">${owner}</span>` : ""}
 </div>
 <div class="meta">
-  Generated: ${generated_at} · Latest data: ${latestRunFreshness(stats.latestRunAt)} · Schema v2
+  Generated: ${generated_at} · Latest data: ${latestRunFreshness(stats.latestRunAt)} · Schema v2 · Scope: ${stats.scope ? esc(stats.scope) : `all projects (${stats.byWorktree.length})`}
 </div>
 
 <h2>Summary</h2>
@@ -94,11 +94,12 @@ ${insufficientData(stats.runs.total, "runs")}
 <h2>By Model <span class="sample">(n=${gates})</span></h2>
 ${insufficientData(gates, "gates")}
 <table id="t-model">
-  <thead><tr><th>Client</th><th>Provider</th><th>Model</th><th>Agent</th><th>Gates</th><th>Avg Quality</th></tr></thead>
+  <thead><tr>${stats.scope ? "" : "<th>Project</th>"}<th>Client</th><th>Provider</th><th>Model</th><th>Agent</th><th>Gates</th><th>Avg Quality</th></tr></thead>
   <tbody>
 ${stats.byModel
   .map(
     (m) => `    <tr data-model="${esc(m.model)}">
+      ${stats.scope ? "" : `<td>${esc(m.worktree)}</td>`}
       <td>${esc(m.client)}</td>
       <td>${esc(m.provider)}</td>
       <td>${esc(m.model)}</td>

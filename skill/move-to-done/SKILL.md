@@ -50,9 +50,11 @@ You are about to move a PLAN that has been shipped to the archive.
    chore(plan): archive PLAN-foo.md (shipped <hash>)
    ```
 
-7. **Record the verdict** — call the `verdict_submit` MCP tool (fapony) so this ship feeds
-   `project_health_context` for whoever touches these files next. No `run_id` needed:
+7. **Record the verdict** — call the `verdict_submit` MCP tool (fapony) so this ship counts
+   toward what this project knows about the model that did the work. No `run_id` needed:
    - `verdict`: `pass` (adjust if the ship had known rough edges — see VERDICT_GRADES)
+   - `regime`: **required** — the shape of the work that shipped: `code` for a feature or
+     refactor, `fix` for a bug fix, `plan` when what shipped was the plan or spec itself
    - `reason_code`: `missing_test` / `scope_mismatch` / `unsafe_command` / `spec_gap` / `other`
      — `other` when the ship was clean and nothing fits
    - `note`: **omit it on a clean ship.** A verdict with no note still counts toward the plan
@@ -80,14 +82,14 @@ Steps:
 2. inbound: README.md, .fapony/plan/PLAN-loop.md
 3. git mv .fapony/plan/PLAN-kickoff.md .fapony/plan/done/2026-09-05-PLAN-kickoff.md
 4. commit
-5. verdict_submit(verdict="pass", reason_code="other", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/2026-09-05-PLAN-kickoff.md", files=["src/kickoff.ts"])
+5. verdict_submit(verdict="pass", reason_code="other", regime="code", worktree="/Users/you/Project/fapony/wt-fapony", plan=".fapony/plan/done/2026-09-05-PLAN-kickoff.md", files=["src/kickoff.ts"])
    — clean ship, so no note
 ```
 
 A ship worth a note looks like this instead:
 
 ```
-5. verdict_submit(verdict="pass-adequate", reason_code="spec_gap",
+5. verdict_submit(verdict="pass-adequate", reason_code="spec_gap", regime="fix",
      note="sheet scroll reset on open, not close — the restore hook was on the wrong side; the router's own scrollRestoration resets on every navigate(). Check the router option before writing a restore hook.",
      worktree="/Users/you/Project/vela", plan=".fapony/plan/done/PLAN-quick-nav.md",
      files=["src/routes/expenses/index.tsx"])

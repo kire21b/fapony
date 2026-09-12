@@ -33,7 +33,7 @@ which kind of task" becomes a data question instead of a vibe. On top of measure
 claims against git facts: handoff conformance, allowlisted evidence, a 6-grade verdict — with
 everything the agent claimed but couldn't prove marked as such.
 
-**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients, and rounds: which failure reason keeps coming back on this project, which plans blew the round cap (a plan problem, not a code problem — see [CLAUDE.md](CLAUDE.md) Key Design Decision #2), which shapes passed clean on round one. fapony is the only thing positioned to see that, because it's the one layer every client reports into. That history feeds straight back into `plan-with-pony` as a short "known patterns" block — so a dev benefits from their own project's track record without ever opening a stats dashboard.
+**The reason to keep it running is the third layer: knowledge accumulation.** Any single client already logs its own session — timing, tokens, tool calls. What none of them see is *across* runs, clients and task shapes: which model earns its keep on which kind of work **in this project**, at what token cost, graded by whoever reviewed it. Every verdict carries a `regime` (`code` / `fix` / `review` / `plan`), and runs split by whether there was a plan at all — so "does planning beat diving in, and for which model" is a table, not an argument. Session logs have the tokens but no grades; benchmarks have grades but not your codebase. fapony is the one layer that holds both, because it's the one every client reports into.
 
 Three tiers, deliberately: **measurement ships today** and needs no per-project setup — raw facts nobody can call unfair. **Verification is the sharper edge** but stays beta until its evidence layer is hardened; fapony doesn't control your agent's flow, so it never promises "verified" as a headline. **Knowledge accumulation is the compounding one** — it's worthless on run 1 and gets more useful every run after, which is exactly why it's the layer competitors can't clone by copying a feature list.
 
@@ -53,6 +53,10 @@ Stated up front, because the gap between these two things is where most tooling 
   different guarantees and fapony only offers the first.
 - **Nothing blocks.** There is no gate, no hook, no CI failure. Forget to call it and you are back
   to exactly the workflow you had.
+- **Model attribution is inferred, not declared.** A gate is attributed to whichever client
+  session was live in that worktree at that moment. When one model writes the code and another
+  reviews and files the verdict, the grade lands on the reviewer. Reports label it `inferred`;
+  read it as such.
 - **The knowledge layer is empty on run 1.** It is worth something around run 5 and more every run
   after. That is the trade for it being the layer nobody can clone from a feature list.
 
@@ -132,13 +136,13 @@ sequenceDiagram
     F->>W: git diff/log + commands from .fapony/evidence.json
     W-->>F: facts + evidence (passed / failed / timeout / not_run)
     F-->>A: one report, stamped with server_sha
-    A->>F: verdict_submit (grade + reason_code + note)
+    A->>F: verdict_submit (grade + reason_code + regime + note)
     Note over F: stored in ~/.config/fapony/state.db
-    F-->>A: project_health_context — past notes shape the next plan
+    F-->>A: fapony_stats — model x regime x quality, for the next call
 ```
 
-`verdict_submit` is the only step that creates knowledge, and `project_health_context`
-is the only reason to keep it. Everything in between is the agent's own business.
+`verdict_submit` is the only step that creates knowledge — grade, `reason_code`, `regime`.
+Everything in between is the agent's own business.
 
 ## The 8 tools
 
@@ -146,20 +150,20 @@ is the only reason to keep it. Everything in between is the agent's own business
 discover: plan_list (pending plan files joined with their run history)
 measure:  handoff_collect ── fapony_stats ── fapony_usage
 verify:   handoff_check ── verdict_submit ── verification_report
-recall:   project_health_context (what failed in these files before — call it before editing)
-          (facts + checks + evidence + verdict + cost, in one call)
+recall:   project_health_context (what failed in these files before — optional, never required)
+          (facts + checks + evidence + verdict, in one call)
 ```
 
 | Tool | Tier | Purpose |
 |------|------|---------|
 | `plan_list` | discover | Pending `.fapony/plan/*.md` files joined with run history (title, run count, last verdict) — not a raw `ls` |
 | `handoff_collect` | measure | Machine facts from git (diff stat, commits, branch) |
-| `fapony_stats` | measure | KPIs across runs: by-model (with fail rate), by-grade, by-value, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
+| `fapony_stats` | measure | KPIs across runs: by-model (gates, fail rate, quality, tokens), by-grade, planned vs dove-in, regime x model, per-file risk; `group_by: reason_code\|plan\|file` for top-N slices |
 | `fapony_usage` | measure | Passive usage from OpenCode, ZCode, Claude Code, and Codex sessions (tokens, cost, by-model; `detail:true` adds per-step timing) |
 | `handoff_check` | verify | Check the agent's handoff claims against those facts |
-| `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) |
-| `verification_report` | verify | Full report: facts + checks + evidence + verdict + cost |
-| `project_health_context` | recall | Known-patterns block for the files you are about to touch: recurring fail reasons, escalated runs, round-1-pass shapes. Any task, no plan file required |
+| `verdict_submit` | verify | Store a 6-grade verdict (pass-excellent → uncertain) with a required `regime` — the task shape the grade applies to |
+| `verification_report` | verify | Full report: facts + checks + evidence + verdict |
+| `project_health_context` | recall | Known-patterns block for the files you are about to touch. Useful when a file does have history; measured across real repos, most do not (1-9% of shipped files come back under a `fix:` within two weeks), so it is optional — never a precondition for editing |
 
 Prefer CLI? `fapony report <run-id>` prints the same report for a run; `fapony report-web [file]` renders it as a static HTML page (overwrites `file` on every call — safe to reuse the same path). Run `bun run overview` for a one-shot shortcut that writes it to `/tmp/fapony-overview.html` and opens it. `fapony usage-scan` scans session logs and writes a cache file; `fapony usage-web [port]` serves a static HTML dashboard from that cache (no live scanning). Run `fapony usage-scan` periodically to keep data fresh.
 
@@ -221,9 +225,9 @@ written. Nothing else in the loop knows what went wrong last month.
 
 | Moment | Call | What fapony gets out of it |
 |---|---|---|
-| Before writing a plan | `/plan-with-pony` | reads `project_health_context` — what keeps failing here |
+| Before writing a plan | `/plan-with-pony` | reads `project_health_context` when these files have history |
 | Before committing | `/git-commit` | nothing; it just keeps commits reviewable |
-| Before merging | `/review-pony` | writes a verdict + `reason_code` + note |
+| Before merging | `/review-pony` | writes a verdict + `reason_code` + `regime` + note |
 | Merging | `/git-ship` (`pr` / `land` on a team) | nothing; pure git plumbing |
 | After it ships | `/move-to-done` | writes the ship verdict, closes the loop |
 | Any time | ask for `verification_report` | git facts + allowlisted evidence, one call |

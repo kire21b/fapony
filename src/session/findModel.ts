@@ -21,6 +21,30 @@ export interface SessionModel {
   client: SessionClient;
   /** Subagent name (ZCode model_usage.agent only); null elsewhere. */
   agent: string | null;
+  /** Total input tokens for the session (null when client does not record tokens). */
+  tokensInput: number | null;
+  /** Total output tokens for the session (null when client does not record tokens). */
+  tokensOutput: number | null;
+}
+
+/**
+ * Input tokens as the clients themselves account for them: fresh input plus
+ * cache read plus cache write. Cache is not a footnote — in a Claude Code
+ * session it is nearly all of the input, so counting `input_tokens` alone
+ * reported 4.2k in / 1.1M out for Sonnet, and made one client look ~1000x
+ * cheaper than another on the very comparison these numbers exist for.
+ * Null only when the client recorded nothing at all (never zero-as-measured).
+ */
+function sumInput(...parts: (number | null | undefined)[]): number | null {
+  let total = 0;
+  let sawNumber = false;
+  for (const p of parts) {
+    if (typeof p === "number") {
+      total += p;
+      sawNumber = true;
+    }
+  }
+  return sawNumber ? total : null;
 }
 
 /** Single unknown-value sentinel — never "" or "(unknown)" (see task). */
@@ -53,10 +77,28 @@ function findInOpenCode(sessionId: string): SessionModel | null {
     db.run("PRAGMA query_only = ON");
 
     const row = db
-      .prepare(`SELECT model FROM session WHERE id = ?`)
-      .get(sessionId) as { model: string } | null;
+      .prepare(
+        `SELECT model, tokens_input, tokens_output,
+                tokens_cache_read, tokens_cache_write
+         FROM session WHERE id = ?`,
+      )
+      .get(sessionId) as {
+      model: string;
+      tokens_input: number | null;
+      tokens_output: number | null;
+      tokens_cache_read: number | null;
+      tokens_cache_write: number | null;
+    } | null;
 
     if (!row) return null;
+
+    const tokensInput = sumInput(
+      row.tokens_input,
+      row.tokens_cache_read,
+      row.tokens_cache_write,
+    );
+    const tokensOutput =
+      typeof row.tokens_output === "number" ? row.tokens_output : null;
 
     // model column is either plain text or JSON {providerID, id}
     if (typeof row.model === "string") {
@@ -71,6 +113,8 @@ function findInOpenCode(sessionId: string): SessionModel | null {
             provider: parsed.providerID || UNKNOWN,
             client: "opencode",
             agent: null,
+            tokensInput,
+            tokensOutput,
           };
         }
       } catch {
@@ -81,6 +125,8 @@ function findInOpenCode(sessionId: string): SessionModel | null {
         provider: UNKNOWN,
         client: "opencode",
         agent: null,
+        tokensInput,
+        tokensOutput,
       };
     }
     return null;
@@ -109,7 +155,11 @@ function findInZcode(sessionId: string): SessionModel | null {
     // provider_id is taken raw (sometimes a UUID, never mapped).
     const row = db
       .prepare(
-        `SELECT model_id AS model, provider_id AS provider, agent
+        `SELECT model_id AS model, provider_id AS provider, agent,
+                SUM(input_tokens) AS tokens_input,
+                SUM(output_tokens) AS tokens_output,
+                SUM(cache_read_input_tokens) AS tokens_cache_read,
+                SUM(cache_creation_input_tokens) AS tokens_cache_write
          FROM model_usage
          WHERE session_id = ?
          GROUP BY model_id, provider_id, agent
@@ -120,6 +170,10 @@ function findInZcode(sessionId: string): SessionModel | null {
       model: string;
       provider: string | null;
       agent: string | null;
+      tokens_input: number | null;
+      tokens_output: number | null;
+      tokens_cache_read: number | null;
+      tokens_cache_write: number | null;
     } | null;
 
     if (!row) return null;
@@ -128,6 +182,13 @@ function findInZcode(sessionId: string): SessionModel | null {
       provider: row.provider || UNKNOWN,
       client: "zcode",
       agent: row.agent ?? null,
+      tokensInput: sumInput(
+        row.tokens_input,
+        row.tokens_cache_read,
+        row.tokens_cache_write,
+      ),
+      tokensOutput:
+        typeof row.tokens_output === "number" ? row.tokens_output : null,
     };
   } catch {
     return null;
@@ -153,18 +214,37 @@ function findInClaudeCode(sessionId: string): SessionModel | null {
   // opus first (122 turns) but sonnet the worker (572 turns) must win.
   const counts = new Map<string, number>();
   const lastIdx = new Map<string, number>();
+  let totalInput = 0;
+  let totalOutput = 0;
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line) continue;
     try {
       const parsed = JSON.parse(line) as {
-        message?: { model?: string };
+        message?: {
+          model?: string;
+          usage?: {
+            input_tokens?: number;
+            output_tokens?: number;
+            cache_read_input_tokens?: number;
+            cache_creation_input_tokens?: number;
+          };
+        };
       };
       const m = parsed.message?.model;
       if (typeof m === "string" && m) {
         counts.set(m, (counts.get(m) ?? 0) + 1);
         lastIdx.set(m, i);
+      }
+      const usage = parsed.message?.usage;
+      if (usage) {
+        totalInput +=
+          (usage.input_tokens ?? 0) +
+          (usage.cache_read_input_tokens ?? 0) +
+          (usage.cache_creation_input_tokens ?? 0);
+        if (typeof usage.output_tokens === "number")
+          totalOutput += usage.output_tokens;
       }
     } catch {
       // skip malformed
@@ -182,7 +262,14 @@ function findInClaudeCode(sessionId: string): SessionModel | null {
     }
   }
   return best
-    ? { model: best, provider: "anthropic", client: "claude-code", agent: null }
+    ? {
+        model: best,
+        provider: "anthropic",
+        client: "claude-code",
+        agent: null,
+        tokensInput: totalInput || null,
+        tokensOutput: totalOutput || null,
+      }
     : null;
 }
 
@@ -202,7 +289,13 @@ function findInCodex(sessionId: string): SessionModel | null {
   // Claude Code in case a rollout ever carries several.
   const counts = new Map<
     string,
-    { n: number; lastIdx: number; provider: string }
+    {
+      n: number;
+      lastIdx: number;
+      provider: string;
+      tokensInput: number;
+      tokensOutput: number;
+    }
   >();
   const lines = content.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -215,6 +308,12 @@ function findInCodex(sessionId: string): SessionModel | null {
           model?: string;
           model_provider?: string;
           base_instructions?: { provenance?: { model?: string } };
+          usage?: {
+            input_tokens?: number;
+            output_tokens?: number;
+            cached_input_tokens?: number;
+            cache_write_input_tokens?: number;
+          };
         };
       };
       if (parsed.type === "session_meta" && parsed.payload) {
@@ -223,10 +322,18 @@ function findInCodex(sessionId: string): SessionModel | null {
           parsed.payload.base_instructions?.provenance?.model;
         if (model) {
           const prev = counts.get(model);
+          const u = parsed.payload.usage;
+          const inp =
+            (u?.input_tokens ?? 0) +
+            (u?.cached_input_tokens ?? 0) +
+            (u?.cache_write_input_tokens ?? 0);
+          const out = parsed.payload.usage?.output_tokens ?? 0;
           counts.set(model, {
             n: (prev?.n ?? 0) + 1,
             lastIdx: i,
             provider: parsed.payload.model_provider ?? prev?.provider ?? "",
+            tokensInput: (prev?.tokensInput ?? 0) + inp,
+            tokensOutput: (prev?.tokensOutput ?? 0) + out,
           });
         }
       }
@@ -242,11 +349,14 @@ function findInCodex(sessionId: string): SessionModel | null {
     }
   }
   if (!best) return null;
+  const bestData = counts.get(best)!;
   return {
     model: best,
-    provider: counts.get(best)?.provider || UNKNOWN,
+    provider: bestData.provider || UNKNOWN,
     client: "codex",
     agent: null,
+    tokensInput: bestData.tokensInput || null,
+    tokensOutput: bestData.tokensOutput || null,
   };
 }
 

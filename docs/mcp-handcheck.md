@@ -103,17 +103,30 @@ arguments — see [README](../README.md#the-8-tools) for what each one answers:
       "run_id": 42,
       "verdict": "pass",
       "reason_code": "missing_test",
+      "regime": "code",
       "note": "needs integration test"
     }
   }
 }
 ```
 
+**Regimes** (required — the task shape the grade applies to):
+- `code` — new feature or refactor
+- `fix` — debugging an existing defect
+- `review` — reviewing someone else's work or diff
+- `plan` — producing a plan or spec, not code
+- `inquiry` — asking questions without editing files
+- `test` — writing or editing tests as primary work
+
 **Reason codes:**
 - `missing_test` — claims test pass but no new test covers the change
 - `scope_mismatch` — diff exceeds agreed plan
 - `unsafe_command` — dangerous command detected
 - `spec_gap` — spec doesn't cover edge case found
+- `timeout` — agent ran too long and had to be cut
+- `blocked` — stuck on external dependency/env, not the task itself
+- `incomplete` — ended with work still unfinished
+- `none` — clean pass, nothing to report (use this instead of `other` for clean passes)
 - `other` — requires `note` field
 
 ## Example: Claude Code Adapter
@@ -137,7 +150,7 @@ CHECK=$(echo '{"method":"tools/call","params":{"name":"handoff_check","arguments
 # Step 3: If checks pass, submit verdict
 VERDICT=$(echo $CHECK | jq -r '.result.content[0].text' | jq -r '.summary.failed')
 if [ "$VERDICT" = "0" ]; then
-  echo '{"method":"tools/call","params":{"name":"verdict_submit","arguments":{"run_id":'$RUN_ID',"verdict":"pass","reason_code":"missing_test"}}}' | fapony mcp
+  echo '{"method":"tools/call","params":{"name":"verdict_submit","arguments":{"run_id":'$RUN_ID',"verdict":"pass","reason_code":"missing_test","regime":"code"}}}' | fapony mcp
 fi
 ```
 
@@ -176,8 +189,13 @@ class FaponyHandcheck:
         r = self._call("tools/call", {"name": "handoff_check", "arguments": args})
         return json.loads(r["result"]["content"][0]["text"])
     
-    def submit_verdict(self, run_id, verdict, reason_code, note=None):
-        args = {"run_id": run_id, "verdict": verdict, "reason_code": reason_code}
+    def submit_verdict(self, run_id, verdict, reason_code, regime, note=None):
+        args = {
+            "run_id": run_id,
+            "verdict": verdict,
+            "reason_code": reason_code,
+            "regime": regime,
+        }
         if note:
             args["note"] = note
         r = self._call("tools/call", {"name": "verdict_submit", "arguments": args})
@@ -192,7 +210,7 @@ hc = FaponyHandcheck()
 facts = hc.collect_facts("abc123", "def456", "/path/to/repo")
 check = hc.check_handoff(handoff_text, facts)
 if check["summary"]["failed"] == 0:
-    result = hc.submit_verdict(run_id, "pass", "missing_test")
+    result = hc.submit_verdict(run_id, "pass", "missing_test", "code")
 hc.close()
 ```
 

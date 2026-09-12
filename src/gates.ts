@@ -41,6 +41,16 @@ export interface GateWindow {
    * moment. "inferred" is a guess — never present it as declared.
    */
   modelSource: "spawn" | "session_id" | "inferred" | null;
+  /**
+   * Session the tokens below belong to (null when unknown or spawn-based).
+   * Callers that sum tokens MUST dedupe on this: token totals are per session
+   * and one session routinely produces several gates.
+   */
+  sessionId: string | null;
+  /** Total input tokens for the session (null when unknown or spawn-based). */
+  tokensInput: number | null;
+  /** Total output tokens for the session (null when unknown or spawn-based). */
+  tokensOutput: number | null;
 }
 
 /** SQLite `datetime('now')` output is UTC without a zone marker. */
@@ -117,11 +127,14 @@ export function enrichGateWindows(
 
       // No spawn in window (the execute→review loop that wrote them is gone):
       // fall back to session_id on the gate event — resolve model + provider
-      // + client + agent from the client's own session log. Spawn-based model
-      // always wins when present (the three new fields stay null then).
+      // + client + agent + tokens from the client's own session log. Spawn-based
+      // model always wins when present (the new fields stay null then).
       let provider: string | null = null;
       let client: SessionClient | null = null;
       let agent: string | null = null;
+      let sessionId: string | null = null;
+      let tokensInput: number | null = null;
+      let tokensOutput: number | null = null;
       let modelSource: GateWindow["modelSource"] = model ? "spawn" : null;
       if (model === null && typeof d.session_id === "string" && d.session_id) {
         const resolved = findSessionModel(d.session_id);
@@ -130,6 +143,9 @@ export function enrichGateWindows(
           provider = resolved.provider;
           client = resolved.client;
           agent = resolved.agent;
+          sessionId = d.session_id;
+          tokensInput = resolved.tokensInput;
+          tokensOutput = resolved.tokensOutput;
           modelSource = "session_id";
         }
       }
@@ -147,6 +163,9 @@ export function enrichGateWindows(
           provider = resolved.provider;
           client = resolved.client;
           agent = resolved.agent;
+          sessionId = span ? span.sessionId : null;
+          tokensInput = resolved.tokensInput;
+          tokensOutput = resolved.tokensOutput;
           modelSource = "inferred";
         }
       }
@@ -165,6 +184,9 @@ export function enrichGateWindows(
         client,
         agent,
         modelSource,
+        sessionId,
+        tokensInput,
+        tokensOutput,
       });
     }
   }

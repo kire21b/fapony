@@ -32,7 +32,9 @@ export function testMcpInitialize(): void {
   // client without the user editing their own rules file — if this goes
   // missing, fapony silently stops collecting anything new.
   assert.ok(r.instructions, "initialize must carry server instructions");
-  assert.match(r.instructions ?? "", /project_health_context/);
+  // project_health_context is deliberately absent: the pre-edit habit was cut
+  // (rework base rate 1-9%), and this string is paid on every session.
+  assert.doesNotMatch(r.instructions ?? "", /project_health_context/);
   assert.match(r.instructions ?? "", /verdict_submit/);
   console.log("  ✓ mcp initialize returns protocol version + instructions");
 }
