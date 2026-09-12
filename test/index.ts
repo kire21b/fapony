@@ -247,6 +247,7 @@ import {
 } from "./parse.test.js";
 import {
   testReportHtmlByModelHasAttributionColumns,
+  testReportHtmlByModelProjectColumn,
   testReportHtmlCanonicalQuality,
   testReportHtmlEscapesContent,
   testReportHtmlFiltersAndMethodology,
@@ -693,6 +694,7 @@ export async function cmdTest(): Promise<void> {
   testReportHtmlCanonicalQuality();
   testReportHtmlFiltersAndMethodology();
   testReportHtmlByModelHasAttributionColumns();
+  testReportHtmlByModelProjectColumn();
   testReportHtmlEscapesContent();
   // Usage-web tests
   testFmtTokensZero();
