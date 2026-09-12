@@ -95,12 +95,22 @@ export function mergeEntries(
   return Array.from(byKey.values());
 }
 
-/** Get the freshness metadata from cache (oldest scanned_at across clients). */
+/**
+ * Freshness + session total from cache.
+ *
+ * Totals come from the global (worktree-null) rows only — per-worktree rows
+ * are subsets of that aggregate, so summing everything double-counts
+ * (global 100 + projects 60 + 40 reported 200). Pre-dimension caches carry
+ * no worktree field at all, so when no global row exists every entry counts.
+ */
 export function cacheMeta(entries: CacheEntry[]): CacheMeta | null {
   if (entries.length === 0) return null;
-  let oldest = entries[0].scanned_at;
+  const scoped = entries.some((e) => (e.worktree ?? null) === null)
+    ? entries.filter((e) => (e.worktree ?? null) === null)
+    : entries;
+  let oldest = scoped[0].scanned_at;
   let total = 0;
-  for (const e of entries) {
+  for (const e of scoped) {
     if (e.scanned_at < oldest) oldest = e.scanned_at;
     total += e.session_count;
   }

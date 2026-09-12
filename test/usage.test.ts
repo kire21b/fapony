@@ -176,6 +176,32 @@ export function testCacheMetaCalculatesOldest(): void {
   console.log("  ✓ cacheMeta → oldest scanned_at + total sessions");
 }
 
+export function testCacheMetaProjectDimension(): void {
+  // Per-worktree rows are subsets of the global aggregate — totals must come
+  // from the global rows, or the header double-counts (100 → 200).
+  const global = mkEntry("opencode", 100, "2026-09-12T10:00:00Z");
+  const a = {
+    ...mkEntry("opencode", 60, "2026-09-12T10:00:00Z"),
+    worktree: "/proj/a",
+  };
+  const b = {
+    ...mkEntry("opencode", 40, "2026-09-12T10:00:00Z"),
+    worktree: "/proj/b",
+  };
+  const meta = cacheMeta([global, a, b]);
+  assert.ok(meta);
+  assert.equal(meta.total_sessions, 100);
+  // Pre-dimension caches carry no worktree field — every entry counts.
+  const legacy = cacheMeta([
+    mkEntry("opencode", 10, "2026-09-10T10:00:00Z"),
+    mkEntry("zcode", 5, "2026-09-10T10:00:00Z"),
+  ]);
+  assert.equal(legacy?.total_sessions, 15);
+  console.log(
+    "  ✓ cacheMeta → totals from global rows, legacy caches unaffected",
+  );
+}
+
 export function testWriteCacheCreatesStateDir(): void {
   const prev = process.env.FAPONY_STATE_DIR;
   const dir = join(tmpdir(), `fapony-scan-test-${Date.now()}`);

@@ -365,6 +365,7 @@ import {
 import {
   testCacheMetaCalculatesOldest,
   testCacheMetaEmpty,
+  testCacheMetaProjectDimension,
   testFmtCostNull,
   testFmtCostPositive,
   testFmtCostZero,
@@ -715,6 +716,7 @@ export async function cmdTest(): Promise<void> {
   testMergeEntriesDedup();
   testCacheMetaEmpty();
   testCacheMetaCalculatesOldest();
+  testCacheMetaProjectDimension();
   testWriteCacheCreatesStateDir();
   // Render tests
   testRenderHtmlStructure();
