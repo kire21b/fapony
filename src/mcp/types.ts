@@ -12,6 +12,12 @@ export const REASON_CODES = [
 
 export type ReasonCode = (typeof REASON_CODES)[number];
 
+// --- RegimeCode enum (task-shape axis for model × project × quality) ---
+
+export const REGIME_CODES = ["code", "fix", "review", "plan"] as const;
+
+export type RegimeCode = (typeof REGIME_CODES)[number];
+
 // --- Tool result types ---
 
 export interface ToolResult {

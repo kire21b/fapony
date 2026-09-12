@@ -158,6 +158,7 @@ import {
   testJsonResult,
   testParseToolResult,
   testReasonCodesAreLocked,
+  testRegimeCodesAreLocked,
 } from "./mcp/helpers.test.js";
 import {
   testPlanListJoinsRunHistory,
@@ -214,10 +215,13 @@ import {
   testVerdictSubmitAllGrades,
   testVerdictSubmitAutoCreatesRun,
   testVerdictSubmitInvalidReasonCode,
+  testVerdictSubmitInvalidRegimeRejects,
   testVerdictSubmitInvalidVerdict,
+  testVerdictSubmitMissingRegimeRejects,
   testVerdictSubmitNullPlanAlwaysCreatesNew,
   testVerdictSubmitOtherRequiresNote,
   testVerdictSubmitPassedRunNotReused,
+  testVerdictSubmitRegimeStoredInGateEvent,
   testVerdictSubmitReusesOpenRunAcrossRounds,
   testVerdictSubmitRunNotFound,
   testVerdictSubmitStoresMcpSource,
@@ -289,6 +293,8 @@ import {
   testStatsBestPassing,
   testStatsByFileRisk,
   testStatsByModelGroupsByClientProviderAgent,
+  testStatsByPlanModeSplit,
+  testStatsByRegimeSplit,
   testStatsByWorktree,
   testStatsEmptyDb,
   testStatsEscalatedRuns,
@@ -300,6 +306,7 @@ import {
   testStatsPlanBreakdown,
   testStatsReasonCodeBreakdown,
   testStatsSpawnModelWinsOverSessionId,
+  testStatsTokensInByModel,
   testStatsUsageByModelIdentity,
   testStatsVerdictNotesNotCappedAtDisplayLimit,
 } from "./stats.test.js";
@@ -573,6 +580,9 @@ export async function cmdTest(): Promise<void> {
   testVerdictSubmitReusesOpenRunAcrossRounds();
   testVerdictSubmitNullPlanAlwaysCreatesNew();
   testVerdictSubmitPassedRunNotReused();
+  testVerdictSubmitMissingRegimeRejects();
+  testVerdictSubmitInvalidRegimeRejects();
+  testVerdictSubmitRegimeStoredInGateEvent();
   testPlanListRequiresWorktree();
   testPlanListMissingDir();
   testPlanListNeverAttempted();
@@ -588,6 +598,7 @@ export async function cmdTest(): Promise<void> {
   testErrorResult();
   testParseToolResult();
   testReasonCodesAreLocked();
+  testRegimeCodesAreLocked();
   // Verification primitives tests
   testEvidenceStatusesAreLocked();
   testComputeEvidenceSummaryEmpty();
@@ -640,6 +651,9 @@ export async function cmdTest(): Promise<void> {
   testStatsModelFromSessionIdWhenNoSpawn();
   testStatsByModelGroupsByClientProviderAgent();
   testStatsSpawnModelWinsOverSessionId();
+  testStatsByPlanModeSplit();
+  testStatsByRegimeSplit();
+  testStatsTokensInByModel();
   testSessionDefaultHasNoDetail();
   testSessionDetailBreakdown();
   testSessionDetailSkipsUnknownType();

@@ -1,7 +1,7 @@
 // src/mcp/tools/index.ts — barrel + TOOLS array
 
 import { VERDICT_GRADES } from "../../parse.js";
-import { REASON_CODES } from "../types.js";
+import { REASON_CODES, REGIME_CODES } from "../types.js";
 
 export { extractMultiField, toolHandoffCheck } from "./check.js";
 export { toolHandoffCollect } from "./collect.js";
@@ -134,6 +134,13 @@ export const TOOLS = [
           enum: [...REASON_CODES],
           description: "Standardized failure reason code",
         },
+        regime: {
+          type: "string",
+          enum: [...REGIME_CODES],
+          description:
+            "Task shape: code=new feature/refactor, fix=debugging an existing defect, " +
+            "review=reviewing someone else's work/diff, plan=producing a plan or spec",
+        },
         note: {
           type: "string",
           description: "Optional note (required when reason_code = 'other')",
@@ -167,7 +174,7 @@ export const TOOLS = [
             "nothing about where the risk was.",
         },
       },
-      required: ["verdict", "reason_code"],
+      required: ["verdict", "reason_code", "regime"],
     },
   },
   {

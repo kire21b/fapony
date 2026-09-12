@@ -40,6 +40,7 @@ export function testVerdictSubmitInvalidVerdict(): void {
     const result = toolVerdictSubmit({
       verdict: bad,
       reason_code: "missing_test",
+      regime: "code",
     });
     assert.ok(result.isError, `${JSON.stringify(bad)} should be rejected`);
     const msg = (parseToolResult(result) as { error: string }).error;
@@ -61,6 +62,7 @@ export function testVerdictSubmitInvalidReasonCode(): void {
   const result = toolVerdictSubmit({
     verdict: "pass",
     reason_code: "bogus",
+    regime: "code",
   });
   assert.ok(result.isError);
   assert.ok(
@@ -75,6 +77,7 @@ export function testVerdictSubmitOtherRequiresNote(): void {
   const result = toolVerdictSubmit({
     verdict: "fail",
     reason_code: "other",
+    regime: "fix",
   });
   assert.ok(result.isError);
   assert.ok(
@@ -88,6 +91,7 @@ export function testVerdictSubmitRunNotFound(): void {
     run_id: 99999,
     verdict: "pass",
     reason_code: "missing_test",
+    regime: "code",
   });
   const data = parseToolResult(result) as { stored: boolean; error: string };
   assert.equal(data.stored, false);
@@ -104,6 +108,7 @@ export function testVerdictSubmitSuccess(): void {
       run_id: runId,
       verdict: "fail",
       reason_code: "missing_test",
+      regime: "code",
       note: "needs integration test",
     });
 
@@ -130,6 +135,7 @@ export function testVerdictSubmitAutoCreatesRun(): void {
     const result = toolVerdictSubmit({
       verdict: "pass",
       reason_code: "missing_test",
+      regime: "code",
     });
 
     assert.equal(result.isError, undefined);
@@ -156,6 +162,7 @@ export function testVerdictSubmitStoresMcpSource(): void {
       run_id: runId,
       verdict: "pass",
       reason_code: "missing_test",
+      regime: "code",
     });
 
     // Read back the event
@@ -190,6 +197,7 @@ export function testVerdictSubmitAllGrades(): void {
         run_id: runId,
         verdict: grade,
         reason_code: "missing_test",
+        regime: "code",
       });
       assert.equal(result.isError, undefined, `${grade} should be accepted`);
       const data = parseToolResult(result) as {
@@ -226,6 +234,7 @@ export function testVerdictSubmitReusesOpenRunAcrossRounds(): void {
     const r1 = submit({
       verdict: "fail",
       reason_code: "spec_gap",
+      regime: "fix",
       note: "round 1",
       worktree: wt,
       plan,
@@ -238,6 +247,7 @@ export function testVerdictSubmitReusesOpenRunAcrossRounds(): void {
     const r2 = submit({
       verdict: "fail",
       reason_code: "spec_gap",
+      regime: "fix",
       note: "round 2",
       worktree: wt,
       plan,
@@ -250,6 +260,7 @@ export function testVerdictSubmitReusesOpenRunAcrossRounds(): void {
     const r3 = submit({
       verdict: "fail",
       reason_code: "spec_gap",
+      regime: "fix",
       note: "round 3",
       worktree: wt,
       plan,
@@ -278,12 +289,14 @@ export function testVerdictSubmitNullPlanAlwaysCreatesNew(): void {
     const a = submit({
       verdict: "fail",
       reason_code: "other",
+      regime: "review",
       note: "bare diff 1",
       worktree: "/tmp/bare-wt",
     });
     const b = submit({
       verdict: "fail",
       reason_code: "other",
+      regime: "review",
       note: "bare diff 2",
       worktree: "/tmp/bare-wt",
     });
@@ -301,6 +314,7 @@ export function testVerdictSubmitPassedRunNotReused(): void {
     const p = submit({
       verdict: "pass",
       reason_code: "other",
+      regime: "code",
       note: "shipped",
       worktree: wt,
       plan,
@@ -312,6 +326,7 @@ export function testVerdictSubmitPassedRunNotReused(): void {
     const f = submit({
       verdict: "fail",
       reason_code: "missing_test",
+      regime: "fix",
       note: "new work",
       worktree: wt,
       plan,
@@ -321,4 +336,61 @@ export function testVerdictSubmitPassedRunNotReused(): void {
     assert.equal(f.round, 1);
   });
   console.log("  ✓ verdict_submit never reopens a passed run");
+}
+
+export function testVerdictSubmitMissingRegimeRejects(): void {
+  const result = toolVerdictSubmit({
+    verdict: "pass",
+    reason_code: "missing_test",
+  });
+  assert.ok(result.isError);
+  assert.ok(
+    (parseToolResult(result) as { error: string }).error.includes("regime"),
+  );
+  console.log("  ✓ verdict_submit rejects missing regime");
+}
+
+export function testVerdictSubmitInvalidRegimeRejects(): void {
+  const result = toolVerdictSubmit({
+    verdict: "pass",
+    reason_code: "missing_test",
+    regime: "bogus",
+  });
+  assert.ok(result.isError);
+  assert.ok(
+    (parseToolResult(result) as { error: string }).error.includes("regime"),
+  );
+  console.log("  ✓ verdict_submit rejects invalid regime");
+}
+
+export function testVerdictSubmitRegimeStoredInGateEvent(): void {
+  withTempDb(() => {
+    const db = openDb();
+    const runId = newRun(db, "/tmp/test", null, null, "abc123");
+
+    const result = toolVerdictSubmit({
+      run_id: runId,
+      verdict: "pass-good",
+      reason_code: "missing_test",
+      regime: "code",
+    });
+
+    assert.equal(result.isError, undefined);
+    const data = parseToolResult(result) as { stored: boolean; regime: string };
+    assert.equal(data.stored, true);
+    assert.equal(data.regime, "code");
+
+    // Read back the event
+    const events = db
+      .prepare("SELECT data FROM events WHERE run_id = ? AND kind = 'gate'")
+      .all(runId) as { data: string }[];
+    assert.equal(events.length, 1);
+    const parsed = JSON.parse(events[0].data) as {
+      regime: string;
+      reason_code: string;
+    };
+    assert.equal(parsed.regime, "code");
+    assert.equal(parsed.reason_code, "missing_test");
+  });
+  console.log("  ✓ verdict_submit stores regime in gate event");
 }
