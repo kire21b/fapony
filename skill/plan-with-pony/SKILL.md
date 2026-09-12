@@ -75,7 +75,7 @@ draft, which is worth far more than a question about constraints.
 - If fapony isn't wired up, or it says "not enough history yet", skip silently — never block
   drafting on this.
 
-## Phase 2 — Draft first, correct second
+## Phase 2 — Draft straight to the file
 
 Write the full draft **now**, all eight sections, from the Phase 0 harvest + the Phase 1 answer +
 the Phase 1.5 patterns. Fill every section — guessing where you have to.
@@ -91,12 +91,46 @@ the Phase 1.5 patterns. Fill every section — guessing where you have to.
 invention is what hard rule #6 protects against, not proposals. An unmarked guess is a violation;
 a marked one is the whole technique.
 
-Show it in chat first — not as a file — and ask for corrections, never approval:
+**Write it to the file, not into chat.** A full draft pasted in chat costs the plan body twice —
+once as chat, once as the file — and then sits in context for the rest of the session. The dev
+corrects the file just as well as they correct a chat block, and their corrections land as small
+edits instead of a re-draft.
 
-> "Here's a first draft. **Tell me what's wrong with it** — especially anything marked (guess).
-> Blank sections are fine to leave blank; we can decide those while building."
+**Resolve where plans live first — never assume `.fapony/plan/`.** Read
+`<worktree>/fapony.config.json` and use `paths.planDir` / `paths.specDir`; if the file or those
+keys are missing, fall back to `.fapony/plan` / `.fapony/spec`. Repos that keep plans beside the
+app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
+directory nobody reads.
+
+`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
+it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
+
+Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
+**Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
+edge-case tables into section 7; link to the spec instead. The full template with per-section
+prompts lives at `templates/PLAN.md` in the fapony repo.
+
+Write the plan in whatever language the dev has been using in this conversation — they have to read
+it. If they asked for a different one, use that instead. Section headings stay as the template has
+them.
+
+## Phase 3 — Hand back the guesses, not the plan
+
+Then — and this is the part that must not be dropped — invite corrections in chat. Keep it to
+roughly eight lines:
+
+- one line: what this plan does
+- **every `(guess)` in the draft, one bullet each** — this list is what the dev actually corrects,
+  and it is the only reason the draft was ever shown in chat
+- the file path, then: **"Tell me what's wrong with it"** — never "is this ok"
+
+> "Written to <planDir>/PLAN-<feature>.md. Guessed: <g1>, <g2>, <g3>. **Tell me what's wrong** —
+> especially those. Blank sections are fine; we can decide those while building. Change it whenever
+> building teaches you something — that's the plan working, not the plan failing."
 
 Ask "what's wrong" and you get the real answer. Ask "is this ok" and you get "ok".
+
+Corrections come back as edits to the file — change the lines they named, don't rewrite the plan.
 
 ### Then at most two follow-ups
 
@@ -113,27 +147,6 @@ ordinary discussion leaves exactly these two blank:
 
 Everything else — risks, examples, step ordering — ships as-is or as `_TBD_`. Don't chase it.
 
-## Phase 3 — Write the file
-
-**Resolve where plans live first — never assume `.fapony/plan/`.** Read
-`<worktree>/fapony.config.json` and use `paths.planDir` / `paths.specDir`; if the file or those
-keys are missing, fall back to `.fapony/plan` / `.fapony/spec`. Repos that keep plans beside the
-app (e.g. `apps/<app>/plan`) are normal — writing to the default there scatters plans into a
-directory nobody reads.
-
-`ls <planDir>/` and check `PLAN-<feature>.md` doesn't already exist. If it does, don't overwrite
-it — pick a more specific name (e.g. `PLAN-<feature>-v2.md`) or ask which one is stale.
-
-Section 6 — every step must be verifiable. Section 8 — must link back to anything it came from.
-**Plan = what/why/order, spec = how in detail**: never paste API shapes, schemas, wireframes, or
-edge-case tables into section 7; link to the spec instead. The full template with per-section
-prompts lives at `templates/PLAN.md` in the fapony repo.
-
-Then say where it landed, and that it is meant to move:
-
-> "Written to <planDir>/PLAN-<feature>.md. Change it whenever building teaches you something —
-> that's the plan working, not the plan failing."
-
 ## Phase 4 — Spec (optional)
 
 Only if the dev asks, or the plan keeps trying to describe *how*:
@@ -142,7 +155,7 @@ Only if the dev asks, or the plan keeps trying to describe *how*:
 > the detail the plan links to instead of carrying. I can draft one from the plan if you'd rather
 > react than specify."
 
-Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 3) by:
+Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 2) by:
 - Referencing sections from the plan directly — don't rewrite
 - More concrete examples than abstract
 - Include "fail examples" to make boundaries clear
@@ -155,7 +168,8 @@ Then draft `<specDir>/SPEC-<feature>.md` (same config lookup as Phase 3) by:
 2. **Never more than 2 questions in one message** — and only about load-bearing blanks
 3. **"I don't know" is handled, never punished** — offer 2-3 options with consequences and let the
    dev point. Never answer it with more questions
-4. **Every guess is labelled `(guess)`** — unlabelled invention breaks rule #6
+4. **Every guess is labelled `(guess)` — and listed back in chat** (Phase 3). The list is what the
+   dev corrects; unlabelled invention breaks rule #6
 5. **Never block on a blank section** — `_TBD — decide while building_` and move on
 6. **What wasn't discussed or corrected = not in the plan** — a labelled guess the dev fixed or
    kept counts as discussed; silent additions never do
