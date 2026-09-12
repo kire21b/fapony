@@ -4,7 +4,7 @@
 
 Measurement + verification layer for coding agents, shipped as an MCP server (`fapony mcp` — 8 tools, stdio JSON-RPC). No loop, no spawning, no executor role — fapony doesn't drive agents, it measures what already happened (git facts, session cost/tokens) and verifies claims against those facts. Any agent that speaks MCP can call it. อยู่นอก worktree ของ product เพราะ state ของผู้วัดไม่ควรอยู่ในที่ที่ผู้ถูกวัดแก้ได้
 
-**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **project health + knowledge accumulation ข้าม run/client/project** — reason_code ที่ fail ซ้ำ, plan ที่ escalate เกิน round cap, pattern ที่ผ่าน round แรก — สะสมใน `runs`+`events` แล้วป้อนกลับเป็น context ก่อนแตะไฟล์ — keyed ด้วย `files[]` ไม่ใช่ plan (`plan-with-pony` เป็นผู้เรียกรายหนึ่ง ไม่ใช่ทางเข้าเดียว) (`project_health_context` tool, ดู [.fapony/plan/PLAN-project-health-context.md](.fapony/plan/PLAN-project-health-context.md)) fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
+**North star:** ค่าที่ fapony ให้ได้จริงและ client เดี่ยว (OpenCode/ZCode/Claude Code/Codex) ให้ไม่ได้ คือ **`model × project × quality` ข้าม run/client/project** — "งานแบบนี้ในโปรเจกต์นี้ ควรจ่ายให้ model ไหน" · session log ของทุกเจ้ามี token แต่ไม่มีเกรด, benchmark มีเกรดแต่ไม่ใช่โปรเจกต์คุณ — ต้องมี verdict + model + token ครบสามในที่เดียวถึงจะถามได้ · **เคยเล็ง "project health / ไฟล์นี้เคยพัง" แล้วพลาด** — base rate ของ rework จริงคือ 1-9% ต่ำเกินจะเตือนอะไรได้ (ดูกฎ 8) `project_health_context` ยังอยู่แต่ไม่ใช่แกนอีกแล้ว fapony **ไม่ใช่** performance monitor รายวินาที — per-step timing/token/tool-latency มีอยู่แล้วใน session log ของแต่ละ client เอง (`fapony_usage` แค่ query field ที่มีอยู่แล้วให้สะดวกขึ้น ไม่ใช่จุดที่ fapony ได้เปรียบใครจริง)
 
 **Runtime:** Bun-only, zero runtime dependency — ใช้แค่ `bun:sqlite`, `node:fs`, `node:child_process`
 **State:** SQLite ที่ `~/.config/fapony/state.db` (WAL mode) — `FAPONY_STATE_DIR` env ย้ายได้
@@ -89,7 +89,7 @@ fapony/
     util.ts               # templateArgs / fillPrompt / isAffirmative
     mcp/                   # MCP server — stdio JSON-RPC, 8 tools
       index.ts             # MCP entry point + tool registration
-      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn habits 7/8 without editing their own rules file
+      transport.ts         # JSON-RPC framing (stdin/stdout) + SERVER_INSTRUCTIONS (initialize) — how agents learn the grading habit without editing their own rules file
       evidence.ts          # allowlisted evidence collector (.fapony/evidence.json — never runs agent-proposed cmds)
       types.ts             # MCP type definitions
       tools/
@@ -211,7 +211,7 @@ events(
 | `usage-web` ช้าครั้งแรกเมื่อ OpenCode/ZCode part table ใหญ่ (แสนกว่าแถว) | แก้แล้ว — `usage-web` อ่าน cache (`~/.config/fapony/usage-cache.jsonl`) ไม่แตะ session log · scan เกิดตอนคนสั่ง `fapony usage-scan` เท่านั้น · `--full` ย้ายไปเป็น flag ของ `usage-scan` |
 | `usage-web` ไม่มี cache | แสดงข้อความให้รัน `fapony usage-scan` ก่อน — ไม่ scan เองเด็ดขาด (done criteria #5) |
 | gate event ไม่มี `session_id` → `by model` เป็น `—` ทั้งแถว (15/17 บนเครื่องจริง) | อย่าขอ field เพิ่ม — **infer ตอนอ่าน**: ทุก client บันทึก directory + ช่วงเวลาของ session อยู่แล้ว [activeSession.ts](src/session/activeSession.ts) หา span ที่ *ครอบ* ts ของ gate (ไม่ใช่ span ล่าสุด) แคบสุดชนะเมื่อซ้อนกัน · ติดป้าย `modelSource: "inferred"` เสมอ ห้ามแสดงเป็นค่าที่ผู้เรียกประกาศเอง · ทำงานย้อนหลังกับ row เก่าโดยไม่ต้องเขียนอะไรใหม่ (2 declared → 18 attributed) |
-| ผู้ใช้คนอื่นต้องแปะกฎ 7/8 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7/8 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
+| ผู้ใช้คนอื่นต้องแปะกฎ 7 ลง CLAUDE.md ของตัวเองไหม | **ไม่** — MCP `initialize` ตอบ `instructions` กลับไป ([transport.ts](src/mcp/transport.ts) `SERVER_INSTRUCTIONS`) client ฉีดเข้า context ให้เอง = ครอบทุก client โดยไม่แตะไฟล์กฎของใคร · กฎ 7 ใน CLAUDE.md นี้เป็นแค่การย้ำสำหรับ repo ตัวเอง ไม่ใช่กลไก · ข้อความนี้ถูกจ่ายทุก session ของทุกคน — **สั้นไว้ ห้ามยัดเพิ่ม** |
 | cost/efficiency ใน `stats`/`report`/telemetry ว่างเปล่าตลอด | **ลบทิ้งแล้ว** — declared cost ทั้งสาย (spawn event + `pricing` + ES/CPQ + avgValue) derive จาก `beginSpawn`/`endSpawn` ที่ถูกลบไปพร้อม execute→review loop (ดู History) ไม่มี writer เหลืออยู่เลย ตัวเลขจึงเป็น `—` ตลอดกาล · cost ที่เหลือมีเส้นเดียว: passive session log ของ client เอง (`fapony_usage`, `usage-web`) — OpenCode บันทึก cost จริง, ZCode/Claude Code/Codex บันทึก 0 |
 | test db ทับ production db (`os.homedir()` cache ใน Bun ไม่ตาม `process.env.HOME` ที่เปลี่ยนหลัง process start) | test ที่ isolate db ต้องตั้ง `process.env.FAPONY_STATE_DIR` แทน `process.env.HOME` |
 
@@ -238,19 +238,19 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 4. **assertSafe() ต้องเรียกกับทุก shell command** ที่ spawn จาก config (memory/evidence/install) รวมถึงที่มาจาก template
 5. **fapony ห้ามเขียนไฟล์ใน worktree เป้าหมาย** — db อยู่ ~/.config/fapony/ เท่านั้น
 6. **memory: null** = ปิดชั้น memory ทั้งหมด ไม่ error
-7. **ก่อนแก้ไฟล์ ถาม `project_health_context` ก่อน** — ส่ง `files[]` ของไฟล์ที่จะแตะ
-   รู้ pattern ที่เคย fail กับไฟล์นั้นก่อนลงมือ · **หน่วยคือไฟล์ที่แตะ ไม่ใช่ plan** —
-   bug fix เดี่ยว ๆ, refactor, drive-by ก็เรียก ไม่ต้องมี plan file ใด ๆ ทั้งสิ้น
-   · ลืมได้ ไม่เรียกก็ยังทำงานได้เท่าเดิม (optional degradation ไม่ใช่ precondition)
-8. **เดาผิดแล้วรู้ตัว = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — trigger คือ *ตอนรู้ว่าความ
-   พยายามแรกผิดและต้นเหตุไม่ได้อยู่ที่เดียวกับอาการ* ไม่ใช่ตอนงานเสร็จ · **1 run = 1 หน่วยงาน
-   ที่วัดได้ ไม่ใช่ 1 plan** — bug ที่ไม่มี plan ก็เป็น run ได้ (`plan` เป็น nullable ตั้งแต่ schema
-   แรก) ให้ `files[]` แทน plan เป็นตัวผูก · ยิง `fail` ทันทีที่รู้
-   แล้วปิดด้วย pass-family เมื่อตรวจผ่านจริง (ตรวจไม่ได้ → `uncertain` ห้ามเดา pass)
-   งานที่ผ่านตั้งแต่รอบแรก **ไม่ต้องบันทึก** — future session เห็นแค่ 3 note, pass เปล่า ๆ
-   ไล่ note ที่สอนอะไรได้ออก · `note` ต้อง standalone: อาการ / ต้นเหตุจริง / กฎที่ได้
-   ห้ามอ้างอิงบทสนทนา · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree
-   นั้นมาเกาะ ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
+7. **ให้เกรดทุกหน่วยงานที่จบ = ยิง `verdict_submit` เอง ไม่ต้องรอให้สั่ง** — มันคือ *เกรดของงาน*
+   ไม่ใช่คำสารภาพ ฉะนั้นงานที่ผ่านตั้งแต่รอบแรกก็ต้องบันทึก (เดิมกฎบอกไม่ต้อง — กลับด้านแล้ว
+   เพราะค่าที่ใช้จริงย้ายจาก "ไฟล์นี้เคยพัง" ไปเป็น "model ไหนทำงานแบบไหนได้ดี" ซึ่ง n ต่อ model
+   คือทุกอย่าง) · **1 run = 1 หน่วยงานที่วัดได้ ไม่ใช่ 1 plan** — bug ที่ไม่มี plan ก็เป็น run ได้
+   (`plan` เป็น nullable ตั้งแต่ schema แรก และ null/not-null คือ A/B "ลุยเลย vs วางแผน" ที่ใช้จริง)
+   · เจอว่าเดารอบแรกผิด ยิง `fail` ทันทีที่รู้ แล้วปิดด้วย pass-family เมื่อตรวจผ่านจริง
+   (ตรวจไม่ได้ → `uncertain` ห้ามเดา pass) · `note` ต้อง standalone ห้ามอ้างอิงบทสนทนา
+   · ห้ามทิ้ง run ค้าง — run ที่ไม่ terminal ดูด verdict อื่นของ worktree นั้นมาเกาะ
+   ([store.ts findOpenRunWithNullPlan](src/db/store.ts))
+8. **`project_health_context` ไม่ใช่ reflex ก่อนแก้ไฟล์อีกแล้ว** — วัดกับ repo จริงแล้ว: ไฟล์ที่
+   ship แล้วกลับมาโดน `fix:` ใน 14 วัน = 1% (canalis 66/8,760) / 9% (fapony 21/226) base rate
+   ต่ำขนาดนี้แปลว่าเวลาจะแตะไฟล์หนึ่ง history แทบไม่มีอะไรจะเตือน · tool ยังอยู่ เรียกได้ถ้าอยาก
+   แต่ **ห้ามบังคับ ห้ามเอากลับเข้า `SERVER_INSTRUCTIONS`** — ข้อความนั้นจ่ายทุก session ของทุกคน
 
 ---
 
@@ -264,7 +264,7 @@ templates + `move-to-done`/`plan-with-pony` skills below (now agent-driven, not 
 1. **ข้ามไคลเอนต์** — ไม้บรรทัดเดียวกันทับ Claude Code + OpenCode (หลัก), ZCode (เสริม), Codex (ยังไม่ใช้จริง)
    session log ของแต่ละเจ้าไม่มีวันข้ามหากัน เพราะไม่มีใครได้ประโยชน์จากการทำให้ข้าม
 2. **ข้ามโปรเจกต์** — `runs.worktree` เป็น key ตั้งแต่แรก dogfood ปัจจุบัน: `wt-fapony` → `wt-vela`
-   (vela ใกล้เสร็จ ใช้ review-pony ทุกครั้ง แต่ยังไม่ค่อยมี plan — verdict ต้องทำงานได้โดยไม่มี plan ดูกฎ 8)
+   (vela ใกล้เสร็จ ใช้ review-pony ทุกครั้ง แต่ยังไม่ค่อยมี plan — verdict ต้องทำงานได้โดยไม่มี plan ดูกฎ 7)
 3. **เจ้าของถือข้อมูลเอง** — db อยู่ `~/.config/fapony/` เครื่องผู้ใช้ ไม่มี server ไม่มี account
    telemetry opt-in และ allowlist เท่านั้น
 
