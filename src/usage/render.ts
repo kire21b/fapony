@@ -85,6 +85,12 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+/** Shorten a worktree path to its basename for display. */
+function shortWt(wt: string): string {
+  const parts = wt.replace(/\/$/, "").split("/");
+  return parts[parts.length - 1] || wt;
+}
+
 function barHtml(value: number, max: number, color: string): string {
   const w = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return `<div class="bar"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div>`;
@@ -234,32 +240,82 @@ function freshnessBar(scannedAt: string): string {
 </div>`;
 }
 
+type ClientData = {
+  opencode: PassiveUsageResult;
+  zcode: PassiveUsageResult | null;
+  claude_code: PassiveUsageResult | null;
+  codex: PassiveUsageResult | null;
+};
+
 export function renderUsageHtml(
-  opencode: PassiveUsageResult,
-  zcode: PassiveUsageResult | null,
-  claude_code: PassiveUsageResult | null,
-  codex: PassiveUsageResult | null,
+  projectData: Map<string, ClientData>,
   scannedAt: string,
   ownerName?: string,
 ): string {
-  const oc = calcMetrics(opencode);
-  const zc = calcMetrics(zcode);
-  const cc = calcMetrics(claude_code);
-  const cx = calcMetrics(codex);
+  // Find the global entry (worktree=null) and per-project entries.
+  const globalData = projectData.get("__global__");
+  const projectKeys = [...projectData.keys()]
+    .filter((k) => k !== "__global__")
+    .sort();
+
   const owner = ownerName?.trim() ? esc(ownerName.trim()) : "";
 
-  // Context share: proportion of total context tokens per client.
-  const ctxTokens = [
-    { name: "OpenCode", color: "var(--green)", tokens: oc.input + oc.output },
-    { name: "ZCode", color: "var(--accent)", tokens: zc.input + zc.output },
-    {
-      name: "Claude Code",
-      color: "var(--yellow)",
-      tokens: cc.input + cc.output,
-    },
-    { name: "Codex", color: "var(--accent)", tokens: cx.input + cx.output },
-  ];
-  const ctxTotal = ctxTokens.reduce((s, c) => s + c.tokens, 0);
+  function projectSection(
+    label: string,
+    data: ClientData,
+    isGlobal: boolean,
+  ): string {
+    const pOc = calcMetrics(data.opencode);
+    const pZc = calcMetrics(data.zcode);
+    const pCc = calcMetrics(data.claude_code);
+    const pCx = calcMetrics(data.codex);
+    const totalSessions =
+      pOc.sessions + pZc.sessions + pCc.sessions + pCx.sessions;
+    if (totalSessions === 0 && !isGlobal) return "";
+
+    const heading = isGlobal ? "All projects" : shortWt(label);
+
+    return `
+<h2 style="color:var(--accent)">${esc(heading)} <span class="sample">(${totalSessions} sessions)</span></h2>
+<div class="cards">
+${summaryCard("OpenCode", "var(--green)", pOc)}
+${summaryCard("ZCode", "var(--accent)", pZc)}
+${summaryCard("Claude Code", "var(--yellow)", pCc)}
+${summaryCard("Codex", "var(--accent)", pCx)}
+</div>
+
+${clientTable(`t-oc-${label}`, "OpenCode", "var(--green)", data.opencode)}
+${clientTable(`t-zc-${label}`, "ZCode", "var(--accent)", data.zcode)}
+${clientTable(`t-cc-${label}`, "Claude Code", "var(--yellow)", data.claude_code)}
+${clientTable(`t-cx-${label}`, "Codex", "var(--accent)", data.codex)}`;
+  }
+
+  // Project navigation (when there are multiple projects).
+  const navHtml =
+    projectKeys.length > 1
+      ? `<div class="meta" style="margin-bottom:0.5rem">
+  ${projectKeys.map((k) => `<a href="#proj-${esc(k)}" style="color:var(--accent);text-decoration:none">${esc(shortWt(k))}</a>`).join(" · ")}
+  ${globalData ? ` · <a href="#proj-all" style="color:var(--accent);text-decoration:none;font-weight:600">all</a>` : ""}
+</div>`
+      : "";
+
+  // Render all project sections.
+  const sections: string[] = [];
+
+  // Global section first (if exists).
+  if (globalData) {
+    sections.push(
+      `<div id="proj-all">${projectSection("all", globalData, true)}</div>`,
+    );
+  }
+
+  // Per-project sections.
+  for (const k of projectKeys) {
+    const data = projectData.get(k)!;
+    sections.push(
+      `<div id="proj-${esc(k)}">${projectSection(k, data, false)}</div>`,
+    );
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -321,44 +377,9 @@ export function renderUsageHtml(
 </div>
 ${freshnessBar(scannedAt)}
 
-<div class="cards" id="summary-cards">
-${summaryCard("OpenCode", "var(--green)", oc)}
-${summaryCard("ZCode", "var(--accent)", zc)}
-${summaryCard("Claude Code", "var(--yellow)", cc)}
-${summaryCard("Codex", "var(--accent)", cx)}
-</div>
+${navHtml}
 
-<div class="share-section">
-  <div class="share-title">context share (tokens)</div>
-  <div class="share-bar">
-    ${
-      ctxTotal > 0
-        ? ctxTokens
-            .map((c) => {
-              const w = Math.round((c.tokens / ctxTotal) * 100);
-              return w > 0
-                ? `<div class="share-seg" style="width:${w}%;background:${c.color}" title="${c.name}: ${fmtTokens(c.tokens)}"></div>`
-                : "";
-            })
-            .join("")
-        : '<div class="share-seg" style="width:100%;background:var(--border)"></div>'
-    }
-  </div>
-  <div class="share-legend">
-    ${ctxTokens
-      .map((c) => {
-        const pctStr =
-          ctxTotal > 0 ? ((c.tokens / ctxTotal) * 100).toFixed(1) : "0.0";
-        return `<span class="share-item"><span class="share-dot" style="background:${c.color}"></span>${c.name} ${pctStr}%</span>`;
-      })
-      .join("")}
-  </div>
-</div>
-
-${clientTable("t-opencode", "OpenCode", "var(--green)", opencode)}
-${clientTable("t-zcode", "ZCode", "var(--accent)", zcode)}
-${clientTable("t-claude", "Claude Code", "var(--yellow)", claude_code)}
-${clientTable("t-codex", "Codex", "var(--accent)", codex)}
+${sections.join("\n")}
 
 <div class="footer">
   Tokens and cost come from each client's own session log — ZCode, Claude Code and Codex record no cost, so theirs reads $0.

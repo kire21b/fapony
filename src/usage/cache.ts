@@ -19,6 +19,8 @@ const CACHE_FILENAME = "usage-cache.jsonl";
 
 export interface CacheEntry {
   client: string;
+  /** Worktree path this entry scopes to, or undefined/null for the global aggregate. */
+  worktree?: string | null;
   scanned_at: string;
   session_count: number;
   total_tokens_input: number;
@@ -81,16 +83,16 @@ export function writeCache(entries: CacheEntry[], config?: Config): void {
 
 /**
  * Merge new entry into existing cache entries.
- * Dedup by `client` — last write wins (newest scanned_at wins).
+ * Dedup by `client + worktree` — last write wins (newest scanned_at wins).
  */
 export function mergeEntries(
   existing: CacheEntry[],
   updated: CacheEntry[],
 ): CacheEntry[] {
-  const byClient = new Map<string, CacheEntry>();
-  for (const e of existing) byClient.set(e.client, e);
-  for (const e of updated) byClient.set(e.client, e);
-  return Array.from(byClient.values());
+  const byKey = new Map<string, CacheEntry>();
+  for (const e of existing) byKey.set(`${e.client}\0${e.worktree ?? ""}`, e);
+  for (const e of updated) byKey.set(`${e.client}\0${e.worktree ?? ""}`, e);
+  return Array.from(byKey.values());
 }
 
 /** Get the freshness metadata from cache (oldest scanned_at across clients). */
